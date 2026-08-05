@@ -229,9 +229,13 @@ node bin/maw.js doctor
 ```
 
 ## GitHub Stars 趨勢
-頂部的徽章恆顯示即時星數（透過 [shields.io](https://shields.io)）。下方的趨勢圖由開源專案 **[star-history](https://github.com/star-history/star-history)** 產生 —— 它會自動讀取 GitHub 星數並自行更新。對全新儲存庫可能需要時間才會填入；若內嵌圖片為空白，請開啟[互動式圖表](https://star-history.com/#imBlanker/multi-agent-workflow-for-a-complicated-codebase&Date)。
+頂部的徽章恆顯示即時星數（透過 [shields.io](https://shields.io)）——每次檢視都會渲染並自動更新。
 
-[![Star History Chart](https://api.star-history.com/svg?repos=imBlanker/multi-agent-workflow-for-a-complicated-codebase&type=Date)](https://star-history.com/#imBlanker/multi-agent-workflow-for-a-complicated-codebase&Date)
+完整的星數成長曲線請開啟由開源專案 **[star-history](https://github.com/star-history/star-history)** 產生的互動式圖表（它會自動讀取 GitHub 星數）：
+
+→ [**在 star-history.com 檢視星數歷史**](https://star-history.com/#imBlanker/multi-agent-workflow-for-a-complicated-codebase&Date)
+
+> 這裡刻意不內嵌趨勢圖片：對於全新 / 低星數儲存庫，`api.star-history.com/svg` 會回傳 HTTP 500（逾時），會造成圖片顯示失敗。當儲存庫累積星數並被 star-history 快取後，上方的互動式頁面會渲染出完整曲線。
 
 ---
 

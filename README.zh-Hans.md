@@ -229,9 +229,13 @@ node bin/maw.js doctor
 ```
 
 ## GitHub Stars 趋势
-顶部的徽章始终显示实时星标数（通过 [shields.io](https://shields.io)）。下方的趋势图由开源项目 **[star-history](https://github.com/star-history/star-history)** 生成——它会自动读取 GitHub 星标并自我更新。对于一个全新的仓库，它可能需要时间才有数据；如果内联图片为空，请打开[交互式图表](https://star-history.com/#imBlanker/multi-agent-workflow-for-a-complicated-codebase&Date)。
+顶部的徽章始终显示实时星标数（通过 [shields.io](https://shields.io)）——每次查看都会渲染并自动更新。
 
-[![Star History Chart](https://api.star-history.com/svg?repos=imBlanker/multi-agent-workflow-for-a-complicated-codebase&type=Date)](https://star-history.com/#imBlanker/multi-agent-workflow-for-a-complicated-codebase&Date)
+完整的星标增长曲线请打开由开源项目 **[star-history](https://github.com/star-history/star-history)** 生成的交互式图表（它会自动读取 GitHub 星标）：
+
+→ [**在 star-history.com 查看星标历史**](https://star-history.com/#imBlanker/multi-agent-workflow-for-a-complicated-codebase&Date)
+
+> 这里特意不内嵌趋势图片：对于全新 / 低星标仓库，`api.star-history.com/svg` 会返回 HTTP 500（超时），会造成图片显示失败。当仓库累积星标并被 star-history 缓存后，上方的交互式页面会渲染出完整曲线。
 
 ---
 
