@@ -2,17 +2,23 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import os from "node:os";
 import path from "node:path";
-import { status, findCodexCompanion, shouldReview, runReview } from "../src/codex.js";
+import { status, findCodexBinary, findCodexCompanion, shouldReview, runReview } from "../src/codex.js";
 
-test("status reports binary + companion presence", () => {
+// CI runners do not have the codex CLI or codex-plugin-cc installed; skip the
+// environment-dependent tests there so CI stays green. (findCodexBinary/
+// findCodexCompanion are read-only probes.)
+const HAS = (() => { try { return { bin: findCodexBinary(), comp: findCodexCompanion() }; } catch { return {}; } })();
+const HAVE_CODEX = !!(HAS.bin && HAS.comp);
+
+test("status reports binary + companion presence", { skip: !HAVE_CODEX }, () => {
   const s = status();
   assert.equal(typeof s.ready, "boolean");
-  // On this dev machine codex + plugin are installed.
+  // On a dev machine codex + plugin are installed.
   assert.ok(s.binary, "codex binary expected on this machine");
   assert.ok(s.companion, "codex-plugin-cc companion expected on this machine");
 });
 
-test("findCodexCompanion returns a .mjs path under the claude plugins dir", () => {
+test("findCodexCompanion returns a .mjs path under the claude plugins dir", { skip: !HAS.comp }, () => {
   const c = findCodexCompanion();
   assert.ok(c);
   assert.match(c, /codex-companion\.mjs$/);
