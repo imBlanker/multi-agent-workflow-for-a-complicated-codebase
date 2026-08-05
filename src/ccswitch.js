@@ -13,7 +13,8 @@
 import { execFileSync } from "node:child_process";
 import path from "node:path";
 import os from "node:os";
-import { exists, round } from "./util.js";
+import fs from "node:fs";
+import { exists, round, isoNow } from "./util.js";
 
 // Resolve the optional node:sqlite binding once at module load (top-level await
 // is allowed in ESM). If absent, we use the sqlite3 CLI.
@@ -215,4 +216,221 @@ export function perSessionRate(opts = {}) {
     requestCount: num(row.cnt), lastAt: num(row.last),
   }));
   return { sessions, windowSeconds: win };
+}
+
+// -----------------------------------------------------------------------------
+// cc-switch "projects" (= the `profiles` table) + local-routing policy.
+//
+// cc-switch has no `projects` table; its per-project provisioning (providers,
+// MCP, skills, prompts) lives in `profiles.payload`. The existing profiles are
+// named "Claude Code 默认" / "Codex 默认" — they contain "默认" and are PROTECTED.
+//
+// Hard policy (enforced in guardSql / createProjectProfile):
+//   - all existing cc-switch data is READ-ONLY
+//   - MAW may only INSERT a new profile (its own project) and UPDATE that new
+//     profile's own payload; it may NEVER UPDATE/DELETE any other row
+//   - any profile whose name contains "默认" is never written, ever
+//   - the only other allowed write is UPDATE proxy_config for app_type IN
+//     ('claude','codex') — the explicit routing carve-out the user mandated
+// -----------------------------------------------------------------------------
+
+/**
+ * Read all cc-switch profiles (projects), read-only.
+ * @param {object} [opts]
+ * @param {string} [opts.dbPath]
+ */
+export function readProfiles(opts = {}) {
+  const dbPath = opts.dbPath ?? findDb();
+  if (!dbPath) return { dbPath: "", profiles: [] };
+  const r = makeReader(dbPath);
+  const rows = r.all("SELECT id, name, payload, sort_order, created_at, updated_at FROM profiles ORDER BY sort_order, created_at");
+  r.close();
+  const profiles = rows.map((row) => {
+    let payload = {};
+    try { payload = JSON.parse(row.payload); } catch { payload = { raw: row.payload }; }
+    return {
+      id: row.id, name: row.name, payload, sortOrder: row.sort_order,
+      createdAt: row.created_at, updatedAt: row.updated_at,
+      isDefault: String(row.name).includes("默认"),
+    };
+  });
+  return { dbPath, profiles };
+}
+
+/**
+ * Read the local-routing + auto-failover state for claude/codex + detect codex
+ * OpenAI-OAuth login (read-only).
+ * @param {object} [opts]
+ * @param {string} [opts.dbPath]
+ */
+export function readRouting(opts = {}) {
+  const dbPath = opts.dbPath ?? findDb();
+  /** @type {any} */
+  const out = { dbPath, claude: null, codex: null, codexOAuthInUse: false, claudeFailoverProviders: [], codexFailoverProviders: [], raw: {} };
+  if (!dbPath) return out;
+  const r = makeReader(dbPath);
+  for (const row of r.all("SELECT app_type, proxy_enabled, enabled, auto_failover_enabled FROM proxy_config WHERE app_type IN ('claude','codex')")) {
+    const o = { appType: row.app_type, proxyEnabled: num(row.proxy_enabled), enabled: num(row.enabled), autoFailoverEnabled: num(row.auto_failover_enabled) };
+    out[row.app_type] = o; out.raw[row.app_type] = o;
+  }
+  out.claudeFailoverProviders = r.all("SELECT name FROM providers WHERE app_type='claude' AND in_failover_queue=1").map((p) => p.name);
+  out.codexFailoverProviders = r.all("SELECT name FROM providers WHERE app_type='codex' AND in_failover_queue=1").map((p) => p.name);
+  r.close();
+  out.codexOAuthInUse = detectCodexOAuth(dbPath);
+  return out;
+}
+
+/**
+ * Detect whether codex is using an OpenAI OAuth (ChatGPT) login.
+ * Signal 1: the current codex provider's settings_config.auth.auth_mode === "chatgpt".
+ * Signal 2: a sibling codex_oauth_auth.json with a default account.
+ * @param {string} dbPath
+ */
+function detectCodexOAuth(dbPath) {
+  try {
+    const r = makeReader(dbPath);
+    const row = r.all("SELECT settings_config FROM providers WHERE app_type='codex' AND is_current=1 LIMIT 1")[0];
+    r.close();
+    if (row?.settings_config) {
+      const sc = JSON.parse(row.settings_config);
+      if (sc?.auth?.auth_mode === "chatgpt") return true;
+    }
+  } catch {}
+  const oauthPath = path.join(path.dirname(dbPath), "codex_oauth_auth.json");
+  if (exists(oauthPath)) {
+    try {
+      const d = JSON.parse(fs.readFileSync(oauthPath, "utf8"));
+      if (d?.default_account_id && d?.accounts && Object.keys(d.accounts).length > 0) return true;
+    } catch {}
+  }
+  return false;
+}
+
+/**
+ * Compute the routing policy and the list of violations.
+ *  - claude: local routing ON + auto-failover ON (always)
+ *  - codex:  local routing OFF when OpenAI-OAuth login in use; ON otherwise
+ * @param {ReturnType<typeof readRouting>} routing
+ */
+export function routingPolicy(routing) {
+  /** @type {{app:string,field:string,expected:string,actual:string,reason?:string,fix:string}[]} */
+  const violations = [];
+  const c = routing.claude;
+  if (!c || !(c.proxyEnabled && c.enabled)) violations.push({ app: "claude", field: "local_routing", expected: "on", actual: c ? (c.enabled ? "on" : "off") : "missing", fix: "UPDATE proxy_config SET proxy_enabled=1, enabled=1 WHERE app_type='claude'" });
+  if (!c || !c.autoFailoverEnabled) violations.push({ app: "claude", field: "auto_failover", expected: "on", actual: c ? (c.autoFailoverEnabled ? "on" : "off") : "missing", fix: "UPDATE proxy_config SET auto_failover_enabled=1 WHERE app_type='claude'" });
+  const cx = routing.codex;
+  const codexShouldOn = !routing.codexOAuthInUse;
+  if (codexShouldOn && (!cx || !cx.enabled)) violations.push({ app: "codex", field: "local_routing", expected: "on", actual: cx ? (cx.enabled ? "on" : "off") : "missing", reason: "codex is NOT using OpenAI-OAuth login → local routing must be ON", fix: "UPDATE proxy_config SET proxy_enabled=1, enabled=1 WHERE app_type='codex'" });
+  if (!codexShouldOn && cx && cx.enabled) violations.push({ app: "codex", field: "local_routing", expected: "off", actual: "on", reason: "codex is using OpenAI-OAuth login → local routing must be OFF", fix: "UPDATE proxy_config SET enabled=0, proxy_enabled=0 WHERE app_type='codex'" });
+  return { compliant: violations.length === 0, violations, codexOAuthInUse: routing.codexOAuthInUse, claudeFailoverProviders: routing.claudeFailoverProviders, codexFailoverProviders: routing.codexFailoverProviders };
+}
+
+/**
+ * Hard guard for any write SQL. Refuses destructive statements and any
+ * UPDATE/DELETE on protected tables (existing config is read-only). Allows:
+ *   - INSERT INTO profiles        (a new MAW project)
+ *   - UPDATE proxy_config           (the claude/codex routing carve-out)
+ * @param {string} sql
+ */
+function guardSql(sql) {
+  const s = String(sql).replace(/\s+/g, " ").toUpperCase();
+  if (/\b(DROP|DELETE|TRUNCATE|VACUUM|ALTER|ATTACH|DETACH|PRAGMA)\b/.test(s)) return "destructive/system statement not allowed";
+  if (/\bUPDATE\s+(PROFILES|PROVIDERS|SKILLS|MCP_SERVERS|PROMPTS|MODEL_PRICING|PROXY_REQUEST_LOGS|SETTINGS)\b/.test(s)) return "existing cc-switch config is read-only (UPDATE on protected table)";
+  if (/\bINSERT\s+INTO\s+(PROVIDERS|SKILLS|MCP_SERVERS|PROMPTS|MODEL_PRICING|PROXY_REQUEST_LOGS|SETTINGS)\b/.test(s)) return "refused: cannot seed protected table";
+  return null;
+}
+
+/** Open a read-write sqlite handle (busy-timeout aware). Falls back to CLI. */
+function openWriter(dbPath) {
+  if (NODE_SQLITE?.DatabaseSync) {
+    const db = new NODE_SQLITE.DatabaseSync(dbPath);
+    try { db.exec("PRAGMA busy_timeout=3000"); } catch {}
+    return {
+      impl: "node:sqlite",
+      exec(sql) { db.exec(sql); },
+      close() { try { db.close(); } catch {} },
+    };
+  }
+  return {
+    impl: "sqlite3-cli",
+    exec(sql) { execFileSync("sqlite3", [dbPath, sql], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }); },
+    close() {},
+  };
+}
+
+/** Run a guarded write statement (throws on policy violation). */
+function runWrite(dbPath, sql) {
+  const err = guardSql(sql);
+  if (err) throw new Error("refused: " + err);
+  const w = openWriter(dbPath);
+  try { w.exec(sql); }
+  finally { w.close(); }
+}
+
+/**
+ * Create a NEW cc-switch project (profile) for an initialized MAW project.
+ * The new profile references the CURRENT claude/codex providers and has EMPTY
+ * mcp/skills/prompts — all provisioning is scoped to this new project only.
+ * NEVER touches any profile whose name contains "默认". Idempotent (reuses an
+ * existing same-named profile without modifying it).
+ * @param {{ name: string, user?: string, dbPath?: string }} opts
+ */
+export function createProjectProfile(opts) {
+  const name = opts.name;
+  const user = opts.user || "";
+  const dbPath = opts.dbPath ?? findDb();
+  if (!name) return { ok: false, error: "project name required" };
+  if (/默认/.test(name)) return { ok: false, error: "refused: project name contains '默认' (protected)", name };
+  if (!dbPath) return { ok: false, error: "cc-switch database not found", name };
+  const { profiles } = readProfiles({ dbPath });
+  const protectedDefaults = profiles.filter((p) => p.isDefault).map((p) => p.name);
+  const existing = profiles.find((p) => p.name === name);
+  if (existing) {
+    return { ok: true, reused: true, id: existing.id, name, user, protectedDefaults, note: "profile already exists; reused WITHOUT modification" };
+  }
+  const cc = readCcSwitch({ dbPath });
+  const payload = {
+    providers: { claude: cc.currentProviders.claude?.id || null, codex: cc.currentProviders.codex?.id || null },
+    mcp: { claude: [], codex: [] },
+    skills: { claude: [], codex: [] },
+    prompts: { claude: null, codex: null },
+    _maw: { createdFor: "maw", user, createdAt: isoNow() },
+  };
+  const id = `maw-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  const now = Math.floor(Date.now() / 1000);
+  try {
+    runWrite(dbPath, `INSERT INTO profiles (id, name, payload, sort_order, created_at, updated_at) VALUES ('${id}', ${sqlStr(name)}, ${sqlStr(JSON.stringify(payload))}, ${profiles.length || 0}, ${now}, ${now})`);
+  } catch (e) {
+    return { ok: false, error: String(e?.message || e), name, user, protectedDefaults };
+  }
+  return { ok: true, created: true, id, name, user, protectedDefaults, payload };
+}
+
+/**
+ * Apply the mandated routing policy by writing ONLY the proxy_config rows for
+ * claude and codex (the explicit carve-out). No-op/dry-run unless opts.fix.
+ * @param {{ dbPath?: string, fix?: boolean }} opts
+ */
+export function applyRouting(opts = {}) {
+  const dbPath = opts.dbPath ?? findDb();
+  if (!dbPath) return { ok: false, error: "cc-switch database not found", applied: [] };
+  const routing = readRouting({ dbPath });
+  const policy = routingPolicy(routing);
+  if (!opts.fix) return { ok: true, applied: [], policy, routing, note: "dry-run; pass fix:true to apply (writes ONLY proxy_config for claude/codex)" };
+  /** @type {string[]} */
+  const applied = [];
+  try {
+    runWrite(dbPath, "UPDATE proxy_config SET proxy_enabled=1, enabled=1, auto_failover_enabled=1, updated_at=datetime('now') WHERE app_type='claude'");
+    applied.push("claude: local routing ON + auto-failover ON");
+    if (routing.codexOAuthInUse) {
+      runWrite(dbPath, "UPDATE proxy_config SET enabled=0, proxy_enabled=0, updated_at=datetime('now') WHERE app_type='codex'");
+      applied.push("codex: local routing OFF (OpenAI-OAuth login in use)");
+    } else {
+      runWrite(dbPath, "UPDATE proxy_config SET proxy_enabled=1, enabled=1, updated_at=datetime('now') WHERE app_type='codex'");
+      applied.push("codex: local routing ON (no OAuth login)");
+    }
+  } catch (e) {
+    return { ok: false, error: String(e?.message || e), applied, policy, routing };
+  }
+  return { ok: true, applied, policy, routing, note: "routing applied to proxy_config (claude/codex only); restart cc-switch GUI to reflect" };
 }

@@ -12,7 +12,7 @@
 
 ## Tests run
 <!-- Which tests did you run? Check all that apply. -->
-- [ ] `npm test` — all 52 tests pass
+- [ ] `npm test` — all 69 tests pass
 - [ ] `node bin/maw.js doctor`
 - [ ] Manual smoke test (describe below)
 

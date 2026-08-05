@@ -28,7 +28,7 @@ Thanks for your interest in improving **multi-agent-workflow (MAW)** — a porta
 npm test
 ```
 
-This runs the full suite with Node's built-in test runner (`node --test`). **All 52 tests must pass** before you open a PR.
+This runs the full suite with Node's built-in test runner (`node --test`). **All 69 tests must pass** before you open a PR.
 
 Run tests in watch mode while developing:
 
@@ -84,9 +84,16 @@ Common types:
 ## Pull requests
 
 1. Open a PR against `main` (see `.github/PULL_REQUEST_TEMPLATE.md`).
-2. Make sure `npm test` passes locally and CI is green.
-3. Keep PRs focused — **one logical change per PR.**
-4. Update the README and `examples/` if your change affects user-facing behavior.
+2. Reference the issue with `Closes #N` in the PR body.
+3. Make sure `npm test` passes locally and CI is green.
+4. Keep PRs focused — **one logical change per PR.**
+5. Update the README and `examples/` if your change affects user-facing behavior.
+
+## Governance & cc-switch policy
+
+The fork / branch / issue / PR rules MAW follows are written down in [`docs/GOVERNANCE.md`](./docs/GOVERNANCE.md) — read it before your first PR. Review routing is defined in [`.github/CODEOWNERS`](./.github/CODEOWNERS).
+
+**cc-switch is read-only by default.** Code changes must never `UPDATE`/`DELETE` existing cc-switch rows (providers, skills, mcp_servers, prompts, model_pricing) and must never touch any profile whose name contains `默认`. The only allowed writes are a NEW project profile (`createProjectProfile`) and the opt-in routing carve-out on `proxy_config` for claude/codex (`applyRouting`). Both are hard-guarded in `src/ccswitch.js` (`guardSql`) — do not weaken that guard.
 
 ## Licensing
 

@@ -1,0 +1,12 @@
+# CODEOWNERS — review routing for MAW.
+# Reviewers are notified automatically based on the path a PR touches.
+# See docs/GOVERNANCE.md for the full fork/branch/issue/PR rules.
+
+# Default owner for the whole repo (add owners by path as the project grows).
+* @imBlanker
+
+# Sensitive areas — enforce the read-only cc-switch policy here.
+/src/ccswitch.js  @imBlanker
+/src/trellis.js   @imBlanker
+/src/cost.js      @imBlanker
+/docs/            @imBlanker

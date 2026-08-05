@@ -14,6 +14,8 @@ import { doctor } from "./doctor.js";
 import { runReview, shouldReview, status as codexStatus } from "./codex.js";
 import { probeProject } from "./probe.js";
 import { WorkflowGraph, graphFromPlan } from "./graph.js";
+import { createProjectProfile, readRouting, routingPolicy, applyRouting } from "./ccswitch.js";
+import { runTrellisInit } from "./trellis.js";
 
 /**
  * Load cc-switch + host context once.
@@ -34,6 +36,11 @@ function parse(args) {
     if (a.startsWith("--")) {
       const k = a.replace(/^--/, "");
       if (args[i + 1] && !args[i + 1].startsWith("--")) { out.flags[k] = args[++i]; }
+      else out.flags[k] = true;
+    } else if (a.startsWith("-") && a.length > 1 && !a.startsWith("--")) {
+      // short flag, e.g. -u alice
+      const k = a.replace(/^-+/, "");
+      if (args[i + 1] && !args[i + 1].startsWith("-")) { out.flags[k] = args[++i]; }
       else out.flags[k] = true;
     } else out._.push(a);
   }
@@ -63,6 +70,7 @@ export function main(argv = process.argv.slice(2)) {
     case "remove-agent": return cmdRemoveAgent(f, flags);
     case "run": return cmdRun(f, flags);
     case "review": return cmdReview(f, flags);
+    case "routing": return cmdRouting(f, flags);
     case "install": return cmdInstall(f, flags);
     case "uninstall": return cmdUninstall(f, flags);
     case "update": return cmdUpdate(f, flags);
@@ -104,6 +112,8 @@ Commands:
   run           Emit execution guidance for the current plan (host-driven)
   review        Invoke a Codex review via codex-plugin-cc (when available)
   graph         Print the workflow graph (nodes/edges) + topo batches
+  routing       Show the cc-switch local-routing policy (claude on+failover;
+                codex on-except-OAuth). Use --fix to apply.
   install       Install the MAW plugin + skills into the host agent software
   uninstall     Remove the MAW plugin + skills
   update        Reinstall (overwrites templates, keeps user edits)
@@ -132,6 +142,7 @@ function cmdUnknown(cmd) {
 function cmdInit(f, flags) {
   const project = flags.project ? path.resolve(flags.project) : process.cwd();
   const user = flags.u || flags.user || "";
+  if (!user) { out(`init requires -u <user-name> (e.g. maw init -u alice)`, false); return; }
   ensureDir(path.join(project, ".maw", "agents"));
   ensureDir(path.join(project, ".maw", "runtime"));
   const ctx = loadCtx({ dbPath: flags.db });
@@ -139,13 +150,80 @@ function cmdInit(f, flags) {
     { taskType: "greenfield", files: 0, parallelizableSubtasks: 1, risk: "medium", contextNeed: "small", valuePerRun: "medium", description: "init" },
     { host: ctx.host, ccSwitch: ctx.cc, cost: costFrom(flags) }
   );
-  const gen = generateConfigs(project, plan, ctx.cc);
+  generateConfigs(project, plan, ctx.cc);
   writeText(path.join(project, ".maw", "AGENTS.md"), AGENTS_INIT);
   out(`Initialized .maw/ in ${project}`);
-  out(`  host: ${ctx.host.app} (caps: ${hostCapabilities(ctx.host).join(", ") || "none"})`);
-  out(`  cc-switch: ${ctx.cc.dbPath ? "ok" : "not found"}${user ? `; user: ${user}` : ""}`);
+  out(`  host: ${ctx.host.app} (caps: ${hostCapabilities(ctx.host).join(", ") || "none"}); supported: Claude Code + Codex only`);
+  out(`  cc-switch: ${ctx.cc.dbPath ? "ok (read-only)" : "not found"}; user: ${user}`);
   out(`  primary architecture: ${plan.primary}`);
-  out(`  files written: ${gen.files.length}`);
+
+  // 1) cc-switch project profile (NEW; never touches 默认 profiles)
+  if (ctx.cc.dbPath) {
+    const profName = `MAW: ${path.basename(project)}${user ? ` (${user})` : ""}`;
+    const pr = createProjectProfile({ name: profName, user, dbPath: ctx.cc.dbPath });
+    if (pr.ok) {
+      out(`  cc-switch project: ${pr.created ? `created "${profName}" (${pr.id})` : `reused "${profName}"`}` + (pr.protectedDefaults?.length ? `; protected 默认 profiles: ${pr.protectedDefaults.join(", ")}` : ""));
+    } else {
+      out(`  cc-switch project: not created — ${pr.error}`, false);
+    }
+  }
+
+  // 2) routing policy check (read-only; --fix-routing applies the carve-out)
+  if (ctx.cc.dbPath) {
+    const routing = readRouting({ dbPath: ctx.cc.dbPath });
+    const pol = routingPolicy(routing);
+    if (pol.compliant) {
+      out(`  routing policy: compliant (claude local-routing+failover on; codex ${pol.codexOAuthInUse ? "OFF (OAuth)" : "ON"})`);
+    } else {
+      out(`  routing policy: NOT compliant — ${pol.violations.length} violation(s):`);
+      for (const v of pol.violations) out(`    - ${v.app}.${v.field}: expected ${v.expected}, actual ${v.actual}${v.reason ? ` (${v.reason})` : ""}`);
+      if (flags["fix-routing"]) {
+        const ar = applyRouting({ dbPath: ctx.cc.dbPath, fix: true });
+        if (ar.ok) { out(`  routing applied: ${ar.applied.join("; ")}`); }
+        else out(`  routing fix failed: ${ar.error}`, false);
+      } else {
+        out(`    run \`maw routing --fix\` to apply (writes ONLY proxy_config for claude/codex)`);
+      }
+    }
+  }
+
+  // 3) trellis init -u <user> as the mandatory next step (unless --no-trellis)
+  if (flags["no-trellis"]) {
+    out(`  trellis init: skipped (--no-trellis). Next step: run \`trellis init -u ${user}\`.`);
+    return;
+  }
+  out(`  next step: trellis init -u ${user} (chained automatically)`);
+  const tr = runTrellisInit({ project, user, nonInteractive: !process.stdin.isTTY });
+  if (tr.stdout) process.stdout.write(tr.stdout);
+  if (tr.stderr && !tr.ok) process.stderr.write(tr.stderr);
+  out(`  trellis init: ${tr.ok ? "ok" : (tr.code == null ? "interrupted" : `exit ${tr.code}`)} (via ${tr.via}); log: ${path.relative(project, tr.logPath)}`);
+  if (tr.conflicts.length) {
+    out(`  ⚠ ${tr.conflicts.length} conflict(s) between MAW and trellis detected (see log):`, false);
+    for (const c of tr.conflicts.slice(0, 10)) out(`    - ${path.relative(project, c.file)} (${c.kind})`);
+    out(`    re-run \`maw plan --project ${project}\` to regenerate MAW's side, or \`trellis init -u ${user}\` to resume trellis`);
+  }
+}
+
+// --- routing ---
+function cmdRouting(f, flags) {
+  const ctx = loadCtx({ dbPath: flags.db });
+  if (!ctx.cc.dbPath) { out(`cc-switch database not found`, false); return; }
+  const routing = readRouting({ dbPath: ctx.cc.dbPath });
+  const pol = routingPolicy(routing);
+  out(`cc-switch routing policy (claude: local-routing+auto-failover always ON; codex: OFF when OpenAI-OAuth, else ON)`);
+  out(`  codex OAuth login in use: ${pol.codexOAuthInUse}`);
+  out(`  claude: routing ${routing.claude?.enabled ? "on" : "off"}, failover ${routing.claude?.autoFailoverEnabled ? "on" : "off"} (queue: ${pol.claudeFailoverProviders.join(", ") || "none"})`);
+  out(`  codex:  routing ${routing.codex?.enabled ? "on" : "off"} (queue: ${pol.codexFailoverProviders.join(", ") || "none"})`);
+  if (pol.compliant) { out(`  status: compliant ✓`); return; }
+  out(`  status: NOT compliant — ${pol.violations.length} violation(s):`);
+  for (const v of pol.violations) out(`    - ${v.app}.${v.field}: expected ${v.expected}, actual ${v.actual}${v.reason ? ` — ${v.reason}` : ""}`);
+  if (flags.fix) {
+    const ar = applyRouting({ dbPath: ctx.cc.dbPath, fix: true });
+    if (ar.ok) { out(`  applied: ${ar.applied.join("; ")}`); out(`  ${ar.note}`); }
+    else out(`  fix failed: ${ar.error}`, false);
+  } else {
+    out(`  run \`maw routing --fix\` to apply (writes ONLY proxy_config for claude/codex; never touches profiles/providers)`);
+  }
 }
 
 // --- plan ---

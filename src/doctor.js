@@ -1,14 +1,16 @@
 // @ts-check
-// `maw doctor` — environment + capability report.
+// `maw doctor` — environment + capability + policy report.
 import { execFileSync } from "node:child_process";
 import { readJson } from "./util.js";
-import { readCcSwitch, findDb } from "./ccswitch.js";
+import { readCcSwitch, findDb, readRouting, routingPolicy } from "./ccswitch.js";
 import { detectHost, hostCapabilities } from "./host.js";
 import { status as codexStatus } from "./codex.js";
+import { detectTrellis } from "./trellis.js";
 import path from "node:path";
 import os from "node:os";
 
 const PKG_ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
+const SUPPORTED = ["claude-code", "codex"]; // narrowed per project policy
 
 /** @returns {{ ok: boolean, checks: { name: string, status: "ok"|"warn"|"fail", detail: string }[], summary: string }} */
 export function doctor() {
@@ -26,25 +28,44 @@ export function doctor() {
     checks.push({ name: "git", status: "warn", detail: "not found" });
   }
 
-  // host
+  // host (claude-code + codex only are supported)
   const host = detectHost();
-  checks.push({ name: "Host agent software", status: host.app === "unknown" ? "warn" : "ok", detail: `${host.app} at ${host.homeDir || "(none)"}; caps: ${hostCapabilities(host).join(", ") || "none"}` });
+  const supported = SUPPORTED.includes(host.app);
+  checks.push({ name: "Host agent software", status: host.app === "unknown" ? "warn" : (supported ? "ok" : "warn"), detail: `${host.app} at ${host.homeDir || "(none)"}; caps: ${hostCapabilities(host).join(", ") || "none"}${supported ? "" : " — only Claude Code and Codex are supported"}` });
 
-  // cc-switch
+  // cc-switch (read-only)
   const db = findDb();
   if (!db) {
     checks.push({ name: "cc-switch database", status: "warn", detail: "not found; pricing & cost-rate will be unavailable" });
   } else {
     const cc = readCcSwitch({ dbPath: db });
     const cur = Object.keys(cc.currentProviders);
-    checks.push({ name: "cc-switch database", status: "ok", detail: `${db} (impl ${cc.impl}); current providers: ${cur.join(", ") || "none"}` });
+    checks.push({ name: "cc-switch database (read-only)", status: "ok", detail: `${db} (impl ${cc.impl}); current providers: ${cur.join(", ") || "none"}` });
     checks.push({ name: "cc-switch model pricing", status: "ok", detail: `${Object.keys(cc.modelPricing).length} models priced` });
+
+    // routing policy (claude always on+failover; codex on except OAuth)
+    try {
+      const routing = readRouting({ dbPath: db });
+      const pol = routingPolicy(routing);
+      const det = pol.violations.length ? `violations: ${pol.violations.map((v) => v.app + "." + v.field + "=" + v.expected).join("; ")}` : "claude local-routing+failover on; codex " + (pol.codexOAuthInUse ? "routing OFF (OAuth)" : "routing ON");
+      checks.push({ name: "cc-switch routing policy", status: pol.compliant ? "ok" : "warn", detail: det + (pol.compliant ? "" : " — run `maw routing --fix`") });
+    } catch (e) {
+      checks.push({ name: "cc-switch routing policy", status: "warn", detail: "could not read proxy_config" });
+    }
   }
 
   // codex
   const cs = codexStatus();
   checks.push({ name: "Codex CLI", status: cs.binary ? "ok" : "warn", detail: cs.binary || "not found" });
   checks.push({ name: "codex-plugin-cc", status: cs.companion ? "ok" : "warn", detail: cs.companion || cs.reason });
+
+  // trellis (the mandatory next-step init)
+  try {
+    const det = detectTrellis();
+    checks.push({ name: "trellis (next-step init)", status: det.via === "npx" ? "warn" : "ok", detail: det.via === "npx" ? "not on PATH; will use `npx --yes @mindfoldhq/trellis@latest`" : `${det.bin}` });
+  } catch (e) {
+    checks.push({ name: "trellis (next-step init)", status: "warn", detail: "trellis module unavailable" });
+  }
 
   // package
   const pkg = readJson(path.join(PKG_ROOT, "package.json"), { version: "?" });

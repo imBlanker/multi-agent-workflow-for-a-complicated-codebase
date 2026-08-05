@@ -84,4 +84,23 @@ test("maw graph reports nodes/edges and batches", () => {
   assert.ok(j.batches > 0);
 });
 
+test("maw init --no-trellis -u <user> creates .maw + a cc-switch project (never 默认)", () => {
+  const out = run(["init", "--project", project, "-u", "alice", "--no-trellis"]);
+  assert.match(out, /Initialized .maw\//);
+  assert.match(out, /cc-switch project: created/);
+  assert.match(out, /protected 默认 profiles: Claude Code 默认, Codex 默认|protected 默认 profiles: Codex 默认, Claude Code 默认/);
+  // trellis skipped note present
+  assert.match(out, /trellis init: skipped/);
+  // routing violation surfaced (fixture has claude OFF)
+  assert.match(out, /routing policy: NOT compliant|routing applied/);
+});
+
+test("maw routing reports violations; --fix applies the carve-out", () => {
+  const out = run(["routing"]);
+  assert.match(out, /cc-switch routing policy/);
+  // fixture starts non-compliant (or already fixed by the init test above)
+  const fixed = run(["routing", "--fix"]);
+  assert.match(fixed, /applied:|status: compliant/);
+});
+
 test.after(() => { try { fs.rmSync(tmp, { recursive: true, force: true }); } catch {} });

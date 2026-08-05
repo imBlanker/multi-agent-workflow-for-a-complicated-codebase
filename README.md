@@ -1,13 +1,79 @@
-# MAW — Multi-Agent Workflow for Complex Codebases
+[English](./README.md) | [简体中文](./README.zh-Hans.md) | [繁體中文](./README.zh-Hant.md)
 
 [![CI](https://github.com/imBlanker/multi-agent-workflow-for-a-complicated-codebase/actions/workflows/ci.yml/badge.svg)](https://github.com/imBlanker/multi-agent-workflow-for-a-complicated-codebase/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D20.17-green.svg)](https://nodejs.org)
-[![Tests](https://img.shields.io/badge/tests-52%20passing-success.svg)](#testing)
+[![Tests](https://img.shields.io/badge/tests-69%20passing-success.svg)](#testing)
+[![GitHub stars](https://img.shields.io/github/stars/imBlanker/multi-agent-workflow-for-a-complicated-codebase?style=social&label=Stars)](https://github.com/imBlanker/multi-agent-workflow-for-a-complicated-codebase/stargazers)
 
-> A portable, **dynamic** multi-agent workflow system. For a new complex project, MAW reads your [cc-switch](https://github.com/farion1231/cc-switch) config, probes the codebase, and picks the right agent architecture — *loop*, *orchestrator-workers* (subagents), *multi-agent*, *graph*, *dynamic*, or *ultracode* — or a combination. It generates per-agent, independently-editable configs, enforces **real-spend cost-rate limits**, and integrates **Codex review via `codex-plugin-cc`**.
+# MAW — Multi-Agent Workflow for Complex Codebases
 
-It does not hardcode one architecture. The host (Claude Code, Codex, …) drives execution; MAW provides the plan, the cost gate, and the review gates.
+> A portable, **dynamic** multi-agent workflow system. For a new complex project, MAW reads your [cc-switch](https://github.com/farion1231/cc-switch) config, probes the codebase, and picks the right agent architecture — *loop*, *orchestrator-workers* (subagents), *multi-agent*, *graph*, *dynamic*, or *ultracode* — or a combination. It generates per-agent, independently-editable configs, enforces **real-spend cost-rate limits**, and integrates **Codex review via [`codex-plugin-cc`](https://github.com/openai/codex-plugin-cc)**.
+
+> **Supported hosts: Claude Code and Codex only.** Other agent software (Gemini CLI, opencode, …) is intentionally **not** supported.
+
+---
+
+## 🍴 Fork first
+
+**Strongly recommended: fork this repository before you use it.** Make any personal changes in *your* fork, keep it synced with this upstream, and send improvements/insights back here.
+
+- **Fork:** <https://github.com/imBlanker/multi-agent-workflow-for-a-complicated-codebase/fork>
+- **Branch naming (Conventional Commits):** `feat/<topic>`, `fix/<issue>`, `docs/<topic>`, `chore/<topic>`, `refactor/<topic>`, `ci/<topic>`, `test/<topic>`.
+- **No direct pushes to `main`** — open a Pull Request from your feature branch.
+- **One PR per concern**, small and focused; link the issue with `Closes #N`; CI must pass before review.
+- **Issues:** search [existing issues](https://github.com/imBlanker/multi-agent-workflow-for-a-complicated-codebase/issues?q=is%3Aissue) first to avoid duplicates, then use the [bug](https://github.com/imBlanker/multi-agent-workflow-for-a-complicated-codebase/issues/new?template=bug_report.md) / [feature](https://github.com/imBlanker/multi-agent-workflow-for-a-complicated-codebase/issues/new?template=feature_request.md) templates.
+
+Full rules in [`CONTRIBUTING.md`](./CONTRIBUTING.md) and [`docs/GOVERNANCE.md`](./docs/GOVERNANCE.md). See [§Contributors](#15-contributors) and [§Contact](#16-contact).
+
+---
+
+## For Humans
+
+> **Tip: you can hand this whole README to your agent and let it install + configure MAW for you — see [For Agents](#for-agents) below.**
+
+MAW is a CLI (`maw`) plus a Claude Code plugin. The fastest path:
+
+```bash
+# 1. Fork the repo (see 🍴 Fork first), then clone YOUR fork:
+git clone https://github.com/<you>/multi-agent-workflow-for-a-complicated-codebase.git
+cd multi-agent-workflow-for-a-complicated-codebase
+
+# 2. Install the plugin + skills into Claude Code (and Codex, best-effort):
+npx . install          # or: node bin/maw.js install
+
+# 3. Initialize a project (this also creates a NEW cc-switch project profile):
+maw init -u <your-name>
+
+# 4. The next step is automatic: MAW runs `trellis init -u <your-name>` for you.
+#    (skip the trellis chain with --no-trellis)
+
+# 5. Plan + run:
+maw plan --project .
+maw run
+```
+
+If Claude Code routing / auto-failover is off in cc-switch, fix it in one command (writes **only** the `proxy_config` rows for claude/codex — never your profiles/providers):
+
+```bash
+maw routing --fix
+```
+
+Check the environment any time: `maw doctor`.
+
+## For Agents
+
+> **Give this to your agent (Claude Code, Codex, Cursor, …). It will install, configure, and use MAW for the user correctly.**
+
+Fetch the full agent install/configure guide and follow it end to end — do not summarize it:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/imBlanker/multi-agent-workflow-for-a-complicated-codebase/main/docs/AGENT_INSTALL.md
+```
+
+The guide covers: fork-and-clone, `npx . install`, `maw init -u <user>` (creates the cc-switch project profile + checks the routing policy + chains `trellis init`), `maw plan`, `maw run`, `maw cost`, `maw guard`, `maw review`, the [For Humans](#for-humans) workflow, the [cc-switch policy](#7-cc-switch-integration--routing-policy), the [trellis init rule](#8-trellis-init-as-the-mandatory-next-step), graceful degradation, and uninstall. Read it in full; do not guess.
+
+Minimal agent prompt: *"Install and configure MAW by following `docs/AGENT_INSTALL.md` in https://github.com/imBlanker/multi-agent-workflow-for-a-complicated-codebase , then run `maw plan` on this project and report the chosen architecture, agents, and cost limits."*
 
 ---
 
@@ -18,80 +84,53 @@ It does not hardcode one architecture. The host (Claude Code, Codex, …) drives
 4. [Supported Agent Software](#4-supported-agent-software)
 5. [Workflow Selection Mechanism](#5-workflow-selection-mechanism)
 6. [Agent & Subagent Configuration](#6-agent--subagent-configuration)
-7. [Cost Control Mechanism](#7-cost-control-mechanism)
-8. [Installation](#8-installation)
-9. [Usage Examples](#9-usage-examples)
-10. [Directory Structure](#10-directory-structure)
-11. [Security Notes](#11-security-notes)
-12. [Known Limitations](#12-known-limitations)
-13. [Roadmap](#13-roadmap)
-14. [Referenced Projects & Acknowledgements](#14-referenced-projects--acknowledgements)
+7. [cc-switch Integration & Routing Policy](#7-cc-switch-integration--routing-policy)
+8. [trellis init as the Mandatory Next Step](#8-trellis-init-as-the-mandatory-next-step)
+9. [Cost Control Mechanism](#9-cost-control-mechanism)
+10. [Installation](#10-installation)
+11. [Usage Examples](#11-usage-examples)
+12. [Directory Structure](#12-directory-structure)
+13. [Security Notes](#13-security-notes)
+14. [Known Limitations](#14-known-limitations)
 15. [Contributors](#15-contributors)
 16. [Contact](#16-contact)
 
----
-
 ## 1. Project Goals
-
-- **Dynamic, not fixed.** For each project, MAW scores six architectures against real signals (file count, languages, parallelizable subtasks, risk, context need, value/cost tolerance, HITL/persistence needs) plus the host's native capabilities, and selects the best fit — or a combination.
-- **Portable.** The plan and per-agent configs are plain JSON/YAML/Markdown that any agent software can read. Claude Code gets a full plugin (commands/agents/hooks/skills); Codex gets agents; others get the portable files.
-- **Cost-bounded.** Real inference spend from cc-switch logs, not token estimates. Defaults: **$1/min per agent**, **$10/min total** (independent), max concurrency 4 — all editable.
-- **Codex review, risk-gated.** When `codex-plugin-cc` is available, Codex acts as the independent reviewer at risk-based gates — not on every step.
-- **Reusable, not copied.** We studied open-source projects (see §14) and adopted their *ideas*; the implementation is original.
+- **Dynamic, not fixed.** MAW scores six architectures against real project signals + host capabilities, and selects the best fit — or a combination. See [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md).
+- **Portable + agent-software-scoped.** Claude Code and Codex only (narrowed per policy). The plan + per-agent configs are plain JSON/YAML/Markdown the host reads.
+- **Cost-bounded.** Real inference spend from cc-switch logs, not token estimates. Defaults: **$1/min per agent**, **$10/min total**, max concurrency 4 — all editable.
+- **Codex review, risk-gated.** When [`codex-plugin-cc`](https://github.com/openai/codex-plugin-cc) is available, Codex acts as the independent reviewer at risk-based gates — not every step.
+- **cc-switch-safe.** All existing cc-switch data is read-only; MAW only creates a NEW project profile and (opt-in) the routing carve-out.
 
 ## 2. When to Use
-
-- A **new complex project**: `maw init -u <user>` then `maw plan`.
-- A single agent is insufficient: many files, multiple languages, high risk, or context that exceeds one window.
-- You need **cost-bounded** multi-agent runs with **Codex review gates** and graceful degradation.
-- You want predictable, inspectable control (graph) with human-in-the-loop checkpoints.
-
-**When NOT to use:** tiny fixed tasks (a single LLM call + retrieval suffices), or tasks where all agents must share one context with many inter-dependencies (most simple coding tasks — a single loop agent is cheaper).
+A **new complex project**: `maw init -u <user>` → `maw plan`. Use when one agent is insufficient (many files, multiple languages, high risk, context exceeds one window) and you need cost-bounded multi-agent runs with Codex review gates. **Don't** use it for tiny fixed tasks (a single loop agent is cheaper).
 
 ## 3. System Architecture
-
 ```
-                 ┌─────────────────────────────────────────────┐
-   user/project │  maw plan                                   │
-                 │  probe → score architectures → select      │
-                 │  generate per-agent configs (.maw/)        │
-                 └───────────────┬─────────────────────────────┘
-                                 │
-        ┌────────────────────────┼──────────────────────────────┐
-        ▼                        ▼                              ▼
-┌──────────────┐        ┌────────────────┐            ┌──────────────────┐
-│ cc-switch    │        │ host agent      │            │ codex-plugin-cc  │
-│ (SQLite, RO) │        │ (Claude Code)   │            │ (Codex reviewer) │
-│ providers,   │        │ drives execute  │            │ risk-gated       │
-│ model_pricing│        │ via Task/delegate│           │ review gates     │
-│ request_logs │        └────────┬────────┘            └──────────────────┘
-└──────────────┘                 │
-        ▲                        ▼
-        │              ┌──────────────────────────┐
-        │              │ cost guard (pre-spawn)   │
-        └──────────────│ $/min per-agent + total, │
-                       │ concurrency cap          │
-                       └──────────────────────────┘
+   user/project → maw plan: probe → score architectures → select → generate per-agent configs (.maw/)
+        │
+   ┌────┴───────────────────────────────────────────────────────┐
+   ▼              ▼                                            ▼
+ cc-switch      host agent (Claude Code)              codex-plugin-cc (Codex reviewer)
+ (SQLite, RO)   drives execute via Task/delegate     risk-gated review gates
+ providers,     │
+ model_pricing, ▼
+ request_logs   cost guard (pre-spawn): $/min per-agent + total, concurrency cap
 ```
-
-- **Engine** (`src/`): `ccswitch.js` (read-only DB access via `node:sqlite`), `pricing.js` (fallback chain), `planner.js` (architecture selection), `graph.js` (workflow graph), `configgen.js` (per-agent files), `cost.js` (rate limiting), `codex.js` (review integration), `installer.js`, `doctor.js`, `host.js`, `probe.js`.
-- **Plugin** (`plugin/`): Claude Code commands (`/maw:plan`, `/maw:run`, `/maw:cost`, `/maw:doctor`, `/maw:add-agent`, `/maw:review`), agent definitions, and a `PreToolUse` hook that calls the cost guard before every `Task` spawn.
-- **Skills** (`skills/`): portable skill files (`maw-orchestration`, `maw-planner`, `maw-loop`, `maw-graph`, `maw-cost-guard`).
+- **Engine** (`src/`): [`ccswitch.js`](./src/ccswitch.js) (read-only DB + project-profile creation + routing), [`planner.js`](./src/planner.js), [`graph.js`](./src/graph.js), [`configgen.js`](./src/configgen.js), [`cost.js`](./src/cost.js), [`codex.js`](./src/codex.js), [`trellis.js`](./src/trellis.js), [`installer.js`](./src/installer.js), [`doctor.js`](./src/doctor.js), [`host.js`](./src/host.js), [`probe.js`](./src/probe.js).
+- **Plugin** (`plugin/`): Claude Code commands (`/maw:plan`, `/maw:run`, `/maw:cost`, `/maw:doctor`, `/maw:add-agent`, `/maw:review`), agent definitions, a `PreToolUse` cost-guard hook.
+- **Skills** (`skills/`): portable skill files.
 
 ## 4. Supported Agent Software
-
 | Host | Status | Notes |
 |---|---|---|
-| **Claude Code** | Full | Commands, agents, hooks, skills; native `Task`/delegate for subagents & multi-agent. |
-| **Codex** | Best-effort | Agent definitions copied to `~/.codex/agents`; invoked as reviewer via `codex-plugin-cc`. |
-| **Gemini CLI / opencode / others** | Portable | Reads the `.maw/` JSON/YAML/Markdown directly; no native glue yet. |
+| **[Claude Code](https://docs.claude.com/en/docs/claude-code)** | ✅ Full | Commands, agents, hooks, skills; native `Task`/delegate for subagents & multi-agent; **local routing + auto-failover always ON**. |
+| **[Codex](https://github.com/openai/codex)** | ✅ Supported | Agent definitions + reviewer via [`codex-plugin-cc`](https://github.com/openai/codex-plugin-cc); local routing ON unless OpenAI-OAuth login. |
+| Gemini CLI / opencode / others | ❌ Not supported | (Their cc-switch pricing may still be READ for cost estimates.) |
 
-MAW detects the host automatically (`maw doctor`). When the host has a **native** dynamic-workflow / multi-agent mechanism, MAW layers `dynamic` on top and lets the host drive — instead of re-implementing coordination.
+`maw doctor` reports the host + the routing-policy compliance.
 
 ## 5. Workflow Selection Mechanism
-
-The planner scores each architecture (higher = better fit), then picks the top one and combines it with others as appropriate.
-
 | Signal | Likely pick |
 |---|---|
 | tiny, fixed, low-risk | `none` (single call) |
@@ -102,201 +141,96 @@ The planner scores each architecture (higher = better fit), then picks the top o
 | host has native dynamic workflow / multi-agent | `dynamic` (layered on) |
 | complex coding + codex review available | `ultracode` (graph + loop + codex fix-gate) |
 
-These combine, they aren't exclusive. E.g. `ultracode` = `graph` + `loop` + a Codex review gate. See [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) for the full scoring rubric and the theoretical grounding (Anthropic / LangGraph / Lilian Weng).
+Architectures **combine** (e.g. `ultracode` = `graph` + `loop` + a Codex review gate). Full rubric: [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md).
 
 ## 6. Agent & Subagent Configuration
+`maw plan` writes an **independently-editable** config per role under `.maw/` (`workflow.json`, `config.yaml`, `plan.md`, `graph.json`, `agents/<role>.md`+`.json`, `runtime/`). Add/remove dynamically: `maw add-agent --role <r> ...` / `maw remove-agent --role <r>`. Edit any file directly — the runner re-reads it at execute time.
 
-`maw plan` writes an **independently-editable** config per agent/role under `.maw/`:
+## 7. cc-switch Integration & Routing Policy
+MAW treats your cc-switch as **read-only by default**. The rules below are enforced in code ([`src/ccswitch.js`](./src/ccswitch.js), `guardSql`):
 
-```
-.maw/
-  workflow.json          # full plan (re-read at execute time)
-  config.yaml            # global knobs: cost limits, concurrency, pricing sources
-  plan.md                # human-readable execution guide
-  graph.json             # workflow graph (nodes/edges)
-  agents/
-    orchestrator.md      # portable agent definition (one per role)
-    orchestrator.json    # machine config: model, appType, cost limit, tools, price
-    researcher.md / .json
-    implementer.md / .json
-    reviewer.md / .json  # codex reviewer
-  runtime/               # concurrency + cost state (gitignored)
-```
+- **All existing cc-switch data is read-only.** Reads use a read-only SQLite connection (`node:sqlite` `readOnly:true`).
+- **A NEW project per init.** `maw init -u <user>` creates a fresh cc-switch **project** (a row in the `profiles` table) named `MAW: <project> (<user>)`, scoped to claude+codex. Providers / MCP / Skills / memory are provisioned **only within this new project's payload**.
+- **Never touch "默认" profiles.** Any profile whose name contains `默认` (e.g. `Claude Code 默认`, `Codex 默认`) is **never** written, updated, or deleted — a hard guard refuses it.
+- **Routing rules** (`maw routing` / `maw doctor` checks; `maw routing --fix` applies the carve-out, writing **only** `proxy_config` for claude/codex):
+  - **Claude Code:** local routing **always ON** + auto-failover **always ON**.
+  - **Codex:** when an **OpenAI OAuth (ChatGPT) login** is in use → local routing **OFF**; otherwise **ON**. (OAuth is detected from `codex_oauth_auth.json` + the provider's `auth.auth_mode === "chatgpt"`.)
 
-Nothing is hardcoded: agents/roles come from the plan. Add/remove dynamically:
+## 8. trellis init as the Mandatory Next Step
+**Always run `trellis init -u <user-name>` as the step right after `maw init`.** MAW does this for you automatically (it invokes [`@mindfoldhq/trellis`](https://github.com/mindfoldhq/trellis) — a more powerful, more rigorous workflow framework). Use `maw init --no-trellis` to skip.
 
-```bash
-maw add-agent --role static-analyzer --model claude-sonnet-5 --app claude --task "Static analysis pass."
-maw remove-agent --role static-analyzer
-```
+Because trellis and MAW can both manage files, on conflict MAW **pauses** trellis init:
+1. **Snapshot** MAW-managed files (`.maw/*`, excluding `runtime/`/`logs/`).
+2. **Run** `trellis init -u <user> -y --claude --codex`, streaming output to `.maw/logs/trellis-init-<timestamp>.log`.
+3. **Detect** any MAW-managed file trellis touched → **pause**, print the conflict details + overview + log path in the terminal.
+4. **You choose** per conflict: `[m]` keep MAW (regenerate via `maw plan`) · `[t]` keep trellis · `[r]` re-run trellis init to **resume progress**.
+5. MAW applies your choice and continues.
 
-Edit any file directly — the runner re-reads it at execute time.
+(A black-box CLI can't be paused mid-write, so MAW detects conflicts immediately after the conflicting write, then resumes by re-running the idempotent `trellis init`.) See [`src/trellis.js`](./src/trellis.js).
 
-## 7. Cost Control Mechanism
-
-MAW measures **real inference spend** from cc-switch's `proxy_request_logs` (`total_cost_usd` over a time window → USD/min). This is the authoritative rate, not a token estimate.
-
-- **Per-agent**: $1/min default (a session exceeding it blocks new spawns).
-- **Total workflow**: $10/min default (independent of the per-agent sum).
-- **Max concurrency**: 4 default.
-- All editable in `.maw/config.yaml` or via flags (`--per-agent`, `--total`, `--concurrency`).
-
-**Pricing source chain** (used to *label* model prices in configs):
-1. cc-switch `model_pricing` (exact) → 2. cc-switch provider `cost_multiplier` (applied on top) → 3. vendored fallback **estimate** (tagged `estimated: true`) → 4. `null` (never faked as exact).
-
-When the price is an estimate, configs and `maw cost`/`doctor` say so explicitly.
+## 9. Cost Control Mechanism
+Real inference spend from cc-switch's `proxy_request_logs` → USD/min. **Per-agent** $1/min, **total** $10/min (independent), **max concurrency** 4 — editable in `.maw/config.yaml` or via flags. Pricing source chain: cc-switch `model_pricing` → provider `cost_multiplier` → vendored **estimate** (tagged `estimated:true`) → `null` (never faked).
 
 ```bash
-maw cost     # current rate + top sessions + used% vs limit
-maw guard    # ALLOW/DENY a new spawn right now (pre-spawn check)
-maw acquire --id <id> --role <r>   # take a slot (refuses if over budget)
+maw cost      # current rate + top sessions + used% vs limit
+maw guard     # ALLOW/DENY a new spawn right now (pre-spawn check)
+maw acquire --id <id> --role <r>   # take a slot
 maw release --id <id>             # release a slot
 ```
 
-## 8. Installation
-
-**From npm (published):**
+## 10. Installation
+**From npm (once published):** `npx multi-agent-workflow install`.
+**From a fork/clone (now):**
 ```bash
-npx multi-agent-workflow install
-```
-
-**From a clone (for development / before publish):**
-```bash
-git clone https://github.com/imBlanker/multi-agent-workflow-for-a-complicated-codebase.git
+git clone https://github.com/<you>/multi-agent-workflow-for-a-complicated-codebase.git
 cd multi-agent-workflow-for-a-complicated-codebase
-npx . install          # or: node bin/maw.js install
+npx . install          # or node bin/maw.js install
+```
+`install` copies commands/agents/hooks/skills into Claude Code (and Codex, best-effort), writes a manifest to `~/.maw/installed.json`, and is non-destructive (uninstall removes only `maw-*` files). `update` re-copies templates, preserving your edits.
+
+## 11. Usage Examples
+**Minimal:** `maw init -u alice` → `maw plan --project .` → `maw run` → `maw cost`.
+**Full:** `maw plan --project . --task-type coding --risk high --parallel 6 --value high --context large` → `maw guard` before each spawn → `maw acquire/release` → `maw review --after post-implementation`.
+See [`examples/complex-project-workflow.md`](./examples/complex-project-workflow.md) and the generated [`examples/.maw-sample/`](./examples/.maw-sample/).
+
+**Common errors:** `cc-switch database not found` → `maw doctor`; `DENY spawn ... per-agent limit` → lower concurrency or raise `--per-agent`; `codex not ready` → install codex + codex-plugin-cc (MAW degrades to a second Claude reviewer for risk ≥ medium); `routing NOT compliant` → `maw routing --fix`.
+
+## 12. Directory Structure
+```
+bin/maw.js  src/  plugin/  skills/  defaults/  examples/  tests/  docs/
+.github/workflows/ci.yml  README.{md,zh-Hans,zh-Hant}  LICENSE(MIT)
 ```
 
-`install` copies the plugin (commands/agents/hooks/skills) into the host agent software's directories, writes an install manifest to `~/.maw/installed.json`, and runs an environment check. It is non-destructive: `update` overwrites only MAW's own template files and preserves anything else you added.
+## 13. Security Notes
+cc-switch is read-only; the only writes are (a) a NEW project profile and (b) the opt-in `proxy_config` carve-out for claude/codex — both hard-guarded (no `DELETE`/`DROP`, no `UPDATE` on profiles/providers/skills, never on `默认`). The `PreToolUse` hook only **blocks** over-budget spawns. External code was reviewed (license + no hidden network/credential-harvesting) before reuse — see [`NOTICE.md`](./NOTICE.md), [`ACKNOWLEDGEMENTS.md`](./ACKNOWLEDGEMENTS.md).
 
-| Action | Command |
-|---|---|
-| Install | `npx multi-agent-workflow install` |
-| Update | `npx multi-agent-workflow update` |
-| Uninstall | `npx multi-agent-workflow uninstall` |
-| Initialize a project | `maw init -u <your-name>` |
-| Doctor (env check) | `maw doctor` |
-
-## 9. Usage Examples
-
-**Minimal — plan + run a small project:**
-```bash
-maw init -u alice
-maw plan --project .
-maw run            # batched execution guidance
-maw cost           # real cost rate
-```
-
-**Full workflow — a complex, high-risk codebase:**
-```bash
-# 1. plan with explicit signals (or let MAW probe)
-maw plan --project . --task-type coding --risk high --parallel 6 --value high --context large
-
-# 2. before spawning each agent, the host checks the guard
-maw guard --project .
-
-# 3. acquire/release slots around each subagent run
-maw acquire --id impl-1 --role implementer
-#   ... run implementer subagent ...
-maw release --id impl-1
-
-# 4. at review gates, invoke Codex (risk-gated)
-maw review --after "post-implementation"
-```
-
-See [`examples/complex-project-workflow.md`](./examples/complex-project-workflow.md) for an end-to-end walkthrough, and [`examples/.maw-sample/`](./examples/.maw-sample/) for a real generated plan (6 agents: orchestrator + 2 researchers + 2 implementers + codex reviewer).
-
-**Common errors:**
-- `cc-switch database not found` → run `maw doctor`; ensure `~/.cc-switch/cc-switch.db` exists or set `CC_SWITCH_DB`.
-- `DENY spawn: ... per-agent limit` → a session is over $1/min; lower concurrency or raise `--per-agent`.
-- `codex not ready` → install `codex` and `codex-plugin-cc`; MAW then degrades to a second Claude Code reviewer for risk ≥ medium.
-- `no workflow.json; run maw plan first` → run `maw plan --project .`.
-
-## 10. Directory Structure
-
-```
-.
-├── bin/maw.js              # CLI entry
-├── src/                    # engine (ccswitch, pricing, planner, graph, cost, codex, …)
-├── plugin/                 # Claude Code plugin (commands, agents, hooks, skills)
-├── skills/                 # portable skills
-├── defaults/               # pricing.fallback.json (estimates, clearly marked)
-├── examples/               # sample project + a real generated .maw plan
-├── tests/                  # node:test suite (52 tests) + fixture db builder
-├── docs/ARCHITECTURE.md    # architecture + theoretical grounding
-├── .github/workflows/ci.yml
-├── README.md / README.zh-Hans.md / README.zh-Hant.md
-└── LICENSE  (MIT)
-```
-
-## 11. Security Notes
-
-- MAW reads cc-switch **read-only** (`node:sqlite` in `readOnly: true` mode; never mutates provider data).
-- It never writes secrets to logs. `doctor`/`cost` redact auth tokens.
-- The Codex review path invokes `codex-plugin-cc`'s companion script; MAW does not embed credentials.
-- The `PreToolUse` hook only **blocks** spawns that exceed the cost/concurrency budget — it does not modify tool inputs.
-- Before reusing any external code, we checked: license permits reuse, no obvious security risk, no hidden network calls / credential harvesting / dangerous auto-execution. See [`NOTICE.md`](./NOTICE.md).
-
-## 12. Known Limitations
-
-- The cost guard measures **past** spend; a sudden burst can briefly exceed the limit before the next log flush.
-- Codex review integration depends on `codex-plugin-cc` being installed; without it, MAW substitutes a second Claude Code reviewer (graceful, but not Codex).
-- Per-agent rate limiting is enforced per **session**; agents that share a session id share a budget.
-- Graph persistence resumes state within a session; cross-process crash recovery is on the roadmap.
-- Not yet published to npm; use `npx . install` from a clone until published.
-
-## 13. Roadmap
-
-- [ ] Publish to npm as `multi-agent-workflow`.
-- [ ] Cross-process crash recovery for graph state.
-- [ ] LangGraph-style conditional edge evaluation in the runner.
-- [ ] Per-agent token-budget projection alongside the spend-based rate.
-- [ ] Gemini CLI / opencode native glue.
-- [ ] Web UI for live cost + concurrency monitoring.
-
-## 14. Referenced Projects & Acknowledgements
-
-We studied these open-source projects and adopted their **ideas** (workflow scheduling, agent/role management, dynamic workflow generation, graph execution, loop control, cost budgeting, plugin install, multi-agent messaging). The MAW implementation is original; no project was copied wholesale. See [`NOTICE.md`](./NOTICE.md) for what was borrowed and why.
-
-- **Anthropic — *Building Effective Agents*** & ***How we built our multi-agent research system*** — the workflow-vs-agent distinction, the orchestrator-workers pattern, subagent context compression, ~15× token cost awareness, and risk-gated evaluation.
-- **LangChain / LangGraph** — graph-as-nodes-and-edges, declarative structure + dynamic paths, persistence/HITL, "the hard part is context at each step".
-- **Lilian Weng — *LLM Powered Autonomous Agents*** — ReAct/Reflexion loop and reflection mechanics.
-- [`mbruhler/claude-orchestration`](https://github.com/mbruhler/claude-orchestration) (MIT) — multi-agent orchestration plugin layout.
-- [`garyqlin/glink-engine`](https://github.com/garyqlin/glink-engine) (MIT) — zero-dependency YAML graph engine + shared event bus.
-- [`milanglacier/pi-dynamic-workflow`](https://github.com/milanglacier/pi-dynamic-workflow) (MIT) — dynamic workflow selection.
-- [`srijansk/agent-relay`](https://github.com/srijansk/agent-relay) (MIT) — YAML workflow + agent relay.
-- [`x-glacier/SwarmFlow`](https://github.com/x-glacier/SwarmFlow) (Apache-2.0) — multi-agent orchestration + cost awareness.
-- [`openai/codex-plugin-cc`](https://github.com/openai/codex-plugin-cc) — the Codex review integration target.
-- **star-history** (open source) — the GitHub Stars trend chart (§below).
+## 14. Known Limitations
+- Not yet on npm (use `npx . install`).
+- The cost guard measures **past** spend; a burst can briefly exceed the limit.
+- Codex review depends on codex-plugin-cc; without it, MAW substitutes a second Claude reviewer.
+- The routing carve-out writes cc-switch's SQLite directly; the cc-switch GUI may need a restart to reflect it.
+- Cross-process graph crash recovery is on the roadmap.
 
 ## 15. Contributors
-
 - **imBlanker** — initial implementation.
-
-> Contributions welcome. See [`CONTRIBUTING.md`](./CONTRIBUTING.md). *(This section is a placeholder; no other contributors are fabricated.)*
+> Contributions welcome — see [`CONTRIBUTING.md`](./CONTRIBUTING.md) and [`docs/GOVERNANCE.md`](./docs/GOVERNANCE.md). *(No other contributors are fabricated.)*
 
 ## 16. Contact
-
 - Issues: <https://github.com/imBlanker/multi-agent-workflow-for-a-complicated-codebase/issues>
-- Author: **imBlanker** (GitHub) — *contact details to be added.*
-
-*(Contact details are intentionally placeholder; no personal email or handle is fabricated.)*
+- Author: **imBlanker** (GitHub). *(Contact details to be added; none fabricated.)*
 
 ---
 
 ## Testing
-
 ```bash
-npm test        # 52 node:test cases (engine + CLI + installer + codex)
-npm run smoke   # maw doctor + maw plan --self-test against this repo
-npm run demo    # generate examples/.maw-sample
+npm test        # 69 node:test cases
+node bin/maw.js doctor
 ```
 
 ## GitHub Stars Trend
+The badge at the top always shows the live star count (via [shields.io](https://shields.io)). The trend chart below is generated by the open-source **[star-history](https://github.com/star-history/star-history)** project — it auto-reads GitHub stars and updates itself. For a brand-new repo it may take time to populate; if the inline image is blank, open the [interactive chart](https://star-history.com/#imBlanker/multi-agent-workflow-for-a-complicated-codebase&Date).
 
-This chart auto-reads the repository's star count and updates itself — no self-hosted statistics service. It is generated by the open-source **[star-history](https://github.com/star-history/star-history)** project.
-
-[![Star History](https://api.star-history.com/svg?repos=imBlanker/multi-agent-workflow-for-a-complicated-codebase&type=Date)](https://star-history.com/#imBlanker/multi-agent-workflow-for-a-complicated-codebase&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=imBlanker/multi-agent-workflow-for-a-complicated-codebase&type=Date)](https://star-history.com/#imBlanker/multi-agent-workflow-for-a-complicated-codebase&Date)
 
 ---
 

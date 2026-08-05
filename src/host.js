@@ -1,7 +1,11 @@
 // @ts-check
-// Detect the "host" agent software (Claude Code, Codex, etc.) and its
-// capabilities, so the planner can prefer native dynamic-workflow / multi-agent
-// mechanisms when the host provides them instead of re-implementing them.
+// Detect the supported host agent software and its capabilities, so the
+// planner can prefer native dynamic-workflow / multi-agent mechanisms when the
+// host provides them instead of re-implementing them.
+//
+// Supported hosts are narrowed to ONLY Claude Code and Codex (project policy).
+// Other agent software (Gemini CLI, opencode, …) is NOT supported; their
+// cc-switch pricing data may still be READ for cost estimates.
 import { execSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -9,7 +13,8 @@ import os from "node:os";
 import { exists, readJson } from "./util.js";
 
 /**
- * @typedef {"claude-code"|"codex"|"gemini-cli"|"opencode"|"unknown"} HostApp
+ * @typedef {"claude-code"|"codex"|"unknown"} HostApp
+ * Note: only claude-code and codex are supported. Everything else is "unknown".
  * @typedef {{
  *   app: HostApp,
  *   homeDir: string,
@@ -70,6 +75,9 @@ export function detectHost(opts = {}) {
     agentsDirs.push(path.join(claudeDir, "agents"));
   }
 
+  // Supported hosts are Claude Code and Codex ONLY. Gemini CLI / opencode /
+  // others are intentionally NOT detected as supported (they may still be
+  // read for pricing).
   const codexBinary = sh("command -v codex 2>/dev/null || which codex 2>/dev/null") || null;
   if (exists(codexDir)) {
     detected.push(`Codex home at ${codexDir}`);
