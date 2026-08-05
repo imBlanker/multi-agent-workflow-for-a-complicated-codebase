@@ -241,17 +241,17 @@ node bin/maw.js doctor
 ```
 
 ## GitHub Stars 趨勢
-頂部的徽章恆顯示即時星數（透過 [shields.io](https://shields.io)）。下方趨勢圖依**官方 [star-history](https://www.star-history.com/blog/how-to-use-github-star-history#how-to-embed-the-chart-in-your-readme) 方法**內嵌（開源專案 [star-history](https://github.com/star-history/star-history)；感知深色／淺色模式，每次檢視皆自動更新）：
+頂部的徽章恆顯示即時星數（透過 [shields.io](https://shields.io)）。下方趨勢圖透過官方 [star-history](https://www.star-history.com/blog/how-to-use-github-star-history#how-to-embed-the-chart-in-your-readme)「**Generate embed code**」流程，以封裝的儲存庫讀取權杖（`sealed_token`）內嵌——無論 star-history 共享權杖池狀態如何皆可靠渲染，感知深色／淺色模式，每次檢視皆自動更新：
 
-<a href="https://www.star-history.com/#imBlanker/multi-agent-workflow-for-a-complicated-codebase&Date">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=imBlanker/multi-agent-workflow-for-a-complicated-codebase&type=date&theme=dark&legend=top-left" />
-    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=imBlanker/multi-agent-workflow-for-a-complicated-codebase&type=date&legend=top-left" />
-    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=imBlanker/multi-agent-workflow-for-a-complicated-codebase&type=date&legend=top-left" />
-  </picture>
+<a href="https://www.star-history.com/?type=date&repos=imBlanker%2Fmulti-agent-workflow-for-a-complicated-codebase">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=imBlanker/multi-agent-workflow-for-a-complicated-codebase&type=date&theme=dark&legend=top-left&sealed_token=PYzm97OB-CHuFqRbxwItWNfcNPaj1VeB_w7lokYexF6G_txF6lQ5fkUsDSa2CA-OXsxYMZMRjbrqcsM4xF_3tlnZqyQRfDYzMvEEFRDiRV2FhIbBv3Ythw" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=imBlanker/multi-agent-workflow-for-a-complicated-codebase&type=date&legend=top-left&sealed_token=PYzm97OB-CHuFqRbxwItWNfcNPaj1VeB_w7lokYexF6G_txF6lQ5fkUsDSa2CA-OXsxYMZMRjbrqcsM4xF_3tlnZqyQRfDYzMvEEFRDiRV2FhIbBv3Ythw" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=imBlanker/multi-agent-workflow-for-a-complicated-codebase&type=date&legend=top-left&sealed_token=PYzm97OB-CHuFqRbxwItWNfcNPaj1VeB_w7lokYexF6G_txF6lQ5fkUsDSa2CA-OXsxYMZMRjbrqcsM4xF_3tlnZqyQRfDYzMvEEFRDiRV2FhIbBv3Ythw" />
+ </picture>
 </a>
 
-> GitHub 已將星數資料限定為儲存庫協作者可見（2026 年 7 月），因此 star-history 透過自有權杖池提供圖表；當該權杖池遭速率限制時，圖片會顯示佔位圖，並在權杖池冷卻後**自我修復**。若要保證恆可渲染，請開啟 [star-history.com](https://www.star-history.com/#imBlanker/multi-agent-workflow-for-a-complicated-codebase&Date)，加入一個可讀取本儲存庫的權杖，然後點擊 **Generate embed code**（權杖在進入 README 前會先加密）。
+> `sealed_token` 由 star-history 加密——原始 GitHub 權杖不會暴露於本 README。若圖表停止渲染（權杖遭撤銷或過期），請在 [star-history.com](https://www.star-history.com/) 重新產生嵌入碼並替換此片段。
 
 ---
 

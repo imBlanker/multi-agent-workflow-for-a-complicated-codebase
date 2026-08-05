@@ -240,17 +240,17 @@ node bin/maw.js doctor
 ```
 
 ## GitHub Stars Trend
-The badge at the top always shows the live star count (via [shields.io](https://shields.io)). The trend chart below is embedded per the **official [star-history](https://www.star-history.com/blog/how-to-use-github-star-history#how-to-embed-the-chart-in-your-readme) method** (open-source [star-history](https://github.com/star-history/star-history); dark/light aware, auto-updates on each view):
+The badge at the top always shows the live star count (via [shields.io](https://shields.io)). The trend chart below is embedded via the official [star-history](https://www.star-history.com/blog/how-to-use-github-star-history#how-to-embed-the-chart-in-your-readme) **"Generate embed code"** flow with a sealed repo-read token (`sealed_token`) — it renders reliably regardless of star-history's shared token-pool state, is dark/light aware, and auto-updates on each view:
 
-<a href="https://www.star-history.com/#imBlanker/multi-agent-workflow-for-a-complicated-codebase&Date">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=imBlanker/multi-agent-workflow-for-a-complicated-codebase&type=date&theme=dark&legend=top-left" />
-    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=imBlanker/multi-agent-workflow-for-a-complicated-codebase&type=date&legend=top-left" />
-    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=imBlanker/multi-agent-workflow-for-a-complicated-codebase&type=date&legend=top-left" />
-  </picture>
+<a href="https://www.star-history.com/?type=date&repos=imBlanker%2Fmulti-agent-workflow-for-a-complicated-codebase">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=imBlanker/multi-agent-workflow-for-a-complicated-codebase&type=date&theme=dark&legend=top-left&sealed_token=PYzm97OB-CHuFqRbxwItWNfcNPaj1VeB_w7lokYexF6G_txF6lQ5fkUsDSa2CA-OXsxYMZMRjbrqcsM4xF_3tlnZqyQRfDYzMvEEFRDiRV2FhIbBv3Ythw" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=imBlanker/multi-agent-workflow-for-a-complicated-codebase&type=date&legend=top-left&sealed_token=PYzm97OB-CHuFqRbxwItWNfcNPaj1VeB_w7lokYexF6G_txF6lQ5fkUsDSa2CA-OXsxYMZMRjbrqcsM4xF_3tlnZqyQRfDYzMvEEFRDiRV2FhIbBv3Ythw" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=imBlanker/multi-agent-workflow-for-a-complicated-codebase&type=date&legend=top-left&sealed_token=PYzm97OB-CHuFqRbxwItWNfcNPaj1VeB_w7lokYexF6G_txF6lQ5fkUsDSa2CA-OXsxYMZMRjbrqcsM4xF_3tlnZqyQRfDYzMvEEFRDiRV2FhIbBv3Ythw" />
+ </picture>
 </a>
 
-> GitHub restricted star data to repo collaborators (July 2026), so star-history serves charts through its own token pool; when that pool is rate-limited the image shows a placeholder and **self-heals** when the pool cools down. For guaranteed always-on rendering, open [star-history.com](https://www.star-history.com/#imBlanker/multi-agent-workflow-for-a-complicated-codebase&Date), add a token that can read this repo, and click **Generate embed code** (the token is encrypted before it enters the README).
+> The `sealed_token` is encrypted by star-history — the raw GitHub token is never exposed in this README. If the chart ever stops rendering (token revoked or expired), regenerate the embed on [star-history.com](https://www.star-history.com/) and paste the new snippet here.
 
 ---
 
