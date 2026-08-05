@@ -106,7 +106,7 @@ Minimal agent prompt: *"Install and configure MAW by following `docs/AGENT_INSTA
 ## 2. When to Use
 A **new complex project**: `maw init -u <user>` → `maw plan`. Use when one agent is insufficient (many files, multiple languages, high risk, context exceeds one window) and you need cost-bounded multi-agent runs with Codex review gates. **Don't** use it for tiny fixed tasks (a single loop agent is cheaper).
 
-**Background reading — agent-system concepts.** New to the paradigms MAW scores and selects among? Read [`docs/agent-architecture-paradigms.html`](./docs/agent-architecture-paradigms.html) (open the `.html` directly in a browser — it's self-contained): a short illustrated report distinguishing **Augmented LLM**, **Workflow vs Agent**, **Multi-Agent**, **Subagents**, **Orchestrator-Worker**, **Loop Engineering**, and **Graph Engineering** — what each is, when to use it, and the prerequisites it demands.
+**Background reading — agent-system concepts.** New to the paradigms MAW scores and selects among? Read the live report — [Agent Architecture Paradigms](https://imblanker.github.io/multi-agent-workflow-for-a-complicated-codebase/agent-architecture-paradigms.html) (rendered on GitHub Pages; source: [`docs/agent-architecture-paradigms.html`](./docs/agent-architecture-paradigms.html)): a short illustrated study distinguishing **Augmented LLM**, **Workflow vs Agent**, **Multi-Agent**, **Subagents**, **Orchestrator-Worker**, **Loop Engineering**, and **Graph Engineering** — what each is, when to use it, and the prerequisites it demands.
 
 ## 3. System Architecture
 ```
