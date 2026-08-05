@@ -1,0 +1,28 @@
+{
+  "role": "orchestrator",
+  "agent": "claude-code",
+  "app_type": "claude",
+  "model": "claude-opus-5",
+  "cost_rate_limit_usd_per_min": 1,
+  "concurrency": 1,
+  "tools": [
+    "Task",
+    "Read",
+    "Edit",
+    "Bash"
+  ],
+  "review_required": true,
+  "task": "Plan, decompose, delegate, synthesize.",
+  "price": {
+    "model_id": "claude-opus-5",
+    "display_name": "Claude Opus 5",
+    "input_per_m": 5,
+    "output_per_m": 25,
+    "cache_read_per_m": 0.5,
+    "cache_creation_per_m": 6.25,
+    "source": "cc-switch",
+    "estimated": false,
+    "multiplier": 1
+  },
+  "editable": "All fields are independently editable. The runner reads this file at execute time."
+}

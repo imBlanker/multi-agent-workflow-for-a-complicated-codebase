@@ -1,0 +1,41 @@
+workflow:
+  id: orchestrator-workers-sample-project
+  primary: orchestrator-workers
+  selected:
+  - dynamic
+  host_app: claude-code
+cost:
+  per_agent_limit_usd_per_min: 1
+  total_limit_usd_per_min: 10
+  max_concurrency: 4
+  window_seconds: 3600
+  pricing_sources:
+  - "cc-switch:model_pricing"
+codex:
+  enabled: true
+  when:
+  - "risk>=medium"
+  - ultracode fix-gate
+  review_scopes:
+  - auto
+  - working-tree
+models:
+  orchestrator:
+    model: claude-opus-5
+    app_type: claude
+  researcher:
+    model: claude-opus-5
+    app_type: claude
+  implementer:
+    model: claude-opus-5
+    app_type: claude
+  implementer-2:
+    model: claude-opus-5
+    app_type: claude
+  researcher-2:
+    model: claude-opus-5
+    app_type: claude
+  reviewer:
+    model: gpt-5.2-codex
+    app_type: codex
+editable: "Every field above is user-editable. Re-run `maw plan` to regenerate from signals."

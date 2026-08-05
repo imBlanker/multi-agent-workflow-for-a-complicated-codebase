@@ -1,0 +1,116 @@
+{
+  "graph": {
+    "id": "wf",
+    "name": "orchestrator-workers-sample-project",
+    "meta": {},
+    "nodes": [
+      {
+        "id": "n1",
+        "role": "orchestrator",
+        "agent": "claude-code",
+        "kind": "task",
+        "description": "Decompose the task; write .maw/plan.md."
+      },
+      {
+        "id": "n2",
+        "role": "researcher",
+        "agent": "claude-code",
+        "kind": "parallel-fanout",
+        "description": "Explore landscape; return compressed findings."
+      },
+      {
+        "id": "n3",
+        "role": "implementer",
+        "agent": "claude-code",
+        "kind": "parallel-fanout",
+        "description": "Implement vertical slice A."
+      },
+      {
+        "id": "n4",
+        "role": "implementer-2",
+        "agent": "claude-code",
+        "kind": "parallel-fanout",
+        "description": "Implement vertical slice B in parallel."
+      },
+      {
+        "id": "n5",
+        "role": "researcher-2",
+        "agent": "claude-code",
+        "kind": "parallel-fanout",
+        "description": "Secondary parallel exploration."
+      },
+      {
+        "id": "n6",
+        "role": "orchestrator",
+        "agent": "claude-code",
+        "kind": "task",
+        "description": "Merge subagent results; resolve conflicts."
+      },
+      {
+        "id": "r7",
+        "kind": "review",
+        "review": {
+          "by": "codex",
+          "scope": "auto"
+        },
+        "description": "post-implementation review"
+      },
+      {
+        "id": "r8",
+        "kind": "review",
+        "review": {
+          "by": "codex",
+          "scope": "working-tree"
+        },
+        "description": "architecture/security review"
+      }
+    ],
+    "edges": [
+      {
+        "from": "n1",
+        "to": "n2"
+      },
+      {
+        "from": "n1",
+        "to": "n3"
+      },
+      {
+        "from": "n1",
+        "to": "n4"
+      },
+      {
+        "from": "n1",
+        "to": "n5"
+      },
+      {
+        "from": "n2",
+        "to": "n6"
+      },
+      {
+        "from": "n3",
+        "to": "n6"
+      },
+      {
+        "from": "n4",
+        "to": "n6"
+      },
+      {
+        "from": "n5",
+        "to": "n6"
+      },
+      {
+        "from": "n6",
+        "to": "r7"
+      },
+      {
+        "from": "r7",
+        "to": "r8"
+      }
+    ]
+  },
+  "validation": {
+    "ok": true,
+    "errors": [],
+    "warnings": []
+  }
+}

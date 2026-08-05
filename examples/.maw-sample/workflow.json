@@ -1,0 +1,223 @@
+{
+  "name": "orchestrator-workers-sample-project",
+  "selected": [
+    "dynamic"
+  ],
+  "primary": "orchestrator-workers",
+  "rationale": [
+    "[orchestrator-workers] 6 parallelizable subtasks / context large: delegate to subagents with own windows",
+    "[multi-agent] high-value (high) breadth-first work, 6 parallel directions: multi-agent scales token spend",
+    "[ultracode] complex coding with codex-review available: graph checkpoints + implement→review→fix loop"
+  ],
+  "agents": [
+    {
+      "role": "orchestrator",
+      "agent": "claude-code",
+      "model": "claude-opus-5",
+      "appType": "claude",
+      "costRateLimitUsdPerMin": 1,
+      "concurrency": 1,
+      "tools": [
+        "Task",
+        "Read",
+        "Edit",
+        "Bash"
+      ],
+      "reviewRequired": true,
+      "task": "Plan, decompose, delegate, synthesize."
+    },
+    {
+      "role": "researcher",
+      "agent": "claude-code",
+      "model": "claude-opus-5",
+      "appType": "claude",
+      "costRateLimitUsdPerMin": 1,
+      "concurrency": 1,
+      "tools": [
+        "WebFetch",
+        "Grep",
+        "Read"
+      ],
+      "reviewRequired": false,
+      "task": "Investigate independent facets and compress findings."
+    },
+    {
+      "role": "implementer",
+      "agent": "claude-code",
+      "model": "claude-opus-5",
+      "appType": "claude",
+      "costRateLimitUsdPerMin": 1,
+      "concurrency": 1,
+      "tools": [
+        "Read",
+        "Edit",
+        "Write",
+        "Bash"
+      ],
+      "reviewRequired": false,
+      "task": "Implement a vertical slice end-to-end."
+    },
+    {
+      "role": "implementer-2",
+      "agent": "claude-code",
+      "model": "claude-opus-5",
+      "appType": "claude",
+      "costRateLimitUsdPerMin": 1,
+      "concurrency": 1,
+      "tools": [
+        "Read",
+        "Edit",
+        "Write",
+        "Bash"
+      ],
+      "reviewRequired": false,
+      "task": "Implement a second independent slice in parallel."
+    },
+    {
+      "role": "researcher-2",
+      "agent": "claude-code",
+      "model": "claude-opus-5",
+      "appType": "claude",
+      "costRateLimitUsdPerMin": 1,
+      "concurrency": 1,
+      "tools": [
+        "WebFetch",
+        "Grep"
+      ],
+      "reviewRequired": false,
+      "task": "Secondary breadth-first exploration."
+    },
+    {
+      "role": "reviewer",
+      "agent": "codex",
+      "model": "gpt-5.2-codex",
+      "appType": "codex",
+      "costRateLimitUsdPerMin": 1,
+      "concurrency": 1,
+      "tools": [
+        "codex:review",
+        "codex:adversarial-review"
+      ],
+      "reviewRequired": true,
+      "task": "Independent code/architecture/security review via codex-plugin-cc."
+    }
+  ],
+  "groups": [
+    {
+      "label": "plan",
+      "parallel": false,
+      "agents": [
+        "orchestrator"
+      ],
+      "steps": [
+        {
+          "role": "orchestrator",
+          "agent": "claude-code",
+          "task": "Decompose the task; write .maw/plan.md."
+        }
+      ]
+    },
+    {
+      "label": "execute-parallel",
+      "parallel": true,
+      "agents": [
+        "researcher",
+        "implementer",
+        "implementer-2",
+        "researcher-2"
+      ],
+      "steps": [
+        {
+          "role": "researcher",
+          "agent": "claude-code",
+          "task": "Explore landscape; return compressed findings."
+        },
+        {
+          "role": "implementer",
+          "agent": "claude-code",
+          "task": "Implement vertical slice A."
+        },
+        {
+          "role": "implementer-2",
+          "agent": "claude-code",
+          "task": "Implement vertical slice B in parallel."
+        },
+        {
+          "role": "researcher-2",
+          "agent": "claude-code",
+          "task": "Secondary parallel exploration."
+        }
+      ]
+    },
+    {
+      "label": "synthesize",
+      "parallel": false,
+      "agents": [
+        "orchestrator"
+      ],
+      "steps": [
+        {
+          "role": "orchestrator",
+          "agent": "claude-code",
+          "task": "Merge subagent results; resolve conflicts."
+        }
+      ]
+    }
+  ],
+  "reviewPoints": [
+    {
+      "by": "codex",
+      "scope": "auto",
+      "label": "post-implementation review"
+    },
+    {
+      "by": "codex",
+      "scope": "working-tree",
+      "label": "architecture/security review"
+    }
+  ],
+  "loops": [],
+  "cost": {
+    "perAgentLimitUsdPerMin": 1,
+    "totalLimitUsdPerMin": 10,
+    "maxConcurrency": 4,
+    "sources": [
+      "cc-switch:model_pricing"
+    ]
+  },
+  "hostApp": "claude-code",
+  "hostCapabilities": [
+    "subagents",
+    "multi-agent",
+    "dynamic-workflow",
+    "codex-review"
+  ],
+  "codex": {
+    "enabled": true,
+    "when": [
+      "risk>=medium",
+      "ultracode fix-gate"
+    ],
+    "reviewScopes": [
+      "auto",
+      "working-tree"
+    ]
+  },
+  "signals": {
+    "files": 14,
+    "loc": 24,
+    "languages": [
+      "js"
+    ],
+    "taskType": "coding",
+    "parallelizableSubtasks": 6,
+    "risk": "high",
+    "contextNeed": "large",
+    "valuePerRun": "high",
+    "maxIterations": 5,
+    "needHITL": false,
+    "needPersistence": false,
+    "description": "sample-project"
+  },
+  "createdAt": "2026-08-05T04:49:47.719Z"
+}

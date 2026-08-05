@@ -1,0 +1,11 @@
+---
+description: Invoke a Codex review via codex-plugin-cc (risk-gated by the plan; pass --force to review anyway)
+argument-hint: '[--after post-implementation|architecture/security|ultracode fix-gate] [--scope auto|working-tree|branch] [--base <ref>] [--force]'
+allowed-tools: Bash, Read
+---
+
+Run `node ${CLAUDE_PLUGIN_ROOT}/../bin/maw.js review --project $PWD $ARGUMENTS`.
+
+The command checks whether the plan has a review gate matching `--after`. If yes (or if `--force` is set) and codex-plugin-cc is available, it invokes the codex companion review and returns Codex's output verbatim. If codex is unavailable, it reports that and suggests using a second Claude Code agent as the reviewer (graceful degradation).
+
+This is review-only: do not apply patches or make changes from this command.

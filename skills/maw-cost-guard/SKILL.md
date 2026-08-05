@@ -1,0 +1,29 @@
+# MAW Cost Guard (skill)
+
+> Use before spawning any subagent. Enforces real-spend cost-rate limits.
+
+MAW measures cost from **actual inference spend** in the cc-switch proxy logs (`proxy_request_logs.total_cost_usd` over a time window → USD/min), not token estimates. This is the authoritative rate.
+
+## Defaults (editable in `.maw/config.yaml`)
+- Per-agent: **$1/min**
+- Total workflow: **$10/min** (independent constraint; enforced via concurrency + rate gating)
+- Max concurrency: 4
+
+## Commands
+```bash
+maw cost                         # current rate + top sessions + used% vs limit
+maw guard                        # ALLOW/DENY a new spawn right now
+maw acquire --id <id> --role <r>  # take a slot (refuses if over budget)
+maw release --id <id>             # release a slot
+```
+
+## Pricing source chain (per spec)
+1. cc-switch `model_pricing` (exact)
+2. cc-switch provider `cost_multiplier` (applied on top)
+3. vendored fallback estimate (clearly tagged `estimated: true`)
+4. unknown → `null` (never faked as exact)
+
+When the price is an estimate, configs and the `maw cost`/`doctor` output say so. Do not present estimates as exact.
+
+## Degradation
+If cc-switch is unavailable, the guard degrades to concurrency-only limiting (no spend tracking) and `maw doctor` reports the gap. Codex reviewer availability is independent: if codex is missing, the planner substitutes a second Claude Code agent reviewer for risk >= medium.

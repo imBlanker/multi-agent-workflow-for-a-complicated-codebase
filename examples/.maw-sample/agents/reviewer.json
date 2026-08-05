@@ -1,0 +1,26 @@
+{
+  "role": "reviewer",
+  "agent": "codex",
+  "app_type": "codex",
+  "model": "gpt-5.2-codex",
+  "cost_rate_limit_usd_per_min": 1,
+  "concurrency": 1,
+  "tools": [
+    "codex:review",
+    "codex:adversarial-review"
+  ],
+  "review_required": true,
+  "task": "Independent code/architecture/security review via codex-plugin-cc.",
+  "price": {
+    "model_id": "gpt-5.2-codex",
+    "display_name": "GPT-5.2 Codex",
+    "input_per_m": 1.75,
+    "output_per_m": 14,
+    "cache_read_per_m": 0.175,
+    "cache_creation_per_m": 0,
+    "source": "cc-switch",
+    "estimated": false,
+    "multiplier": 1
+  },
+  "editable": "All fields are independently editable. The runner reads this file at execute time."
+}

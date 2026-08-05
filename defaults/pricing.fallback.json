@@ -1,0 +1,15 @@
+{
+  "models": {
+    "claude-opus-5": { "display_name": "Claude Opus 5 (estimate)", "input_per_m": 5, "output_per_m": 25, "cache_read_per_m": 0.5, "cache_creation_per_m": 6.25 },
+    "claude-sonnet-5": { "display_name": "Claude Sonnet 5 (estimate)", "input_per_m": 3, "output_per_m": 15, "cache_read_per_m": 0.3, "cache_creation_per_m": 3.75 },
+    "claude-haiku-4-5": { "display_name": "Claude Haiku 4.5 (estimate)", "input_per_m": 1, "output_per_m": 5, "cache_read_per_m": 0.1, "cache_creation_per_m": 1.25 },
+    "gpt-5.2-codex": { "display_name": "GPT-5.2 Codex (estimate)", "input_per_m": 1.75, "output_per_m": 14, "cache_read_per_m": 0.175, "cache_creation_per_m": 0 },
+    "gpt-5.2": { "display_name": "GPT-5.2 (estimate)", "input_per_m": 1.75, "output_per_m": 14, "cache_read_per_m": 0.175, "cache_creation_per_m": 0 },
+    "deepseek-v4-pro": { "display_name": "DeepSeek V4 Pro (estimate)", "input_per_m": 1.1, "output_per_m": 2.7, "cache_read_per_m": 0.11, "cache_creation_per_m": 0 },
+    "deepseek-v4-flash": { "display_name": "DeepSeek V4 Flash (estimate)", "input_per_m": 0.3, "output_per_m": 0.9, "cache_read_per_m": 0.03, "cache_creation_per_m": 0 },
+    "kimi-k3": { "display_name": "Kimi K3 (estimate)", "input_per_m": 0.8, "output_per_m": 2.4, "cache_read_per_m": 0.08, "cache_creation_per_m": 0 },
+    "gemini-3-pro": { "display_name": "Gemini 3 Pro (estimate)", "input_per_m": 2, "output_per_m": 12, "cache_read_per_m": 0.2, "cache_creation_per_m": 0 }
+  },
+  "_note": "These are ESTIMATES used only when cc-switch has no price for a model. Verify real prices on Artificial Analysis (https://artificialanalysis.ai) or OpenRouter (https://openrouter.ai/models). Never treat these as exact.",
+  "_sources": ["Artificial Analysis", "OpenRouter", "vendor docs (public)"]
+}

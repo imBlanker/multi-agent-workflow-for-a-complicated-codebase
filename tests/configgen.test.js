@@ -1,0 +1,77 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import os from "node:os";
+import { planWorkflow } from "../src/planner.js";
+import { generateConfigs } from "../src/configgen.js";
+import { readJson, exists } from "../src/util.js";
+
+const host = { app: "claude-code", hasSubagents: true, hasMultiAgent: true, hasDynamicWorkflow: true, codexPluginInstalled: true, codexBinary: "/x/codex" };
+const cc = {
+  currentProviders: {
+    claude: { name: "Deep Worker", cost_multiplier: 1, settings_config: { env: { ANTHROPIC_MODEL: "claude-opus-5" } } },
+    codex: { name: "Codex", cost_multiplier: 1, settings_config: { model: "gpt-5.2-codex" } },
+  },
+  modelPricing: { "claude-opus-5": { input_per_m: 5, output_per_m: 25, cache_read_per_m: 0.5, cache_creation_per_m: 6.25, source: "cc-switch" }, "gpt-5.2-codex": { input_per_m: 1.75, output_per_m: 14, cache_read_per_m: 0.175, cache_creation_per_m: 0, source: "cc-switch" } },
+};
+
+function mkTmpProject() {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "maw-cfg-"));
+  return tmp;
+}
+
+test("generateConfigs writes per-agent .md and .json for every role", () => {
+  const proj = mkTmpProject();
+  const plan = planWorkflow({ files: 30, parallelizableSubtasks: 4, risk: "high", contextNeed: "large", valuePerRun: "high", taskType: "coding" }, { host, ccSwitch: cc });
+  const gen = generateConfigs(proj, plan, cc);
+  assert.ok(gen.files.length >= 4);
+  assert.ok(exists(path.join(proj, ".maw", "workflow.json")));
+  assert.ok(exists(path.join(proj, ".maw", "config.yaml")));
+  assert.ok(exists(path.join(proj, ".maw", "plan.md")));
+  assert.ok(exists(path.join(proj, ".maw", "graph.json")));
+  for (const a of plan.agents) {
+    assert.ok(exists(path.join(proj, ".maw", "agents", `${a.role}.md`)), `missing ${a.role}.md`);
+    assert.ok(exists(path.join(proj, ".maw", "agents", `${a.role}.json`)), `missing ${a.role}.json`);
+  }
+  fs.rmSync(proj, { recursive: true, force: true });
+});
+
+test("per-agent json carries model, cost limit, tools, and price source", () => {
+  const proj = mkTmpProject();
+  const plan = planWorkflow({ files: 30, parallelizableSubtasks: 4, risk: "high", contextNeed: "large", valuePerRun: "high", taskType: "coding" }, { host, ccSwitch: cc });
+  generateConfigs(proj, plan, cc);
+  const reviewer = readJson(path.join(proj, ".maw", "agents", "reviewer.json"));
+  assert.equal(reviewer.role, "reviewer");
+  assert.equal(reviewer.agent, "codex");
+  assert.equal(reviewer.model, "gpt-5.2-codex");
+  assert.equal(reviewer.cost_rate_limit_usd_per_min, 1);
+  assert.equal(reviewer.price.source, "cc-switch");
+  assert.equal(reviewer.price.estimated, false);
+  fs.rmSync(proj, { recursive: true, force: true });
+});
+
+test("config.yaml contains editable cost knobs", () => {
+  const proj = mkTmpProject();
+  const plan = planWorkflow({ files: 30, parallelizableSubtasks: 4, risk: "high", contextNeed: "large", valuePerRun: "high", taskType: "coding" }, { host, ccSwitch: cc, cost: { perAgent: 1.5, total: 7, maxConcurrency: 3 } });
+  generateConfigs(proj, plan, cc);
+  const yaml = fs.readFileSync(path.join(proj, ".maw", "config.yaml"), "utf8");
+  assert.match(yaml, /per_agent_limit_usd_per_min: 1\.5/);
+  assert.match(yaml, /total_limit_usd_per_min: 7/);
+  assert.match(yaml, /max_concurrency: 3/);
+  fs.rmSync(proj, { recursive: true, force: true });
+});
+
+test("warnings emitted when model price unknown", () => {
+  const proj = mkTmpProject();
+  const plan = {
+    name: "t", primary: "loop", selected: ["loop"],
+    agents: [{ role: "x", agent: "claude-code", model: "totally-unknown-model-xyz", appType: "claude", costRateLimitUsdPerMin: 1, concurrency: 1, tools: [], reviewRequired: false, task: "x" }],
+    groups: [], reviewPoints: [], loops: [],
+    cost: { perAgentLimitUsdPerMin: 1, totalLimitUsdPerMin: 10, maxConcurrency: 4, sources: [] },
+    hostApp: "claude-code", hostCapabilities: [], codex: { enabled: false, when: [], reviewScopes: [] }, signals: {}, rationale: [], createdAt: "",
+  };
+  const gen = generateConfigs(proj, plan, { modelPricing: {} });
+  assert.ok(gen.warnings.length >= 1, `expected >=1 warning, got ${JSON.stringify(gen.warnings)}`);
+  fs.rmSync(proj, { recursive: true, force: true });
+});

@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/../bin/maw.js\" guard --project \"$(pwd)\" 2>/dev/null | grep -q '^ALLOW' || (echo 'MAW cost guard: deny (per-agent or total cost-rate limit, or max concurrency reached). See `maw cost`.' >&2 && exit 2)"
+          }
+        ]
+      }
+    ]
+  }
+}

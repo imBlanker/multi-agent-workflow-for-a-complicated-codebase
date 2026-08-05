@@ -1,0 +1,97 @@
+# Contributing to MAW
+
+Thanks for your interest in improving **multi-agent-workflow (MAW)** — a portable, dynamic multi-agent workflow system for complex codebases. This guide covers the basics of getting a change merged.
+
+## Prerequisites
+
+- **Node.js >= 20.17** (20.x LTS or 22.x recommended)
+- npm (bundled with Node)
+- Optional: [cc-switch](https://github.com/farion1231/cc-switch) and the Codex CLI, for full `doctor` output
+
+## Getting started
+
+1. **Fork** the repository on GitHub and clone your fork.
+2. Create a feature branch from `main`:
+   ```bash
+   git checkout -b feat/my-change
+   ```
+3. Install dependencies:
+   ```bash
+   npm install --no-audit --no-fund
+   ```
+
+## Development workflow
+
+### Run the tests
+
+```bash
+npm test
+```
+
+This runs the full suite with Node's built-in test runner (`node --test`). **All 52 tests must pass** before you open a PR.
+
+Run tests in watch mode while developing:
+
+```bash
+npm run test:watch
+```
+
+### Check your environment
+
+```bash
+node bin/maw.js doctor
+```
+
+`doctor` verifies that cc-switch and the Codex CLI are reachable. If you don't have those tools installed locally, expect non-fatal warnings — CI runs this same step with `continue-on-error` for the same reason.
+
+### Smoke test the CLI
+
+```bash
+node bin/maw.js version
+node bin/maw.js doctor
+```
+
+## Code style
+
+- **ES modules** — the package is `"type": "module"`. Use `import` / `export`, never `require`.
+- **Small modules** — keep every source file **under 500 lines**. Split a module when it grows beyond that.
+- **No secrets** — never hardcode API keys, tokens, or credentials. Read them from the environment or cc-switch config.
+- **Test your changes** — every new behavior should land with a `tests/*.test.js` file.
+
+## Commit messages
+
+Use [Conventional Commits](https://www.conventionalcommits.org/):
+
+```
+feat: add graph-based planner
+fix: handle missing cc-switch db path
+docs: clarify doctor output
+test: cover config-gen edge cases
+refactor: split installer into stages
+chore: bump node engine range
+```
+
+Common types:
+
+- `feat:` a new feature
+- `fix:` a bug fix
+- `docs:` documentation only
+- `test:` tests only
+- `refactor:` no behavior change
+- `chore:` tooling, deps, or config
+- Scope is optional: `feat(planner): support dynamic graphs`
+
+## Pull requests
+
+1. Open a PR against `main` (see `.github/PULL_REQUEST_TEMPLATE.md`).
+2. Make sure `npm test` passes locally and CI is green.
+3. Keep PRs focused — **one logical change per PR.**
+4. Update the README and `examples/` if your change affects user-facing behavior.
+
+## Licensing
+
+By contributing, you agree that your contributions will be licensed under the **MIT License** (see [LICENSE](./LICENSE)).
+
+## Acknowledgements
+
+MAW reuses **ideas and architectural concepts** — loop engineering, orchestrator-workers, multi-agent / graph / dynamic workflows, cost budgeting, plugin install — from referenced projects and prior art (see the *Referenced Projects & Acknowledgements* section of the README and [`NOTICE.md`](./NOTICE.md)). MAW does **not** copy source code from those projects; it is an independent implementation. When you add functionality inspired by another project, credit the idea in the commit message or docs and write your own code.
