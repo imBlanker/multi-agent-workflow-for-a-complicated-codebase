@@ -13,6 +13,7 @@
 // can add/remove/edit any file. `maw add-agent`/`maw remove-agent` mutate the
 // plan and regenerate affected files.
 import path from "node:path";
+import fs from "node:fs";
 import { writeText, writeJson, slug, toYaml, round, exists } from "./util.js";
 import { resolvePrice } from "./pricing.js";
 import { graphFromPlan, WorkflowGraph } from "./graph.js";
@@ -73,6 +74,7 @@ export function generateConfigs(projectRoot, plan, ccSwitch = {}, opts = {}) {
       agent: a.agent,
       app_type: a.appType,
       model: a.model,
+      model_selection: a.modelChoice ?? null,
       cost_rate_limit_usd_per_min: a.costRateLimitUsdPerMin,
       concurrency: a.concurrency,
       tools: a.tools,
@@ -88,6 +90,15 @@ export function generateConfigs(projectRoot, plan, ccSwitch = {}, opts = {}) {
 
   // .maw/runtime/ dir for concurrency state
   files.push(writeText(path.join(maw, "runtime", ".keep"), "# concurrency + cost state lives here (gitignored)\n"));
+
+  // prune stale agent files for roles that are no longer in the plan
+  try {
+    const keep = new Set(plan.agents.map((a) => slug(a.role)));
+    for (const f of fs.readdirSync(agentsDir)) {
+      const m = f.match(/^(.*)\.(md|json)$/);
+      if (m && !keep.has(m[1])) { fs.unlinkSync(path.join(agentsDir, f)); files.push(`(pruned) ${path.join(agentsDir, f)}`); }
+    }
+  } catch {}
 
   return { dir: maw, files, warnings };
 }
@@ -111,6 +122,7 @@ function agentMarkdown(a, price, plan) {
 - **Host agent software**: \`${a.agent}\`
 - **App type (cc-switch)**: \`${a.appType}\`
 - **Model**: \`${a.model}\`
+${modelSelectionMd(a)}
 
 ## Task
 
@@ -144,6 +156,33 @@ or use the slash command \`/codex:review\` (review-only). For adversarial review
  * @param {import("./planner.js").Plan} plan
  * @param {any} ccSwitch
  */
+/**
+ * Render the "Model selection" block for an agent definition.
+ * @param {import("./planner.js").AgentSpec} a
+ */
+function modelSelectionMd(a) {
+  const mc = a.modelChoice;
+  if (!mc) return "";
+  const lines = [];
+  lines.push("## Model selection (capability-aware)");
+  lines.push("");
+  lines.push(`- **Provider (api key)**: ${mc.provider ?? "(current provider)"}${mc.providerId ? ` (\`${mc.providerId}\`)` : ""} — chosen from ${mc.considered ?? "?"} available candidate(s)`);
+  if (mc.capabilityScore != null) lines.push(`- **Capability fit**: ${mc.capabilityScore}/100 for this role`);
+  lines.push(`- **Remaining quota (today)**: ${mc.quota?.remainingTodayUsd != null ? `$${mc.quota.remainingTodayUsd}` : "unknown (no daily limit set in cc-switch)"}`);
+  if (mc.quota?.ratePerMin != null) lines.push(`- **Provider current spend rate**: $${mc.quota.ratePerMin}/min`);
+  lines.push(`- **Estimated**: ${mc.estimated ? "yes (curated capability catalog + cc-switch pricing)" : "no"}`);
+  if (mc.reasons?.length) {
+    lines.push("- **Why this provider+model**:");
+    for (const r of mc.reasons) lines.push(`  - ${r}`);
+  }
+  if (mc.alternates?.length) {
+    lines.push("- **Alternates** (next-best fits):");
+    for (const al of mc.alternates) lines.push(`  - ${al.provider ?? "?"} / \`${al.model}\` (fit ${al.capabilityScore ?? "?"})`);
+  }
+  lines.push("");
+  return lines.join("\n");
+}
+
 function planMarkdown(plan, ccSwitch) {
   const lines = [];
   lines.push(`# Workflow Plan: ${plan.name}`);
@@ -163,6 +202,20 @@ function planMarkdown(plan, ccSwitch) {
     lines.push(`- Cost-rate limit: $${a.costRateLimitUsdPerMin}/min; concurrency ${a.concurrency}; review required: ${a.reviewRequired}`);
   }
   lines.push("");
+  // Model assignments: capability fit -> provider remaining quota -> cost rate.
+  if (plan.agents.some((a) => a.modelChoice)) {
+    lines.push("## Model assignments (capability-aware)");
+    lines.push("Models differ WITHIN a leaderboard (some agentic models are full-multimodal, some are reasoning/dialogue-only, some multimodal models are not agentic), so each role first filters the available provider models by capability fit, then ranks by provider remaining quota/balance and cost rate. Capability data is curated and marked estimated.");
+    lines.push("");
+    lines.push("| Role | Provider (api key) | Model | Capability fit | Remaining quota today | Price per M (in/out) |");
+    lines.push("|---|---|---|---|---|---|");
+    for (const a of plan.agents) {
+      const mc = a.modelChoice;
+      if (!mc) { lines.push(`| ${a.role} | (current) | \`${a.model}\` | — | — | — |`); continue; }
+      lines.push(`| ${a.role} | ${mc.provider ?? "(current)"} | \`${a.model}\` | ${mc.capabilityScore ?? "?"}/100 | ${mc.quota?.remainingTodayUsd != null ? "$" + mc.quota.remainingTodayUsd : "unknown"} | ${mc.price ? `$${mc.price.input_per_m}/$${mc.price.output_per_m}${mc.price.estimated ? " est." : ""}` : "unknown"} |`);
+    }
+    lines.push("");
+  }
   lines.push("## Execution order");
   for (const g of plan.groups) {
     lines.push(`### ${g.label} ${g.parallel ? "(parallel)" : "(serial)"}`);
@@ -178,7 +231,7 @@ function planMarkdown(plan, ccSwitch) {
   if (!plan.loops.length) lines.push("- (none)");
   lines.push("");
   lines.push("## Cost control");
-  lines.push(`- Per-agent limit: $${plan.cost.perAgentLimitUsdPerMin}/min`);
+  lines.push(`- Per-agent limit: $${plan.cost.perAgentLimitUsdPerMin}/min (real inference spend from cc-switch proxy_request_logs)`);
   lines.push(`- Total workflow limit: $${plan.cost.totalLimitUsdPerMin}/min (independent constraint; enforced via concurrency + rate gating)`);
   lines.push(`- Max concurrency: ${plan.cost.maxConcurrency}`);
   lines.push(`- Pricing sources: ${plan.cost.sources.join(", ") || "cc-switch unavailable"}`);

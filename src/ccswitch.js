@@ -97,8 +97,16 @@ export function readCcSwitch(opts = {}) {
   }
   const r = makeReader(dbPath);
   const allProviders = r.all(
-    "SELECT id, app_type, name, is_current, provider_type, cost_multiplier, limit_daily_usd, limit_monthly_usd, website_url, category, sort_index FROM providers ORDER BY app_type, is_current DESC, sort_index"
+    "SELECT id, app_type, name, is_current, provider_type, cost_multiplier, limit_daily_usd, limit_monthly_usd, website_url, category, sort_index, settings_config FROM providers ORDER BY app_type, is_current DESC, sort_index"
   );
+  // Parse each provider's settings_config into `settingsConfig` so callers can
+  // enumerate every candidate (provider × model) for capability-aware selection.
+  for (const p of allProviders) {
+    if (p.settings_config) {
+      try { p.settingsConfig = JSON.parse(p.settings_config); } catch { p.settingsConfig = {}; }
+      delete p.settings_config;
+    }
+  }
   const appTypes = [...new Set(allProviders.map((p) => p.app_type))];
   const currentProviders = {};
   for (const p of allProviders) if (p.is_current) currentProviders[p.app_type] = p;
@@ -135,6 +143,55 @@ export function readCcSwitch(opts = {}) {
 
   r.close();
   return { dbPath, impl: r.impl, appTypes, currentProviders, allProviders, modelPricing, settings };
+}
+
+/**
+ * Provider balance / remaining-quota + current spend rate per provider.
+ *  - remaining quota: providers.limit_daily_usd / limit_monthly_usd MINUS the
+ *    spend recorded in usage_daily_rollups for today / this month. When a
+ *    provider has NO limit set, remaining is `null` (= unknown, not infinite).
+ *  - spend rate: real USD/min over the last hour from proxy_request_logs.
+ * Read-only. Degrades gracefully when usage_daily_rollups does not exist.
+ * @param {object} [opts]
+ * @param {string} [opts.dbPath]
+ * @param {number} [opts.windowSeconds] rate window (default 3600)
+ */
+export function readProviderQuota(opts = {}) {
+  const dbPath = opts.dbPath ?? findDb();
+  const win = opts.windowSeconds ?? 3600;
+  const out = { dbPath: dbPath ?? "", providers: /** @type {Record<string, any>} */ ({}), tableMissing: false, windowSeconds: win };
+  if (!dbPath) return out;
+  const r = makeReader(dbPath);
+  const provs = r.all("SELECT id, app_type, name, is_current, cost_multiplier, limit_daily_usd, limit_monthly_usd FROM providers");
+  const hasRollups = r.all("SELECT name FROM sqlite_master WHERE type='table' AND name='usage_daily_rollups'").length > 0;
+  out.tableMissing = !hasRollups;
+  /** @type {Record<string, number>} */
+  const todayMap = {}, monthMap = {}, rateMap = {};
+  if (hasRollups) {
+    for (const row of r.all("SELECT provider_id, SUM(CAST(total_cost_usd AS REAL)) AS t FROM usage_daily_rollups WHERE date=date('now') GROUP BY provider_id")) todayMap[row.provider_id] = num(row.t);
+    for (const row of r.all("SELECT provider_id, SUM(CAST(total_cost_usd AS REAL)) AS t FROM usage_daily_rollups WHERE date>=date('now','start of month') GROUP BY provider_id")) monthMap[row.provider_id] = num(row.t);
+  }
+  const since = Math.floor(Date.now() / 1000) - win;
+  for (const row of r.all(`SELECT provider_id, SUM(CAST(total_cost_usd AS REAL)) AS t FROM proxy_request_logs WHERE created_at >= ${since} GROUP BY provider_id`)) rateMap[row.provider_id] = num(row.t);
+  r.close();
+  const minutes = Math.max(win / 60, 1 / 60);
+  for (const p of provs) {
+    const limD = p.limit_daily_usd == null ? null : num(p.limit_daily_usd);
+    const limM = p.limit_monthly_usd == null ? null : num(p.limit_monthly_usd);
+    const spendT = hasRollups ? (todayMap[p.id] ?? 0) : null;
+    const spendM = hasRollups ? (monthMap[p.id] ?? 0) : null;
+    out.providers[p.id] = {
+      providerId: p.id, name: p.name, appType: p.app_type, isCurrent: !!p.is_current,
+      limitDailyUsd: limD, limitMonthlyUsd: limM,
+      spendTodayUsd: spendT == null ? null : round(spendT, 4),
+      spendMonthUsd: spendM == null ? null : round(spendM, 4),
+      remainingTodayUsd: limD == null || spendT == null ? null : round(Math.max(limD - spendT, 0), 4),
+      remainingMonthUsd: limM == null || spendM == null ? null : round(Math.max(limM - spendM, 0), 4),
+      ratePerMin: round((rateMap[p.id] ?? 0) / minutes, 4),
+      quotaKnown: limD != null || limM != null,
+    };
+  }
+  return out;
 }
 
 /**

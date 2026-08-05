@@ -2,8 +2,51 @@
   "role": "reviewer",
   "agent": "codex",
   "app_type": "codex",
-  "model": "gpt-5.2-codex",
-  "cost_rate_limit_usd_per_min": 1,
+  "model": "deepseek-v4-flash",
+  "model_selection": {
+    "provider": "DeepSeek",
+    "providerId": "5c1b48a6-b5af-4d3c-b612-f9d9c39988e1",
+    "capabilityScore": 100,
+    "quota": {
+      "remainingTodayUsd": null,
+      "remainingMonthUsd": null,
+      "spendTodayUsd": 0,
+      "ratePerMin": 0
+    },
+    "price": {
+      "input_per_m": 0.14,
+      "output_per_m": 0.28,
+      "source": "cc-switch",
+      "estimated": false
+    },
+    "reasons": [
+      "capability fit 100/100 for role \"reviewer\" (independent code/architecture/security review)",
+      "model class: agentic (multi-turn reasoning + dialogue) but text-only: no image input",
+      "provider remaining quota: unknown (no daily limit set in cc-switch)",
+      "provider current spend rate: $0/min",
+      "price $0.14/$0.28 per M tokens (cc-switch)"
+    ],
+    "estimated": true,
+    "considered": 9,
+    "alternates": [
+      {
+        "provider": "DeepSeek copy",
+        "model": "deepseek-v4-flash",
+        "capabilityScore": 100
+      },
+      {
+        "provider": "OpenAI Official",
+        "model": "gpt-5.6-terra",
+        "capabilityScore": 100
+      },
+      {
+        "provider": "GGBOOM",
+        "model": "gpt-5.3-codex",
+        "capabilityScore": 100
+      }
+    ]
+  },
+  "cost_rate_limit_usd_per_min": 5,
   "concurrency": 1,
   "tools": [
     "codex:review",
@@ -12,11 +55,11 @@
   "review_required": true,
   "task": "Independent code/architecture/security review via codex-plugin-cc.",
   "price": {
-    "model_id": "gpt-5.2-codex",
-    "display_name": "GPT-5.2 Codex",
-    "input_per_m": 1.75,
-    "output_per_m": 14,
-    "cache_read_per_m": 0.175,
+    "model_id": "deepseek-v4-flash",
+    "display_name": "DeepSeek V4 Flash",
+    "input_per_m": 0.14,
+    "output_per_m": 0.28,
+    "cache_read_per_m": 0.0028,
     "cache_creation_per_m": 0,
     "source": "cc-switch",
     "estimated": false,

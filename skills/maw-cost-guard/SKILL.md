@@ -5,9 +5,9 @@
 MAW measures cost from **actual inference spend** in the cc-switch proxy logs (`proxy_request_logs.total_cost_usd` over a time window → USD/min), not token estimates. This is the authoritative rate.
 
 ## Defaults (editable in `.maw/config.yaml`)
-- Per-agent: **$1/min**
+- Per-agent: **$5/min**
 - Total workflow: **$10/min** (independent constraint; enforced via concurrency + rate gating)
-- Max concurrency: 4
+- Max concurrency: 16
 
 ## Commands
 ```bash

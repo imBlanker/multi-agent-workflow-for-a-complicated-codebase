@@ -2,8 +2,52 @@
   "role": "implementer-2",
   "agent": "claude-code",
   "app_type": "claude",
-  "model": "claude-opus-5",
-  "cost_rate_limit_usd_per_min": 1,
+  "model": "deepseek-v4-flash",
+  "model_selection": {
+    "provider": "Deep Worker",
+    "providerId": "e2d33717-dbe1-4cda-8e56-cf654f6c8f6c",
+    "capabilityScore": 100,
+    "quota": {
+      "remainingTodayUsd": null,
+      "remainingMonthUsd": null,
+      "spendTodayUsd": 0,
+      "ratePerMin": 0
+    },
+    "price": {
+      "input_per_m": 0.14,
+      "output_per_m": 0.28,
+      "source": "cc-switch",
+      "estimated": false
+    },
+    "reasons": [
+      "capability fit 100/100 for role \"implementer\" (writes and edits code end-to-end)",
+      "model class: agentic (multi-turn reasoning + dialogue) but text-only: no image input",
+      "provider remaining quota: unknown (no daily limit set in cc-switch)",
+      "provider current spend rate: $0/min",
+      "price $0.14/$0.28 per M tokens (cc-switch)",
+      "provider is the cc-switch current one (known-working)"
+    ],
+    "estimated": true,
+    "considered": 37,
+    "alternates": [
+      {
+        "provider": "Deep Worker",
+        "model": "deepseek-v4-pro",
+        "capabilityScore": 100
+      },
+      {
+        "provider": "Deep Worker",
+        "model": "claude-haiku-4-5",
+        "capabilityScore": 100
+      },
+      {
+        "provider": "Deep Worker",
+        "model": "kimi-k3",
+        "capabilityScore": 100
+      }
+    ]
+  },
+  "cost_rate_limit_usd_per_min": 5,
   "concurrency": 1,
   "tools": [
     "Read",
@@ -14,12 +58,12 @@
   "review_required": false,
   "task": "Implement a second independent slice in parallel.",
   "price": {
-    "model_id": "claude-opus-5",
-    "display_name": "Claude Opus 5",
-    "input_per_m": 5,
-    "output_per_m": 25,
-    "cache_read_per_m": 0.5,
-    "cache_creation_per_m": 6.25,
+    "model_id": "deepseek-v4-flash",
+    "display_name": "DeepSeek V4 Flash",
+    "input_per_m": 0.14,
+    "output_per_m": 0.28,
+    "cache_read_per_m": 0.0028,
+    "cache_creation_per_m": 0,
     "source": "cc-switch",
     "estimated": false,
     "multiplier": 1

@@ -98,7 +98,8 @@ Minimal agent prompt: *"Install and configure MAW by following `docs/AGENT_INSTA
 ## 1. Project Goals
 - **Dynamic, not fixed.** MAW scores six architectures against real project signals + host capabilities, and selects the best fit — or a combination. See [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md).
 - **Portable + agent-software-scoped.** Claude Code and Codex only (narrowed per policy). The plan + per-agent configs are plain JSON/YAML/Markdown the host reads.
-- **Cost-bounded.** Real inference spend from cc-switch logs, not token estimates. Defaults: **$1/min per agent**, **$10/min total**, max concurrency 4 — all editable.
+- **Cost-bounded.** Real inference spend from cc-switch logs, not token estimates. Defaults: **$5/min per agent**, **$10/min total**, max concurrency 16 — all editable.
+- **Capability-aware model choice.** Models differ WITHIN a leaderboard (some agentic models are full-multimodal; some are reasoning/dialogue-only; some multimodal models aren't agentic at all), so each agent/subagent first filters the available provider models by capability fit, then picks provider(api key)+model by remaining quota/balance and cost rate.
 - **Codex review, risk-gated.** When [`codex-plugin-cc`](https://github.com/openai/codex-plugin-cc) is available, Codex acts as the independent reviewer at risk-based gates — not every step.
 - **cc-switch-safe.** All existing cc-switch data is read-only; MAW only creates a NEW project profile and (opt-in) the routing carve-out.
 
@@ -146,9 +147,19 @@ Architectures **combine** (e.g. `ultracode` = `graph` + `loop` + a Codex review 
 ## 6. Agent & Subagent Configuration
 `maw plan` writes an **independently-editable** config per role under `.maw/` (`workflow.json`, `config.yaml`, `plan.md`, `graph.json`, `agents/<role>.md`+`.json`, `runtime/`). Add/remove dynamically: `maw add-agent --role <r> ...` / `maw remove-agent --role <r>`. Edit any file directly — the runner re-reads it at execute time.
 
+**Capability-aware model selection** ([`src/modelcap.js`](./src/modelcap.js), inspired by [Artificial Analysis](https://artificialanalysis.ai)'s ~10 per-capability model leaderboards — intelligence / coding / math / agentic / multimodal-vision / image / image-edit / video / tts / stt). For each role MAW: ① classifies **every available provider model** from cc-switch by capability (a full-multimodal agentic model, a reasoning/dialogue-only agentic model, and a multimodal-but-non-agentic model are three different things), ② drops models unfit for the role (e.g. an image-generation model can never be an implementer), ③ ranks the rest by **capability fit → provider remaining quota/balance → cost rate** (quota = `limit_daily/monthly_usd` − spend in `usage_daily_rollups`; unknown when no limit is set). The curated catalog is always marked `estimated:true`. Inspect it live:
+
+```bash
+maw models                # capability view of all provider models + per-role assignments
+maw models --app codex    # same for the codex app_type
+```
+
+Each agent's `.json`/`.md` carries the full `model_selection` record (chosen provider+model, capability fit, remaining quota, price, reasons, alternates) — see [`examples/.maw-sample/agents/orchestrator.json`](./examples/.maw-sample/agents/orchestrator.json).
+
 ## 7. cc-switch Integration & Routing Policy
 MAW treats your cc-switch as **read-only by default**. The rules below are enforced in code ([`src/ccswitch.js`](./src/ccswitch.js), `guardSql`):
 
+- **Snapshot before every init.** `maw init` FIRST packages **all** cc-switch config files into a timestamped archive at `~/.cc-switch/maw-backups/cc-switch-snapshot-<timestamp>.tar.gz` (falls back to a directory copy + sha256 manifest where `tar` is unavailable) — before MAW creates its project profile or touches routing. Only reads existing files; writes only NEW files under `maw-backups/`.
 - **All existing cc-switch data is read-only.** Reads use a read-only SQLite connection (`node:sqlite` `readOnly:true`).
 - **A NEW project per init.** `maw init -u <user>` creates a fresh cc-switch **project** (a row in the `profiles` table) named `MAW: <project> (<user>)`, scoped to claude+codex. Providers / MCP / Skills / memory are provisioned **only within this new project's payload**.
 - **Never touch "默认" profiles.** Any profile whose name contains `默认` (e.g. `Claude Code 默认`, `Codex 默认`) is **never** written, updated, or deleted — a hard guard refuses it.
@@ -169,7 +180,7 @@ Because trellis and MAW can both manage files, on conflict MAW **pauses** trelli
 (A black-box CLI can't be paused mid-write, so MAW detects conflicts immediately after the conflicting write, then resumes by re-running the idempotent `trellis init`.) See [`src/trellis.js`](./src/trellis.js).
 
 ## 9. Cost Control Mechanism
-Real inference spend from cc-switch's `proxy_request_logs` → USD/min. **Per-agent** $1/min, **total** $10/min (independent), **max concurrency** 4 — editable in `.maw/config.yaml` or via flags. Pricing source chain: cc-switch `model_pricing` → provider `cost_multiplier` → vendored **estimate** (tagged `estimated:true`) → `null` (never faked).
+Real inference spend from cc-switch's `proxy_request_logs` → USD/min. **Per-agent** $5/min, **total** $10/min (independent), **max concurrency** 16 — editable in `.maw/config.yaml` or via flags. Pricing source chain: cc-switch `model_pricing` → provider `cost_multiplier` → vendored **estimate** (tagged `estimated:true`) → `null` (never faked).
 
 ```bash
 maw cost      # current rate + top sessions + used% vs limit
@@ -189,7 +200,8 @@ npx . install          # or node bin/maw.js install
 `install` copies commands/agents/hooks/skills into Claude Code (and Codex, best-effort), writes a manifest to `~/.maw/installed.json`, and is non-destructive (uninstall removes only `maw-*` files). `update` re-copies templates, preserving your edits.
 
 ## 11. Usage Examples
-**Minimal:** `maw init -u alice` → `maw plan --project .` → `maw run` → `maw cost`.
+**Minimal:** `maw init -u alice` (snapshots cc-switch first) → `maw plan --project .` → `maw run` → `maw cost`.
+**Model choice:** `maw models` — see which provider(api key)+model each role gets and why (capability fit → remaining quota → cost rate).
 **Full:** `maw plan --project . --task-type coding --risk high --parallel 6 --value high --context large` → `maw guard` before each spawn → `maw acquire/release` → `maw review --after post-implementation`.
 See [`examples/complex-project-workflow.md`](./examples/complex-project-workflow.md) and the generated [`examples/.maw-sample/`](./examples/.maw-sample/).
 
@@ -228,13 +240,17 @@ node bin/maw.js doctor
 ```
 
 ## GitHub Stars Trend
-The badge at the top always shows the live star count (via [shields.io](https://shields.io)) — it renders on every view and auto-updates.
+The badge at the top always shows the live star count (via [shields.io](https://shields.io)). The trend chart below is embedded per the **official [star-history](https://www.star-history.com/blog/how-to-use-github-star-history#how-to-embed-the-chart-in-your-readme) method** (open-source [star-history](https://github.com/star-history/star-history); dark/light aware, auto-updates on each view):
 
-For the full star-growth curve, open the interactive chart generated by the open-source **[star-history](https://github.com/star-history/star-history)** project (it auto-reads GitHub stars):
+<a href="https://www.star-history.com/#imBlanker/multi-agent-workflow-for-a-complicated-codebase&Date">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=imBlanker/multi-agent-workflow-for-a-complicated-codebase&type=date&theme=dark&legend=top-left" />
+    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=imBlanker/multi-agent-workflow-for-a-complicated-codebase&type=date&legend=top-left" />
+    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=imBlanker/multi-agent-workflow-for-a-complicated-codebase&type=date&legend=top-left" />
+  </picture>
+</a>
 
-→ [**View star history on star-history.com**](https://star-history.com/#imBlanker/multi-agent-workflow-for-a-complicated-codebase&Date)
-
-> The inline trend image is intentionally omitted: `api.star-history.com/svg` returns HTTP 500 (timeout) for brand-new / low-star repositories, which produced a broken image. Once the repo accumulates stars and star-history caches it, the interactive page above renders the full curve.
+> GitHub restricted star data to repo collaborators (July 2026), so star-history serves charts through its own token pool; when that pool is rate-limited the image shows a placeholder and **self-heals** when the pool cools down. For guaranteed always-on rendering, open [star-history.com](https://www.star-history.com/#imBlanker/multi-agent-workflow-for-a-complicated-codebase&Date), add a token that can read this repo, and click **Generate embed code** (the token is encrypted before it enters the README).
 
 ---
 

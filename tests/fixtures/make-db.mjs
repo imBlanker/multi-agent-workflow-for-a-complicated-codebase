@@ -68,6 +68,16 @@ export function makeFixtureDb(dbPath, opts = {}) {
     )`,
     PROFILES_SQL,
     PROXY_SQL,
+    `CREATE TABLE usage_daily_rollups (
+      date TEXT NOT NULL, app_type TEXT NOT NULL, provider_id TEXT NOT NULL,
+      model TEXT NOT NULL, request_model TEXT NOT NULL DEFAULT '', pricing_model TEXT NOT NULL DEFAULT '',
+      request_count INTEGER NOT NULL DEFAULT 0, success_count INTEGER NOT NULL DEFAULT 0,
+      input_tokens INTEGER NOT NULL DEFAULT 0, output_tokens INTEGER NOT NULL DEFAULT 0,
+      cache_read_tokens INTEGER NOT NULL DEFAULT 0, cache_creation_tokens INTEGER NOT NULL DEFAULT 0,
+      total_cost_usd TEXT NOT NULL DEFAULT '0', avg_latency_ms INTEGER NOT NULL DEFAULT 0,
+      input_token_semantics INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (date, app_type, provider_id, model)
+    )`,
   ];
 
   const settingsConfig = JSON.stringify({
@@ -87,7 +97,7 @@ export function makeFixtureDb(dbPath, opts = {}) {
   const codexDefaultPayload = JSON.stringify({ providers: { claude: "p1", codex: "p2" }, mcp: { claude: [], codex: [] }, skills: { claude: [], codex: [] }, prompts: { claude: null, codex: null } });
 
   const rows = [
-    { table: "providers", vals: ["p1", "claude", "Test Claude", settingsConfig, null, null, 1, 0, null, null, null, "{}", 1, 0, String(opts.multiplier ?? 1), null, null, null] },
+    { table: "providers", vals: ["p1", "claude", "Test Claude", settingsConfig, null, null, 1, 0, null, null, null, "{}", 1, 0, String(opts.multiplier ?? 1), "10", "50", null] },
     { table: "providers", vals: ["p2", "codex", "Test Codex", codexConfig, null, null, 1, 0, null, null, null, "{}", 1, 0, "1", null, null, null] },
     { table: "providers", vals: ["p3", "gemini", "Test Gemini", JSON.stringify({ model: "gemini-3-pro" }), null, null, 1, 0, null, null, null, "{}", 1, 0, "1", null, null, null] },
   ];
@@ -120,6 +130,10 @@ export function makeFixtureDb(dbPath, opts = {}) {
       insLog.run("r2", "p1", "claude", "claude-opus-5", "0.50", 200, "sess-A", now - 30);
       insLog.run("r3", "p1", "claude", "claude-opus-5", "0.50", 200, "sess-A", now - 10);
     }
+    // usage_daily_rollups: $2.00 spent TODAY by p1 (→ remaining today $8 of $10; month $48 of $50)
+    const today = new Date().toISOString().slice(0, 10);
+    const insRoll = db.prepare(`INSERT INTO usage_daily_rollups (date, app_type, provider_id, model, total_cost_usd) VALUES (${PH(5)})`);
+    insRoll.run(today, "claude", "p1", "claude-opus-5", "2.00");
     db.close();
     if (opts.codexOAuth) {
       // sibling codex_oauth_auth.json — MAW detects OAuth login from this + auth_mode
@@ -135,7 +149,7 @@ export function makeFixtureDb(dbPath, opts = {}) {
   // Fallback: sqlite3 CLI
   const esc = (s) => String(s).replace(/'/g, "''");
   const all = [...sql,
-    `INSERT INTO providers VALUES ('p1','claude','Test Claude','${esc(settingsConfig)}',NULL,NULL,1,0,NULL,NULL,NULL,'{}',1,0,'${opts.multiplier ?? 1}',NULL,NULL,NULL)`,
+    `INSERT INTO providers VALUES ('p1','claude','Test Claude','${esc(settingsConfig)}',NULL,NULL,1,0,NULL,NULL,NULL,'{}',1,0,'${opts.multiplier ?? 1}','10','50',NULL)`,
     `INSERT INTO providers VALUES ('p2','codex','Test Codex','${esc(codexConfig)}',NULL,NULL,1,0,NULL,NULL,NULL,'{}',1,0,'1',NULL,NULL,NULL)`,
     `INSERT INTO providers VALUES ('p3','gemini','Test Gemini','${esc(JSON.stringify({ model: "gemini-3-pro" }))}',NULL,NULL,1,0,NULL,NULL,NULL,'{}',1,0,'1',NULL,NULL,NULL)`,
     `INSERT INTO model_pricing VALUES ('claude-opus-5','Claude Opus 5','5','25','0.50','6.25')`,
@@ -153,6 +167,8 @@ export function makeFixtureDb(dbPath, opts = {}) {
     all.push(`INSERT INTO proxy_request_logs (request_id, provider_id, app_type, model, total_cost_usd, status_code, session_id, created_at) VALUES ('r2','p1','claude','claude-opus-5','0.50',200,'sess-A',${now - 30})`);
     all.push(`INSERT INTO proxy_request_logs (request_id, provider_id, app_type, model, total_cost_usd, status_code, session_id, created_at) VALUES ('r3','p1','claude','claude-opus-5','0.50',200,'sess-A',${now - 10})`);
   }
+  const today = new Date().toISOString().slice(0, 10);
+  all.push(`INSERT INTO usage_daily_rollups (date, app_type, provider_id, model, total_cost_usd) VALUES ('${today}','claude','p1','claude-opus-5','2.00')`);
   const dump = all.map((s) => s + ";").join("\n");
   execFileSync("sqlite3", [dbPath], { input: dump, encoding: "utf8" });
   if (opts.codexOAuth) {

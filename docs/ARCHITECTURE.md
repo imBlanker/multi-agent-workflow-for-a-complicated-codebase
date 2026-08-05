@@ -128,7 +128,7 @@ and retries that token math would miss.
 
 Two **independent** constraints, both enforced in `cost.js`:
 
-- **Per-agent (per-session) rate**: $1.00/min default — a `session_id` exceeding
+- **Per-agent (per-session) rate**: $5.00/min default — a `session_id` exceeding
   it blocks new spawns for that session (a proxy for a single agent run).
 - **Total workflow rate**: $10.00/min default — independent of the per-agent sum,
   so four agents each at $0.90/min (under the per-agent cap) still trip the

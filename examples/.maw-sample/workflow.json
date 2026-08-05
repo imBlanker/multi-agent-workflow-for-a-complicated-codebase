@@ -5,17 +5,17 @@
   ],
   "primary": "orchestrator-workers",
   "rationale": [
-    "[orchestrator-workers] 6 parallelizable subtasks / context large: delegate to subagents with own windows",
-    "[multi-agent] high-value (high) breadth-first work, 6 parallel directions: multi-agent scales token spend",
-    "[ultracode] complex coding with codex-review available: graph checkpoints + implement→review→fix loop"
+    "[orchestrator-workers] 5 parallelizable subtasks / context medium: delegate to subagents with own windows",
+    "[ultracode] complex coding with codex-review available: graph checkpoints + implement→review→fix loop",
+    "[multi-agent] high-value (medium) breadth-first work, 5 parallel directions: multi-agent scales token spend"
   ],
   "agents": [
     {
       "role": "orchestrator",
       "agent": "claude-code",
-      "model": "claude-opus-5",
+      "model": "claude-haiku-4-5",
       "appType": "claude",
-      "costRateLimitUsdPerMin": 1,
+      "costRateLimitUsdPerMin": 5,
       "concurrency": 1,
       "tools": [
         "Task",
@@ -24,14 +24,53 @@
         "Bash"
       ],
       "reviewRequired": true,
-      "task": "Plan, decompose, delegate, synthesize."
+      "task": "Plan, decompose, delegate, synthesize.",
+      "modelChoice": {
+        "provider": "Deep Worker",
+        "providerId": "e2d33717-dbe1-4cda-8e56-cf654f6c8f6c",
+        "capabilityScore": 100,
+        "quota": {
+          "remainingTodayUsd": null,
+          "remainingMonthUsd": null,
+          "spendTodayUsd": 0,
+          "ratePerMin": 0
+        },
+        "price": null,
+        "reasons": [
+          "capability fit 100/100 for role \"orchestrator\" (plans, decomposes, delegates and synthesizes; vision helps read diagrams/screenshots)",
+          "model class: agentic AND multimodal (supports image input)",
+          "provider remaining quota: unknown (no daily limit set in cc-switch)",
+          "provider current spend rate: $0/min",
+          "price: unknown (not in cc-switch model_pricing)",
+          "provider is the cc-switch current one (known-working)"
+        ],
+        "estimated": true,
+        "considered": 37,
+        "alternates": [
+          {
+            "provider": "Deep Worker",
+            "model": "claude-opus-5",
+            "capabilityScore": 100
+          },
+          {
+            "provider": "Any Router",
+            "model": "claude-opus-4-8[1M]",
+            "capabilityScore": 100
+          },
+          {
+            "provider": "Any Router",
+            "model": "claude-sonnet-4-5-20250929[1M]",
+            "capabilityScore": 100
+          }
+        ]
+      }
     },
     {
       "role": "researcher",
       "agent": "claude-code",
-      "model": "claude-opus-5",
+      "model": "claude-haiku-4-5",
       "appType": "claude",
-      "costRateLimitUsdPerMin": 1,
+      "costRateLimitUsdPerMin": 5,
       "concurrency": 1,
       "tools": [
         "WebFetch",
@@ -39,14 +78,53 @@
         "Read"
       ],
       "reviewRequired": false,
-      "task": "Investigate independent facets and compress findings."
+      "task": "Investigate independent facets and compress findings.",
+      "modelChoice": {
+        "provider": "Deep Worker",
+        "providerId": "e2d33717-dbe1-4cda-8e56-cf654f6c8f6c",
+        "capabilityScore": 100,
+        "quota": {
+          "remainingTodayUsd": null,
+          "remainingMonthUsd": null,
+          "spendTodayUsd": 0,
+          "ratePerMin": 0
+        },
+        "price": null,
+        "reasons": [
+          "capability fit 100/100 for role \"researcher\" (investigates and compresses findings; vision helps with screenshots/charts)",
+          "model class: agentic AND multimodal (supports image input)",
+          "provider remaining quota: unknown (no daily limit set in cc-switch)",
+          "provider current spend rate: $0/min",
+          "price: unknown (not in cc-switch model_pricing)",
+          "provider is the cc-switch current one (known-working)"
+        ],
+        "estimated": true,
+        "considered": 37,
+        "alternates": [
+          {
+            "provider": "Deep Worker",
+            "model": "claude-opus-5",
+            "capabilityScore": 100
+          },
+          {
+            "provider": "Any Router",
+            "model": "claude-opus-4-8[1M]",
+            "capabilityScore": 100
+          },
+          {
+            "provider": "Any Router",
+            "model": "claude-sonnet-4-5-20250929[1M]",
+            "capabilityScore": 100
+          }
+        ]
+      }
     },
     {
       "role": "implementer",
       "agent": "claude-code",
-      "model": "claude-opus-5",
+      "model": "deepseek-v4-flash",
       "appType": "claude",
-      "costRateLimitUsdPerMin": 1,
+      "costRateLimitUsdPerMin": 5,
       "concurrency": 1,
       "tools": [
         "Read",
@@ -55,14 +133,58 @@
         "Bash"
       ],
       "reviewRequired": false,
-      "task": "Implement a vertical slice end-to-end."
+      "task": "Implement a vertical slice end-to-end.",
+      "modelChoice": {
+        "provider": "Deep Worker",
+        "providerId": "e2d33717-dbe1-4cda-8e56-cf654f6c8f6c",
+        "capabilityScore": 100,
+        "quota": {
+          "remainingTodayUsd": null,
+          "remainingMonthUsd": null,
+          "spendTodayUsd": 0,
+          "ratePerMin": 0
+        },
+        "price": {
+          "input_per_m": 0.14,
+          "output_per_m": 0.28,
+          "source": "cc-switch",
+          "estimated": false
+        },
+        "reasons": [
+          "capability fit 100/100 for role \"implementer\" (writes and edits code end-to-end)",
+          "model class: agentic (multi-turn reasoning + dialogue) but text-only: no image input",
+          "provider remaining quota: unknown (no daily limit set in cc-switch)",
+          "provider current spend rate: $0/min",
+          "price $0.14/$0.28 per M tokens (cc-switch)",
+          "provider is the cc-switch current one (known-working)"
+        ],
+        "estimated": true,
+        "considered": 37,
+        "alternates": [
+          {
+            "provider": "Deep Worker",
+            "model": "deepseek-v4-pro",
+            "capabilityScore": 100
+          },
+          {
+            "provider": "Deep Worker",
+            "model": "claude-haiku-4-5",
+            "capabilityScore": 100
+          },
+          {
+            "provider": "Deep Worker",
+            "model": "kimi-k3",
+            "capabilityScore": 100
+          }
+        ]
+      }
     },
     {
       "role": "implementer-2",
       "agent": "claude-code",
-      "model": "claude-opus-5",
+      "model": "deepseek-v4-flash",
       "appType": "claude",
-      "costRateLimitUsdPerMin": 1,
+      "costRateLimitUsdPerMin": 5,
       "concurrency": 1,
       "tools": [
         "Read",
@@ -71,35 +193,161 @@
         "Bash"
       ],
       "reviewRequired": false,
-      "task": "Implement a second independent slice in parallel."
+      "task": "Implement a second independent slice in parallel.",
+      "modelChoice": {
+        "provider": "Deep Worker",
+        "providerId": "e2d33717-dbe1-4cda-8e56-cf654f6c8f6c",
+        "capabilityScore": 100,
+        "quota": {
+          "remainingTodayUsd": null,
+          "remainingMonthUsd": null,
+          "spendTodayUsd": 0,
+          "ratePerMin": 0
+        },
+        "price": {
+          "input_per_m": 0.14,
+          "output_per_m": 0.28,
+          "source": "cc-switch",
+          "estimated": false
+        },
+        "reasons": [
+          "capability fit 100/100 for role \"implementer\" (writes and edits code end-to-end)",
+          "model class: agentic (multi-turn reasoning + dialogue) but text-only: no image input",
+          "provider remaining quota: unknown (no daily limit set in cc-switch)",
+          "provider current spend rate: $0/min",
+          "price $0.14/$0.28 per M tokens (cc-switch)",
+          "provider is the cc-switch current one (known-working)"
+        ],
+        "estimated": true,
+        "considered": 37,
+        "alternates": [
+          {
+            "provider": "Deep Worker",
+            "model": "deepseek-v4-pro",
+            "capabilityScore": 100
+          },
+          {
+            "provider": "Deep Worker",
+            "model": "claude-haiku-4-5",
+            "capabilityScore": 100
+          },
+          {
+            "provider": "Deep Worker",
+            "model": "kimi-k3",
+            "capabilityScore": 100
+          }
+        ]
+      }
     },
     {
       "role": "researcher-2",
       "agent": "claude-code",
-      "model": "claude-opus-5",
+      "model": "claude-haiku-4-5",
       "appType": "claude",
-      "costRateLimitUsdPerMin": 1,
+      "costRateLimitUsdPerMin": 5,
       "concurrency": 1,
       "tools": [
         "WebFetch",
         "Grep"
       ],
       "reviewRequired": false,
-      "task": "Secondary breadth-first exploration."
+      "task": "Secondary breadth-first exploration.",
+      "modelChoice": {
+        "provider": "Deep Worker",
+        "providerId": "e2d33717-dbe1-4cda-8e56-cf654f6c8f6c",
+        "capabilityScore": 100,
+        "quota": {
+          "remainingTodayUsd": null,
+          "remainingMonthUsd": null,
+          "spendTodayUsd": 0,
+          "ratePerMin": 0
+        },
+        "price": null,
+        "reasons": [
+          "capability fit 100/100 for role \"researcher-2\" (investigates and compresses findings; vision helps with screenshots/charts)",
+          "model class: agentic AND multimodal (supports image input)",
+          "provider remaining quota: unknown (no daily limit set in cc-switch)",
+          "provider current spend rate: $0/min",
+          "price: unknown (not in cc-switch model_pricing)",
+          "provider is the cc-switch current one (known-working)"
+        ],
+        "estimated": true,
+        "considered": 37,
+        "alternates": [
+          {
+            "provider": "Any Router",
+            "model": "claude-opus-4-8[1M]",
+            "capabilityScore": 100
+          },
+          {
+            "provider": "Any Router",
+            "model": "claude-sonnet-4-5-20250929[1M]",
+            "capabilityScore": 100
+          },
+          {
+            "provider": "IkunCode",
+            "model": "claude-opus-4-8[1M]",
+            "capabilityScore": 100
+          }
+        ]
+      }
     },
     {
       "role": "reviewer",
       "agent": "codex",
-      "model": "gpt-5.2-codex",
+      "model": "deepseek-v4-flash",
       "appType": "codex",
-      "costRateLimitUsdPerMin": 1,
+      "costRateLimitUsdPerMin": 5,
       "concurrency": 1,
       "tools": [
         "codex:review",
         "codex:adversarial-review"
       ],
       "reviewRequired": true,
-      "task": "Independent code/architecture/security review via codex-plugin-cc."
+      "task": "Independent code/architecture/security review via codex-plugin-cc.",
+      "modelChoice": {
+        "provider": "DeepSeek",
+        "providerId": "5c1b48a6-b5af-4d3c-b612-f9d9c39988e1",
+        "capabilityScore": 100,
+        "quota": {
+          "remainingTodayUsd": null,
+          "remainingMonthUsd": null,
+          "spendTodayUsd": 0,
+          "ratePerMin": 0
+        },
+        "price": {
+          "input_per_m": 0.14,
+          "output_per_m": 0.28,
+          "source": "cc-switch",
+          "estimated": false
+        },
+        "reasons": [
+          "capability fit 100/100 for role \"reviewer\" (independent code/architecture/security review)",
+          "model class: agentic (multi-turn reasoning + dialogue) but text-only: no image input",
+          "provider remaining quota: unknown (no daily limit set in cc-switch)",
+          "provider current spend rate: $0/min",
+          "price $0.14/$0.28 per M tokens (cc-switch)"
+        ],
+        "estimated": true,
+        "considered": 9,
+        "alternates": [
+          {
+            "provider": "DeepSeek copy",
+            "model": "deepseek-v4-flash",
+            "capabilityScore": 100
+          },
+          {
+            "provider": "OpenAI Official",
+            "model": "gpt-5.6-terra",
+            "capabilityScore": 100
+          },
+          {
+            "provider": "GGBOOM",
+            "model": "gpt-5.3-codex",
+            "capabilityScore": 100
+          }
+        ]
+      }
     }
   ],
   "groups": [
@@ -178,9 +426,9 @@
   ],
   "loops": [],
   "cost": {
-    "perAgentLimitUsdPerMin": 1,
+    "perAgentLimitUsdPerMin": 5,
     "totalLimitUsdPerMin": 10,
-    "maxConcurrency": 4,
+    "maxConcurrency": 16,
     "sources": [
       "cc-switch:model_pricing"
     ]
@@ -204,20 +452,21 @@
     ]
   },
   "signals": {
-    "files": 14,
-    "loc": 24,
+    "files": 45,
+    "loc": 116,
     "languages": [
+      "py",
       "js"
     ],
     "taskType": "coding",
-    "parallelizableSubtasks": 6,
-    "risk": "high",
-    "contextNeed": "large",
-    "valuePerRun": "high",
+    "parallelizableSubtasks": 5,
+    "risk": "medium",
+    "contextNeed": "medium",
+    "valuePerRun": "medium",
     "maxIterations": 5,
     "needHITL": false,
     "needPersistence": false,
     "description": "sample-project"
   },
-  "createdAt": "2026-08-05T04:49:47.719Z"
+  "createdAt": "2026-08-05T09:45:18.069Z"
 }

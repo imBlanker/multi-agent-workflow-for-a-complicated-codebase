@@ -98,7 +98,8 @@ curl -fsSL https://raw.githubusercontent.com/imBlanker/multi-agent-workflow-for-
 ## 1. 專案目標
 - **動態，而非固定。** MAW 依據真實專案訊號＋宿主能力對六種架構評分，挑選最適配者 —— 或其組合。見 [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md)。
 - **可攜＋限定智慧體軟體。** 僅 Claude Code 與 Codex（依策略收窄）。規劃＋各智慧體設定為宿主可讀的純 JSON/YAML/Markdown。
-- **成本有界。** 來自 cc-switch 日誌的真實推理消費，而非權杖估計。預設：**每智慧體 $1/分鐘**、**總計 $10/分鐘**、最大並發 4 —— 皆可編輯。
+- **成本有界。** 來自 cc-switch 日誌的真實推理消費，而非權杖估計。預設：**每智慧體 $5/分鐘**、**總計 $10/分鐘**、最大並發 16 —— 皆可編輯。
+- **能力感知的模型選擇。** 模型在**同一榜單內**也有差異（有些 agentic 模型是全多模態；有些僅限推理／對話；有些多模態模型根本不具 agentic 能力），因此每個智慧體／子智慧體會先依能力適配過濾可用的供應商模型，再依剩餘額度／餘額與花銷速率挑選 provider（API key）＋模型。
 - **Codex 審查，依風險設關卡。** 當 [`codex-plugin-cc`](https://github.com/openai/codex-plugin-cc) 可用時，Codex 在基於風險的關卡擔任獨立審查者 —— 而非每一步。
 - **cc-switch 安全。** 既有 cc-switch 資料皆為唯讀；MAW 只建立新的專案設定檔與（可選）路由豁免。
 
@@ -146,9 +147,19 @@ curl -fsSL https://raw.githubusercontent.com/imBlanker/multi-agent-workflow-for-
 ## 6. 智慧體與子智慧體設定
 `maw plan` 在 `.maw/` 下為每個角色寫入**可獨立編輯**的設定（`workflow.json`、`config.yaml`、`plan.md`、`graph.json`、`agents/<role>.md`+`.json`、`runtime/`）。動態新增／移除：`maw add-agent --role <r> ...`／`maw remove-agent --role <r>`。直接編輯任一檔案 —— 執行器會在執行時重新讀取。
 
+**能力感知的模型選擇**（[`src/modelcap.js`](./src/modelcap.js)，靈感來自 [Artificial Analysis](https://artificialanalysis.ai) 的約 10 個分能力模型榜單 —— intelligence／coding／math／agentic／multimodal-vision／image／image-edit／video／tts／stt）。對每個角色，MAW 會：① 將 cc-switch 中**每個可用的供應商模型**依能力分類（全多模態的 agentic 模型、僅推理／對話的 agentic 模型、多模態但非 agentic 的模型是三種不同的東西）；② 剔除不適合該角色的模型（例如圖像生成模型絕不可能成為實現者）；③ 將其餘模型依**能力適配 → 供應商剩餘額度／餘額 → 花銷速率**排序（額度 = `limit_daily/monthly_usd` − `usage_daily_rollups` 中的消費；未設定上限時額度為未知）。精選目錄一律標記為估算值（`estimated:true`）。即時檢視：
+
+```bash
+maw models                # capability view of all provider models + per-role assignments
+maw models --app codex    # same for the codex app_type
+```
+
+每個智慧體的 `.json`／`.md` 都帶有完整的 `model_selection` 記錄（所選 provider＋模型、能力適配、剩餘額度、價格、理由、備選）—— 見 [`examples/.maw-sample/agents/orchestrator.json`](./examples/.maw-sample/agents/orchestrator.json)。
+
 ## 7. cc-switch 整合與路由策略
 MAW 預設將你的 cc-switch 視為**唯讀**。以下規則在程式碼中強制執行（[`src/ccswitch.js`](./src/ccswitch.js)、`guardSql`）：
 
+- **每次 init 前先做快照。** `maw init` **首先**將**所有** cc-switch 設定檔打包為帶時間戳的歸檔，位於 `~/.cc-switch/maw-backups/cc-switch-snapshot-<timestamp>.tar.gz`（在無 `tar` 可用的環境退為目錄複製＋sha256 清單）—— 早於 MAW 建立其專案設定檔或觸碰路由之前。只讀取既有檔案；只在 `maw-backups/` 下寫入**新**檔案。
 - **既有 cc-switch 資料皆為唯讀。** 讀取使用唯讀 SQLite 連線（`node:sqlite` `readOnly:true`）。
 - **每次 init 一個新專案。** `maw init -u <user>` 建立一個全新的 cc-switch **專案**（`profiles` 表中的一列），命名為 `MAW: <project> (<user>)`，範圍限定於 claude+codex。供應商／MCP／技能／記憶體**只在此新專案的 payload 內**供應。
 - **絕不碰 `默认` 設定檔。** 任何名稱含 `默认`（例如 `Claude Code 默认`、`Codex 默认`）的設定檔**絕不**被寫入、更新或刪除 —— 一道硬性護欄會予以拒絕。
@@ -169,7 +180,7 @@ MAW 預設將你的 cc-switch 視為**唯讀**。以下規則在程式碼中強�
 （黑箱 CLI 無法在寫入途中暫停，因此 MAW 在衝突寫入後立即偵測，再透過重新執行冪等的 `trellis init` 來恢復。）見 [`src/trellis.js`](./src/trellis.js)。
 
 ## 9. 成本控制機制
-來自 cc-switch `proxy_request_logs` 的真實推理消費 → USD/分鐘。**每智慧體** $1/分鐘、**總計** $10/分鐘（獨立）、**最大並發** 4 —— 可在 `.maw/config.yaml` 或透過旗標編輯。定價來源鏈：cc-switch `model_pricing` → 供應商 `cost_multiplier` → 內建**估計值**（標記 `estimated:true`）→ `null`（絕不偽造）。
+來自 cc-switch `proxy_request_logs` 的真實推理消費 → USD/分鐘。**每智慧體** $5/分鐘、**總計** $10/分鐘（獨立）、**最大並發** 16 —— 可在 `.maw/config.yaml` 或透過旗標編輯。定價來源鏈：cc-switch `model_pricing` → 供應商 `cost_multiplier` → 內建**估計值**（標記 `estimated:true`）→ `null`（絕不偽造）。
 
 ```bash
 maw cost      # current rate + top sessions + used% vs limit
@@ -189,7 +200,8 @@ npx . install          # or node bin/maw.js install
 `install` 將指令／智慧體／hook／技能複製進 Claude Code（並盡力處理 Codex），把 manifest 寫入 `~/.maw/installed.json`，且為非破壞性（解除安裝只移除 `maw-*` 檔案）。`update` 重新複製模板，保留你的編輯。
 
 ## 11. 使用範例
-**最小：** `maw init -u alice` → `maw plan --project .` → `maw run` → `maw cost`。
+**最小：** `maw init -u alice`（先對 cc-switch 做快照）→ `maw plan --project .` → `maw run` → `maw cost`。
+**模型選擇：** `maw models` —— 檢視每個角色分得哪個 provider（API key）＋模型，以及原因（能力適配 → 剩餘額度 → 花銷速率）。
 **完整：** `maw plan --project . --task-type coding --risk high --parallel 6 --value high --context large` → 每次產生前執行 `maw guard` → `maw acquire/release` → `maw review --after post-implementation`。
 見 [`examples/complex-project-workflow.md`](./examples/complex-project-workflow.md) 與產生的 [`examples/.maw-sample/`](./examples/.maw-sample/)。
 
@@ -229,13 +241,17 @@ node bin/maw.js doctor
 ```
 
 ## GitHub Stars 趨勢
-頂部的徽章恆顯示即時星數（透過 [shields.io](https://shields.io)）——每次檢視都會渲染並自動更新。
+頂部的徽章恆顯示即時星數（透過 [shields.io](https://shields.io)）。下方趨勢圖依**官方 [star-history](https://www.star-history.com/blog/how-to-use-github-star-history#how-to-embed-the-chart-in-your-readme) 方法**內嵌（開源專案 [star-history](https://github.com/star-history/star-history)；感知深色／淺色模式，每次檢視皆自動更新）：
 
-完整的星數成長曲線請開啟由開源專案 **[star-history](https://github.com/star-history/star-history)** 產生的互動式圖表（它會自動讀取 GitHub 星數）：
+<a href="https://www.star-history.com/#imBlanker/multi-agent-workflow-for-a-complicated-codebase&Date">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=imBlanker/multi-agent-workflow-for-a-complicated-codebase&type=date&theme=dark&legend=top-left" />
+    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=imBlanker/multi-agent-workflow-for-a-complicated-codebase&type=date&legend=top-left" />
+    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=imBlanker/multi-agent-workflow-for-a-complicated-codebase&type=date&legend=top-left" />
+  </picture>
+</a>
 
-→ [**在 star-history.com 檢視星數歷史**](https://star-history.com/#imBlanker/multi-agent-workflow-for-a-complicated-codebase&Date)
-
-> 這裡刻意不內嵌趨勢圖片：對於全新 / 低星數儲存庫，`api.star-history.com/svg` 會回傳 HTTP 500（逾時），會造成圖片顯示失敗。當儲存庫累積星數並被 star-history 快取後，上方的互動式頁面會渲染出完整曲線。
+> GitHub 已將星數資料限定為儲存庫協作者可見（2026 年 7 月），因此 star-history 透過自有權杖池提供圖表；當該權杖池遭速率限制時，圖片會顯示佔位圖，並在權杖池冷卻後**自我修復**。若要保證恆可渲染，請開啟 [star-history.com](https://www.star-history.com/#imBlanker/multi-agent-workflow-for-a-complicated-codebase&Date)，加入一個可讀取本儲存庫的權杖，然後點擊 **Generate embed code**（權杖在進入 README 前會先加密）。
 
 ---
 

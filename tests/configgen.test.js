@@ -45,7 +45,7 @@ test("per-agent json carries model, cost limit, tools, and price source", () => 
   assert.equal(reviewer.role, "reviewer");
   assert.equal(reviewer.agent, "codex");
   assert.equal(reviewer.model, "gpt-5.2-codex");
-  assert.equal(reviewer.cost_rate_limit_usd_per_min, 1);
+  assert.equal(reviewer.cost_rate_limit_usd_per_min, 5);
   assert.equal(reviewer.price.source, "cc-switch");
   assert.equal(reviewer.price.estimated, false);
   fs.rmSync(proj, { recursive: true, force: true });
@@ -73,5 +73,19 @@ test("warnings emitted when model price unknown", () => {
   };
   const gen = generateConfigs(proj, plan, { modelPricing: {} });
   assert.ok(gen.warnings.length >= 1, `expected >=1 warning, got ${JSON.stringify(gen.warnings)}`);
+  fs.rmSync(proj, { recursive: true, force: true });
+});
+
+test("regenerating with fewer agents prunes stale agent files", () => {
+  const proj = mkTmpProject();
+  const big = planWorkflow({ files: 40, parallelizableSubtasks: 5, risk: "medium", contextNeed: "medium", taskType: "coding" }, { host, ccSwitch: cc });
+  generateConfigs(proj, big, cc);
+  const agentsDir = path.join(proj, ".maw", "agents");
+  const before = fs.readdirSync(agentsDir).filter((f) => f.endsWith(".json")).length;
+  assert.ok(before >= 4, `expected several agents, got ${before}`);
+  const small = planWorkflow({ files: 5, parallelizableSubtasks: 1, risk: "low", contextNeed: "small", taskType: "coding" }, { host, ccSwitch: cc });
+  generateConfigs(proj, small, cc);
+  const after = fs.readdirSync(agentsDir).filter((f) => f.endsWith(".json")).length;
+  assert.equal(after, small.agents.length, "stale agent files must be pruned to match the new roster");
   fs.rmSync(proj, { recursive: true, force: true });
 });

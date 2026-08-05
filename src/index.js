@@ -14,8 +14,10 @@ import { doctor } from "./doctor.js";
 import { runReview, shouldReview, status as codexStatus } from "./codex.js";
 import { probeProject } from "./probe.js";
 import { WorkflowGraph, graphFromPlan } from "./graph.js";
-import { createProjectProfile, readRouting, routingPolicy, applyRouting } from "./ccswitch.js";
+import { createProjectProfile, readRouting, routingPolicy, applyRouting, readProviderQuota } from "./ccswitch.js";
 import { runTrellisInit } from "./trellis.js";
+import { snapshotCcSwitch } from "./backup.js";
+import { classifyModel, selectModelForRole, candidatesForAppType, baseRole } from "./modelcap.js";
 
 /**
  * Load cc-switch + host context once.
@@ -25,6 +27,7 @@ import { runTrellisInit } from "./trellis.js";
 function loadCtx(opts = {}) {
   const host = detectHost();
   const cc = readCcSwitch(opts.dbPath ? { dbPath: opts.dbPath } : {});
+  if (cc.dbPath) cc.quota = readProviderQuota({ dbPath: cc.dbPath });
   return { host, cc };
 }
 
@@ -70,6 +73,7 @@ export function main(argv = process.argv.slice(2)) {
     case "remove-agent": return cmdRemoveAgent(f, flags);
     case "run": return cmdRun(f, flags);
     case "review": return cmdReview(f, flags);
+    case "models": return cmdModels(f, flags);
     case "routing": return cmdRouting(f, flags);
     case "install": return cmdInstall(f, flags);
     case "uninstall": return cmdUninstall(f, flags);
@@ -100,8 +104,9 @@ function cmdHelp() {
 Usage: maw <command> [options]
 
 Commands:
-  init          Initialize a .maw/ workspace in the current project
+  init          Snapshot cc-switch, then initialize a .maw/ workspace
   plan          Probe the project and generate a workflow plan + per-agent configs
+  models        Show capability-aware model/provider selection per role
   config        Print the effective .maw/config.yaml
   cost          Report current cost rate (USD/min) from cc-switch logs
   guard         Check if a new agent run is allowed under the cost/concurrency budget
@@ -127,9 +132,9 @@ Flags (common):
   --task-type <t>      coding|research|refactor|review|migration|greenfield|ops
   --risk <l>           low|medium|high
   --parallel <n>       parallelizable subtasks estimate
-  --per-agent <usd>    per-agent cost-rate limit USD/min (default 1)
+  --per-agent <usd>    per-agent cost-rate limit USD/min (default 5)
   --total <usd>        total workflow cost-rate limit USD/min (default 10)
-  --concurrency <n>    max concurrent agents (default 4)
+  --concurrency <n>    max concurrent agents (default 16)
   --self-test          run planner against the maw repo itself (smoke)
 `);
 }
@@ -146,13 +151,18 @@ function cmdInit(f, flags) {
   ensureDir(path.join(project, ".maw", "agents"));
   ensureDir(path.join(project, ".maw", "runtime"));
   const ctx = loadCtx({ dbPath: flags.db });
+
+  // 0) packaged snapshot of ALL cc-switch config BEFORE anything else touches
+  //    cc-switch (only reads existing files; creates ~/.cc-switch/maw-backups/)
+  const snap = snapshotCcSwitch({ dbPath: ctx.cc.dbPath || flags.db });
+  if (snap.ok) out(`Initialized .maw/ in ${project}`), out(`  cc-switch snapshot: ${snap.archive ?? snap.dir} (${snap.files} files, ${snap.totalBytes} bytes, ${snap.impl})`);
+  else out(`Initialized .maw/ in ${project}`), out(`  cc-switch snapshot: skipped — ${snap.error}`);
   const plan = planWorkflow(
     { taskType: "greenfield", files: 0, parallelizableSubtasks: 1, risk: "medium", contextNeed: "small", valuePerRun: "medium", description: "init" },
     { host: ctx.host, ccSwitch: ctx.cc, cost: costFrom(flags) }
   );
   generateConfigs(project, plan, ctx.cc);
   writeText(path.join(project, ".maw", "AGENTS.md"), AGENTS_INIT);
-  out(`Initialized .maw/ in ${project}`);
   out(`  host: ${ctx.host.app} (caps: ${hostCapabilities(ctx.host).join(", ") || "none"}); supported: Claude Code + Codex only`);
   out(`  cc-switch: ${ctx.cc.dbPath ? "ok (read-only)" : "not found"}; user: ${user}`);
   out(`  primary architecture: ${plan.primary}`);
@@ -201,6 +211,35 @@ function cmdInit(f, flags) {
     out(`  ⚠ ${tr.conflicts.length} conflict(s) between MAW and trellis detected (see log):`, false);
     for (const c of tr.conflicts.slice(0, 10)) out(`    - ${path.relative(project, c.file)} (${c.kind})`);
     out(`    re-run \`maw plan --project ${project}\` to regenerate MAW's side, or \`trellis init -u ${user}\` to resume trellis`);
+  }
+}
+
+// --- models ---
+/** @param {import("./modelcap.js").Caps} caps */
+function capLine(caps) {
+  const mark = (v) => (v === true ? "✓" : v === false ? "✗" : "?");
+  return `agentic${mark(caps.agentic)} reasoning${mark(caps.reasoning)} coding${mark(caps.coding)} vision${mark(caps.visionIn)}`;
+}
+function cmdModels(f, flags) {
+  const ctx = loadCtx({ dbPath: flags.db });
+  if (!ctx.cc.dbPath) { out(`cc-switch database not found`, false); return; }
+  const appType = flags.app || "claude";
+  const cands = candidatesForAppType(ctx.cc, appType);
+  out(`Model capability view — curated catalog, estimated (dimensions mirror the artificialanalysis.ai model leaderboards: intelligence / coding / math / agentic / multimodal-vision / image / image-edit / video / tts / stt)`);
+  out(`Available ${appType} provider models (${cands.length}):`);
+  for (const c of cands) {
+    const cls = classifyModel(c.model);
+    const q = ctx.cc.quota?.providers?.[c.providerId] ?? {};
+    out(`  ${c.providerName}${c.isCurrent ? " (current)" : ""}: ${c.model} — ${cls.family}; ${capLine(cls.caps)}${q.remainingTodayUsd != null ? `; quota today $${q.remainingTodayUsd}` : "; quota unknown"}${q.ratePerMin ? `; rate $${q.ratePerMin}/min` : ""}`);
+  }
+  out(`\nRole assignments (capability fit → provider remaining quota/balance → cost rate):`);
+  const roles = flags.role ? [flags.role] : ["orchestrator", "researcher", "implementer", "researcher-2", "reviewer"];
+  for (const role of roles) {
+    const at = baseRole(role) === "reviewer" && appType !== "codex" ? appType : appType;
+    const sel = selectModelForRole({ role, appType: at, cc: ctx.cc, quota: ctx.cc.quota, preferCheap: /-2$/.test(role) });
+    if (!sel) { out(`  ${role}: no available candidates for app_type "${at}"`); continue; }
+    out(`  ${role} → ${sel.providerName} / ${sel.model} (fit ${sel.capabilityScore}/100${sel.quota?.remainingTodayUsd != null ? `, quota today $${sel.quota.remainingTodayUsd}` : ", quota unknown"}${sel.price ? `, $${sel.price.input_per_m}/$${sel.price.output_per_m} per M${sel.price.estimated ? " est." : ""}` : ""})`);
+    for (const al of sel.alternates) out(`    alt: ${al.providerName} / ${al.model} (fit ${al.capabilityScore})`);
   }
 }
 
@@ -455,9 +494,9 @@ function costFrom(flags) {
 function costCfgFrom(flags, ctx) {
   const planCost = readPlanCost(flags);
   return {
-    perAgentLimitUsdPerMin: Number(flags["per-agent"]) || planCost.perAgent || 1.0,
+    perAgentLimitUsdPerMin: Number(flags["per-agent"]) || planCost.perAgent || 5.0,
     totalLimitUsdPerMin: Number(flags.total) || planCost.total || 10.0,
-    maxConcurrency: Number(flags.concurrency) || planCost.maxConcurrency || 4,
+    maxConcurrency: Number(flags.concurrency) || planCost.maxConcurrency || 16,
     windowSeconds: Number(flags.window) || 3600,
     dbPath: flags.db || ctx.cc.dbPath || undefined,
   };

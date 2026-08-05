@@ -32,7 +32,7 @@
  * @typedef {{
  *   role: string, agent: string, model: string, appType: string,
  *   costRateLimitUsdPerMin: number, concurrency: number, tools: string[],
- *   reviewRequired: boolean, task: string,
+ *   reviewRequired: boolean, task: string, modelChoice?: object,
  * }} AgentSpec
  *
  * @typedef {{
@@ -49,10 +49,11 @@
  */
 
 import { isoNow, round, slug } from "./util.js";
+import { selectModelForRole, baseRole } from "./modelcap.js";
 
-const DEFAULT_PER_AGENT = 1.0;   // USD/min
+const DEFAULT_PER_AGENT = 5.0;   // USD/min (real inference spend from cc-switch logs)
 const DEFAULT_TOTAL = 10.0;      // USD/min
-const DEFAULT_MAX_CONCURRENCY = 4;
+const DEFAULT_MAX_CONCURRENCY = 16;
 
 /**
  * Score how well each architecture fits the signals. Higher = better fit.
@@ -175,35 +176,56 @@ export function planWorkflow(signals, ctx = {}) {
 
   const rationale = ranked.slice(0, 3).flatMap(([k, v]) => v.reasons.map((r) => `[${k}] ${r}`));
 
-  // --- agent roster ---
-  const claude = pickModel(cc, "claude", "claude-opus-5");
-  const codex = pickModel(cc, "codex", "gpt-5.2-codex");
-  const sonnet = pickModel(cc, "claude", "claude-sonnet-5");
-  const haiku = pickModel(cc, "claude", "claude-haiku-4-5");
+  // --- model selection (capability-aware: suitability -> remaining quota -> cost rate) ---
+  // Models differ WITHIN a leaderboard (some agentic models are full-multimodal,
+  // some are reasoning/dialogue-only, some multimodal models are not agentic at
+  // all), so each role picks from the available provider models by capability
+  // fit first, then provider balance/remaining quota, then cost rate.
+  /** @type {Record<string, any>} */
+  const selCache = {};
+  function modelFor(role, appType, fallbackId, preferCheap = false) {
+    const key = `${baseRole(role)}|${appType}|${preferCheap ? "cheap" : "std"}`;
+    if (!selCache[key]) {
+      const sel = selectModelForRole({ role, appType, cc, quota: cc.quota, preferCheap });
+      selCache[key] = sel ?? {
+        role, appType, model: pickModel(cc, appType, fallbackId), providerId: null, providerName: null,
+        capabilityScore: null, quota: null, price: null,
+        reasons: ["cc-switch provider list unavailable; using the current provider's default model"],
+        estimated: true, alternates: [], considered: 0,
+      };
+    }
+    return selCache[key];
+  }
+  const orchChoice = modelFor("orchestrator", "claude", "claude-opus-5");
+  const resChoice = modelFor("researcher", "claude", "claude-sonnet-5");
+  const implChoice = modelFor("implementer", "claude", "claude-sonnet-5");
+  const lightChoice = modelFor("researcher-2", "claude", "claude-haiku-4-5", true);
+  const codexChoice = modelFor("reviewer", "codex", "gpt-5.2-codex");
+  const claudeRevChoice = modelFor("reviewer", "claude", "claude-opus-5");
 
   /** @type {AgentSpec[]} */
   const agents = [];
   const needsOrch = selected.some((a) => a === "orchestrator-workers" || a === "dynamic" || a === "multi-agent" || a === "ultracode");
   if (needsOrch) {
-    agents.push(mkAgent("orchestrator", "claude-code", claude, "claude", perAgent, ["Task", "Read", "Edit", "Bash"], "Plan, decompose, delegate, synthesize.", true));
+    agents.push(mkAgent("orchestrator", "claude-code", orchChoice.model, "claude", perAgent, ["Task", "Read", "Edit", "Bash"], "Plan, decompose, delegate, synthesize.", true, orchChoice));
   }
   const workerCount = Math.min(Math.max(signals.parallelizableSubtasks ?? 2, selected.includes("multi-agent") ? 4 : 2), maxConcurrency);
   if (selected.includes("multi-agent") || selected.includes("orchestrator-workers") || selected.includes("dynamic")) {
-    agents.push(mkAgent("researcher", "claude-code", sonnet, "claude", perAgent, ["WebFetch", "Grep", "Read"], "Investigate independent facets and compress findings.", false));
-    agents.push(mkAgent("implementer", "claude-code", sonnet, "claude", perAgent, ["Read", "Edit", "Write", "Bash"], "Implement a vertical slice end-to-end.", false));
-    if (workerCount >= 3) agents.push(mkAgent("implementer-2", "claude-code", sonnet, "claude", perAgent, ["Read", "Edit", "Write", "Bash"], "Implement a second independent slice in parallel.", false));
-    if (workerCount >= 4) agents.push(mkAgent("researcher-2", "claude-code", haiku, "claude", perAgent, ["WebFetch", "Grep"], "Secondary breadth-first exploration.", false));
+    agents.push(mkAgent("researcher", "claude-code", resChoice.model, "claude", perAgent, ["WebFetch", "Grep", "Read"], "Investigate independent facets and compress findings.", false, resChoice));
+    agents.push(mkAgent("implementer", "claude-code", implChoice.model, "claude", perAgent, ["Read", "Edit", "Write", "Bash"], "Implement a vertical slice end-to-end.", false, implChoice));
+    if (workerCount >= 3) agents.push(mkAgent("implementer-2", "claude-code", implChoice.model, "claude", perAgent, ["Read", "Edit", "Write", "Bash"], "Implement a second independent slice in parallel.", false, implChoice));
+    if (workerCount >= 4) agents.push(mkAgent("researcher-2", "claude-code", lightChoice.model, "claude", perAgent, ["WebFetch", "Grep"], "Secondary breadth-first exploration.", false, lightChoice));
   }
   if (selected.includes("loop") || selected.includes("ultracode")) {
-    agents.push(mkAgent("implementer", "claude-code", sonnet, "claude", perAgent, ["Read", "Edit", "Write", "Bash", "Task"], "Iterate implement→test→fix in a loop until criteria met.", false));
+    agents.push(mkAgent("implementer", "claude-code", implChoice.model, "claude", perAgent, ["Read", "Edit", "Write", "Bash", "Task"], "Iterate implement→test→fix in a loop until criteria met.", false, implChoice));
   }
   // codex reviewer only if codex available
   const codexOn = !!host.codexPluginInstalled;
   if (codexOn) {
-    agents.push(mkAgent("reviewer", "codex", codex, "codex", perAgent, ["codex:review", "codex:adversarial-review"], "Independent code/architecture/security review via codex-plugin-cc.", true));
+    agents.push(mkAgent("reviewer", "codex", codexChoice.model, "codex", perAgent, ["codex:review", "codex:adversarial-review"], "Independent code/architecture/security review via codex-plugin-cc.", true, codexChoice));
   } else if (riskLevel(signals.risk) >= 2) {
     // graceful degradation: no codex -> use a second claude agent as reviewer
-    agents.push(mkAgent("reviewer", "claude-code", claude, "claude", perAgent, ["Read", "Grep", "Glob"], "Independent review (codex unavailable; using second claude agent).", true));
+    agents.push(mkAgent("reviewer", "claude-code", claudeRevChoice.model, "claude", perAgent, ["Read", "Grep", "Glob"], "Independent review (codex unavailable; using second claude agent).", true, claudeRevChoice));
   }
 
   // --- groups (parallel/serial) ---
@@ -295,10 +317,26 @@ function riskLevel(r) {
  * @param {string[]} tools
  * @param {string} task
  * @param {boolean} reviewRequired
+ * @param {any} [modelChoice]  capability-aware selection result (from modelcap)
  * @returns {AgentSpec}
  */
-function mkAgent(role, agent, model, appType, perAgent, tools, task, reviewRequired) {
-  return { role, agent, model, appType, costRateLimitUsdPerMin: perAgent, concurrency: 1, tools, reviewRequired, task };
+function mkAgent(role, agent, model, appType, perAgent, tools, task, reviewRequired, modelChoice) {
+  /** @type {AgentSpec} */
+  const spec = { role, agent, model, appType, costRateLimitUsdPerMin: perAgent, concurrency: 1, tools, reviewRequired, task };
+  if (modelChoice) {
+    spec.modelChoice = {
+      provider: modelChoice.providerName ?? null,
+      providerId: modelChoice.providerId ?? null,
+      capabilityScore: modelChoice.capabilityScore ?? null,
+      quota: modelChoice.quota ?? null,
+      price: modelChoice.price ?? null,
+      reasons: modelChoice.reasons ?? [],
+      estimated: modelChoice.estimated ?? true,
+      considered: modelChoice.considered ?? 0,
+      alternates: (modelChoice.alternates ?? []).map((a) => ({ provider: a.providerName, model: a.model, capabilityScore: a.capabilityScore })),
+    };
+  }
+  return spec;
 }
 
 /**

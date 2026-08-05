@@ -79,9 +79,9 @@ test("inferSignals scales parallelism with project size", () => {
   assert.equal(big.contextNeed, "large");
 });
 
-test("default cost limits are $1/min per agent and $10/min total", () => {
+test("default cost limits are $5/min per agent, $10/min total, concurrency 16", () => {
   const p = planWorkflow({ files: 10, parallelizableSubtasks: 2, risk: "medium", contextNeed: "medium", taskType: "coding" }, { host, ccSwitch: cc });
-  assert.equal(p.cost.perAgentLimitUsdPerMin, 1.0);
+  assert.equal(p.cost.perAgentLimitUsdPerMin, 5.0);
   assert.equal(p.cost.totalLimitUsdPerMin, 10.0);
-  assert.equal(p.cost.maxConcurrency, 4);
+  assert.equal(p.cost.maxConcurrency, 16);
 });

@@ -98,7 +98,8 @@ curl -fsSL https://raw.githubusercontent.com/imBlanker/multi-agent-workflow-for-
 ## 1. 项目目标
 - **动态，而非固定。** MAW 依据真实的项目信号 + 宿主能力对六种架构打分，并选择最合适的——或一个组合。见 [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md)。
 - **可移植 + 限定于智能体软件。** 仅 Claude Code 与 Codex（依策略收窄）。plan + 各智能体配置都是宿主可读的纯 JSON/YAML/Markdown。
-- **成本有界。** 来自 cc-switch 日志的真实推理花费，而非 token 估算。默认值：**每智能体 $1/分钟**、**总计 $10/分钟**、最大并发 4——全部可编辑。
+- **成本有界。** 来自 cc-switch 日志的真实推理花费，而非 token 估算。默认值：**每智能体 $5/分钟**、**总计 $10/分钟**、最大并发 16——全部可编辑。
+- **能力适配的模型选择。** 同一榜单之内的模型也各不相同（有些 agentic（智能体化）模型是全多模态的；有些仅支持推理/对话；有些多模态模型完全不具备 agentic 能力），因此每个智能体/子智能体先按能力适配筛选可用的 provider 模型，再按剩余额度/余额与花销速率挑选 provider（api key）+模型。
 - **Codex 审查，按风险把关。** 当 [`codex-plugin-cc`](https://github.com/openai/codex-plugin-cc) 可用时，Codex 在基于风险的关卡充当独立审查者——而非每一步都审查。
 - **对 cc-switch 安全。** 所有既有 cc-switch 数据均为只读；MAW 只创建一个新项目 profile 以及（可选的）路由 carve-out。
 
@@ -146,9 +147,19 @@ curl -fsSL https://raw.githubusercontent.com/imBlanker/multi-agent-workflow-for-
 ## 6. 智能体与子智能体配置
 `maw plan` 在 `.maw/` 下为每个角色写入一份**可独立编辑**的配置（`workflow.json`、`config.yaml`、`plan.md`、`graph.json`、`agents/<role>.md`+`.json`、`runtime/`）。动态增删：`maw add-agent --role <r> ...` / `maw remove-agent --role <r>`。直接编辑任意文件——运行器会在执行时重新读取它。
 
+**能力适配的模型选择**（[`src/modelcap.js`](./src/modelcap.js)，灵感来自 [Artificial Analysis](https://artificialanalysis.ai) 的约 10 个按能力划分的模型榜单——intelligence / coding / math / agentic / multimodal-vision / image / image-edit / video / tts / stt）。对每个角色，MAW 会：① 按能力对 cc-switch 中**每一个可用的 provider 模型**分类（全多模态的 agentic 模型、仅推理/对话的 agentic 模型、以及多模态但非 agentic 的模型，是三种不同的东西）；② 剔除不适合该角色的模型（例如图像生成模型绝不可能成为实现者）；③ 按**能力适配 → provider 剩余额度/余额 → 花销速率**对剩余模型排序（额度 = `limit_daily/monthly_usd` − `usage_daily_rollups` 中的花费；未设置限额时额度未知）。精选目录一律标记 `estimated:true`。实时查看：
+
+```bash
+maw models                # capability view of all provider models + per-role assignments
+maw models --app codex    # same for the codex app_type
+```
+
+每个智能体的 `.json`/`.md` 都携带完整的 `model_selection` 记录（所选 provider+模型、能力适配、剩余额度、价格、理由、备选）——见 [`examples/.maw-sample/agents/orchestrator.json`](./examples/.maw-sample/agents/orchestrator.json)。
+
 ## 7. cc-switch 集成与路由策略
 MAW 把你的 cc-switch 视为**默认只读**。以下规则在代码中强制执行（[`src/ccswitch.js`](./src/ccswitch.js)、`guardSql`）：
 
+- **每次 init 前先做快照。** `maw init` **首先**把**所有** cc-switch 配置文件打包成一个带时间戳的归档，存放在 `~/.cc-switch/maw-backups/cc-switch-snapshot-<timestamp>.tar.gz`（在 `tar` 不可用时退化为目录拷贝 + sha256 清单）——这一切发生在 MAW 创建其项目 profile 或触碰路由之前。只读取既有文件；只在 `maw-backups/` 下写入新文件。
 - **所有既有 cc-switch 数据均为只读。** 读取使用只读 SQLite 连接（`node:sqlite` `readOnly:true`）。
 - **每次 init 创建一个新项目。** `maw init -u <user>` 创建一个全新的 cc-switch **project**（`profiles` 表中的一行），名为 `MAW: <project> (<user>)`，作用域为 claude+codex。Providers / MCP / Skills / memory **只在该新项目的 payload 内**配置。
 - **绝不触碰“默认” profiles。** 任何名称含 `默认` 的 profile（如 `Claude Code 默认`、`Codex 默认`）**绝不**被写入、更新或删除——一道硬护栏会拒绝它。
@@ -169,7 +180,7 @@ MAW 把你的 cc-switch 视为**默认只读**。以下规则在代码中强制�
 （一个黑盒 CLI 无法在写入中途暂停，因此 MAW 会在冲突写入之后立即检测到冲突，然后通过重新运行幂等的 `trellis init` 来恢复。）见 [`src/trellis.js`](./src/trellis.js)。
 
 ## 9. 成本控制机制
-来自 cc-switch `proxy_request_logs` 的真实推理花费 → USD/分钟。**每智能体** $1/分钟、**总计** $10/分钟（独立）、**最大并发** 4——可在 `.maw/config.yaml` 或通过 flags 编辑。定价来源链：cc-switch `model_pricing` → provider `cost_multiplier` → 内置的**估算值**（标记 `estimated:true`）→ `null`（绝不伪造）。
+来自 cc-switch `proxy_request_logs` 的真实推理花费 → USD/分钟。**每智能体** $5/分钟、**总计** $10/分钟（独立）、**最大并发** 16——可在 `.maw/config.yaml` 或通过 flags 编辑。定价来源链：cc-switch `model_pricing` → provider `cost_multiplier` → 内置的**估算值**（标记 `estimated:true`）→ `null`（绝不伪造）。
 
 ```bash
 maw cost      # current rate + top sessions + used% vs limit
@@ -189,7 +200,8 @@ npx . install          # or node bin/maw.js install
 `install` 把 commands/agents/hooks/skills 拷贝到 Claude Code（以及 Codex，尽力而为），向 `~/.maw/installed.json` 写入一个清单，且是非破坏性的（卸载只移除 `maw-*` 文件）。`update` 重新拷贝模板，保留你的编辑。
 
 ## 11. 用法示例
-**最简：** `maw init -u alice` → `maw plan --project .` → `maw run` → `maw cost`。
+**最简：** `maw init -u alice`（先对 cc-switch 做快照）→ `maw plan --project .` → `maw run` → `maw cost`。
+**模型选择：** `maw models`——查看每个角色分到哪个 provider（api key）+模型，以及为什么（能力适配 → 剩余额度 → 花销速率）。
 **完整：** `maw plan --project . --task-type coding --risk high --parallel 6 --value high --context large` → 每次 spawn 前执行 `maw guard` → `maw acquire/release` → `maw review --after post-implementation`。
 参见 [`examples/complex-project-workflow.md`](./examples/complex-project-workflow.md) 与生成的 [`examples/.maw-sample/`](./examples/.maw-sample/)。
 
@@ -229,13 +241,17 @@ node bin/maw.js doctor
 ```
 
 ## GitHub Stars 趋势
-顶部的徽章始终显示实时星标数（通过 [shields.io](https://shields.io)）——每次查看都会渲染并自动更新。
+顶部的徽章始终显示实时星标数（通过 [shields.io](https://shields.io)）。下方的趋势图按照 **[star-history](https://www.star-history.com/blog/how-to-use-github-star-history#how-to-embed-the-chart-in-your-readme) 官方方法**内嵌（开源项目 [star-history](https://github.com/star-history/star-history)；感知深色/浅色模式，每次查看时自动更新）：
 
-完整的星标增长曲线请打开由开源项目 **[star-history](https://github.com/star-history/star-history)** 生成的交互式图表（它会自动读取 GitHub 星标）：
+<a href="https://www.star-history.com/#imBlanker/multi-agent-workflow-for-a-complicated-codebase&Date">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=imBlanker/multi-agent-workflow-for-a-complicated-codebase&type=date&theme=dark&legend=top-left" />
+    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=imBlanker/multi-agent-workflow-for-a-complicated-codebase&type=date&legend=top-left" />
+    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=imBlanker/multi-agent-workflow-for-a-complicated-codebase&type=date&legend=top-left" />
+  </picture>
+</a>
 
-→ [**在 star-history.com 查看星标历史**](https://star-history.com/#imBlanker/multi-agent-workflow-for-a-complicated-codebase&Date)
-
-> 这里特意不内嵌趋势图片：对于全新 / 低星标仓库，`api.star-history.com/svg` 会返回 HTTP 500（超时），会造成图片显示失败。当仓库累积星标并被 star-history 缓存后，上方的交互式页面会渲染出完整曲线。
+> GitHub 已将星标数据限制为仅仓库协作者可见（2026 年 7 月），因此 star-history 通过其自有 token 池提供图表；当该池被限流时，图片会显示占位图，并在池子冷却后**自愈**。若要保证始终在线渲染，请打开 [star-history.com](https://www.star-history.com/#imBlanker/multi-agent-workflow-for-a-complicated-codebase&Date)，添加一个可读取本仓库的 token，然后点击 **Generate embed code**（token 在进入 README 前会被加密）。
 
 ---
 

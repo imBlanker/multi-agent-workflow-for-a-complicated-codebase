@@ -13,5 +13,5 @@ allowed-tools: Bash, Read
 4. Synthesize results from the `synthesize` batch and present to the user.
 
 Key rules:
-- Never bypass the cost guard. The total cost-rate limit ($10/min by default) and per-agent limit ($1/min by default) are hard constraints measured from real cc-switch spend.
+- Never bypass the cost guard. The total cost-rate limit ($10/min by default) and per-agent limit ($5/min by default) are hard constraints measured from real cc-switch spend.
 - If a required agent/model is unavailable, degrade gracefully: replace the codex reviewer with a second claude reviewer (the planner already does this), and skip unreachable subagents rather than failing the whole workflow.

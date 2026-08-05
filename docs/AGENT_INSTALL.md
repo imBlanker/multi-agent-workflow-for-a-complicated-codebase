@@ -30,6 +30,7 @@ Verify: Node ≥ 20, git, **host = claude-code or codex**, cc-switch DB found (r
 
 ## 4. cc-switch policy (HARD RULES — do not violate)
 - All existing cc-switch data is **read-only**.
+- **Before every `maw init`, a packaged snapshot of ALL cc-switch config files is taken** → `~/.cc-switch/maw-backups/cc-switch-snapshot-<timestamp>.tar.gz` (directory copy + sha256 manifest if `tar` is unavailable). Mention the snapshot path to the user.
 - `maw init` creates a **NEW** cc-switch project profile (`MAW: <project> (<user>)`); providers/MCP/Skills/memory are provisioned **only within that new project**.
 - **NEVER** touch any profile whose name contains `默认` (e.g. `Claude Code 默认`, `Codex 默认`). The engine hard-refuses this; you must not bypass it.
 - Routing (checked by `maw doctor` / `maw routing`; applied by `maw routing --fix`, writing ONLY `proxy_config` for claude/codex):
@@ -42,7 +43,7 @@ If `maw routing` reports violations, run `maw routing --fix` (after the user con
 ```bash
 maw init -u <user-name>
 ```
-This: (a) writes `.maw/` configs, (b) creates the cc-switch project profile, (c) checks the routing policy, (d) **automatically runs `trellis init -u <user-name>`** as the mandatory next step.
+This: (a) **snapshots all cc-switch config** to `~/.cc-switch/maw-backups/`, (b) writes `.maw/` configs, (c) creates the cc-switch project profile, (d) checks the routing policy, (e) **automatically runs `trellis init -u <user-name>`** as the mandatory next step.
 
 **trellis conflict handling** (see README §8): if trellis touches a MAW-managed file, MAW pauses, prints the conflict + overview + log path (`.maw/logs/trellis-init-*.log`), and asks the user to choose `[m]` keep MAW / `[t]` keep trellis / `[r]` re-run trellis. Apply the user's choice and resume. In a non-interactive context, surface the conflicts + log and let the user decide.
 
@@ -56,6 +57,12 @@ maw plan --project . --task-type coding --risk high --parallel 6 --value high --
 ```
 Reads `.maw/workflow.json` + `plan.md` + `agents/*.json`. Report the chosen **primary architecture**, the **agents** (role→model), **cost limits**, and **review gates** back to the user.
 
+### 5b. Explain the model choices (capability-aware)
+```bash
+maw models            # capability view of all provider models + per-role assignments
+```
+Models differ WITHIN a leaderboard (some agentic models are full-multimodal; some are reasoning/dialogue-only; some multimodal models are not agentic). MAW classifies every available provider model (curated catalog, `estimated:true`), drops models unfit for each role, then ranks by **capability fit → provider remaining quota/balance → cost rate** (quota = cc-switch daily/monthly limits − `usage_daily_rollups` spend; unknown when no limit). Each `agents/*.json` embeds the full `model_selection` record (chosen provider+model, fit, quota, price, reasons, alternates) — walk the user through it.
+
 ## 7. Run (host-driven)
 ```bash
 maw run
@@ -67,7 +74,7 @@ The host (Claude Code) reads the batches, and **before each spawn** checks `maw 
 maw cost        # real USD/min from cc-switch logs
 maw guard       # ALLOW/DENY a new spawn
 ```
-Defaults: $1/min per agent, $10/min total, max concurrency 4. Edit `.maw/config.yaml` to change.
+Defaults: $5/min per agent, $10/min total, max concurrency 16. Edit `.maw/config.yaml` to change.
 
 ## 9. Graceful degradation
 - No codex/codex-plugin-cc → MAW uses a **second Claude Code agent** as reviewer for risk ≥ medium.

@@ -7,7 +7,26 @@
 - **Role**: researcher
 - **Host agent software**: `claude-code`
 - **App type (cc-switch)**: `claude`
-- **Model**: `claude-opus-5`
+- **Model**: `claude-haiku-4-5`
+## Model selection (capability-aware)
+
+- **Provider (api key)**: Deep Worker (`e2d33717-dbe1-4cda-8e56-cf654f6c8f6c`) — chosen from 37 available candidate(s)
+- **Capability fit**: 100/100 for this role
+- **Remaining quota (today)**: unknown (no daily limit set in cc-switch)
+- **Provider current spend rate**: $0/min
+- **Estimated**: yes (curated capability catalog + cc-switch pricing)
+- **Why this provider+model**:
+  - capability fit 100/100 for role "researcher" (investigates and compresses findings; vision helps with screenshots/charts)
+  - model class: agentic AND multimodal (supports image input)
+  - provider remaining quota: unknown (no daily limit set in cc-switch)
+  - provider current spend rate: $0/min
+  - price: unknown (not in cc-switch model_pricing)
+  - provider is the cc-switch current one (known-working)
+- **Alternates** (next-best fits):
+  - Deep Worker / `claude-opus-5` (fit 100)
+  - Any Router / `claude-opus-4-8[1M]` (fit 100)
+  - Any Router / `claude-sonnet-4-5-20250929[1M]` (fit 100)
+
 
 ## Task
 
@@ -21,11 +40,12 @@ Investigate independent facets and compress findings.
 
 ## Cost control
 
-- **Per-agent cost-rate limit**: $1/min (USD, real inference spend measured from cc-switch logs)
+- **Per-agent cost-rate limit**: $5/min (USD, real inference spend measured from cc-switch logs)
 - **Concurrency**: 1
 - **Review required at this agent's output**: no
 
-**Price** (exact): 5/M in, 25/M out — source: `cc-switch`
+**Price** (estimated): 1/M in, 5/M out — source: `fallback:estimate`
+  - Price not found in cc-switch; using vendored estimate. Verify on Artificial Analysis / OpenRouter.
 
 ## How to invoke
 

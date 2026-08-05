@@ -16,7 +16,7 @@ while not done:
 ## Stopping conditions MAW enforces
 - All tests green AND reviewer approves (ultracode).
 - Max iterations reached (default 5, configurable via `--max-iter`).
-- Cost guard DENY (the $1/min per-agent or $10/min total limit).
+- Cost guard DENY (the $5/min per-agent or $10/min total limit).
 - Ground-truth from the environment (tool results, test output) shows the task is complete.
 
 ## When NOT to use a loop

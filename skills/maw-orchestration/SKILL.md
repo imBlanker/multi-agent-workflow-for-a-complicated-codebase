@@ -28,7 +28,7 @@ maw run                     # execution guidance (batches + guards)
 
 ## Core invariants
 - Start simple; add complexity only when it demonstrably helps.
-- The cost guard is authoritative: $1/min per agent, $10/min total (defaults), measured from real cc-switch spend — not token estimates.
+- The cost guard is authoritative: $5/min per agent, $10/min total (defaults), measured from real cc-switch spend — not token estimates.
 - Codex review is risk-gated, not on every step.
 - Every file under `.maw/` is editable; `maw plan` regenerates from fresh signals.
 

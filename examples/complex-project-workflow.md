@@ -92,7 +92,7 @@ plan: orchestrator-workers (dynamic)
   agents: orchestrator(claude-code), researcher(claude-code), implementer(claude-code), implementer-2(claude-code), researcher-2(claude-code), reviewer(codex)
   review gates: 2
   loops: 0
-  cost: $1/min per agent, $10/min total, max 4 concurrent
+  cost: $5/min per agent, $10/min total, max 16 concurrent
   written: 17 files to /…/examples/sample-project/.maw
 ```
 
@@ -198,7 +198,7 @@ For example, [`examples/.maw-sample/agents/reviewer.json`](./.maw-sample/agents/
 }
 ```
 
-Note the four facts the prompt asked to confirm: **agent = `codex`**, **model = `gpt-5.2-codex`**, **`cost_rate_limit_usd_per_min` = 1** ($1/min), and **price `source` = `cc-switch`** (and `estimated: false`, i.e. exact pricing, never faked). The orchestrator and the four claude workers carry the same shape but with `app_type: "claude"` and `model: "claude-opus-5"`.
+Note the four facts the prompt asked to confirm: **agent = `codex`**, **model = `gpt-5.2-codex`**, **`cost_rate_limit_usd_per_min` = 5** ($5/min), and **price `source` = `cc-switch`** (and `estimated: false`, i.e. exact pricing, never faked). The orchestrator/researcher agents carry the same shape with `app_type: "claude"` (capability-aware selection picked `claude-haiku-4-5` from 37 candidates — capability tie → cheapest fit), and the implementers `deepseek-v4-flash`; every agent file also embeds the full `model_selection` record (fit, quota, price, reasons, alternates).
 
 The portable `reviewer.md` also tells the host exactly how to invoke it:
 
@@ -273,7 +273,7 @@ For every spawn the host:
    # {"released":true}
    ```
 
-4. **Spawns the parallel batch in parallel** — `researcher`, `implementer`, `implementer-2`, `researcher-2` all run at once (each in its own context window, each under the $1/min per-agent cap), respecting the max-concurrency-4 ceiling.
+4. **Spawns the parallel batch in parallel** — `researcher`, `implementer`, `implementer-2`, `researcher-2` all run at once (each in its own context window, each under the $5/min per-agent cap), respecting the max-concurrency-16 ceiling.
 
 5. **At the review gate, invokes Codex.** Batch 4 (`r7`, *post-implementation review*) triggers:
 
@@ -315,12 +315,12 @@ Real output (idle session):
 ```
 Cost rate over last 60 min (impl: node:sqlite)
   total: 0 USD/min  (limit 10, 0% used; spend $0 across 0 requests)
-  per-agent limit: $1/min; max concurrency: 4
+  per-agent limit: $5/min; max concurrency: 16
 ```
 
 The two limits are **independent** and both enforced by `guard()`:
 
-- **Per-agent**: `$1/min` default. A session whose measured rate crosses this is blocked from spawning.
+- **Per-agent**: `$5/min` default. A session whose measured rate crosses this is blocked from spawning.
 - **Total workflow**: `$10/min` default, independent of the per-agent sum.
 - **Max concurrency**: `4` default.
 
@@ -330,7 +330,7 @@ Both come from [`config.yaml`](./.maw-sample/config.yaml):
 cost:
   per_agent_limit_usd_per_min: 1
   total_limit_usd_per_min: 10
-  max_concurrency: 4
+  max_concurrency: 16
   window_seconds: 3600
   pricing_sources:
   - "cc-switch:model_pricing"
@@ -356,7 +356,7 @@ maw guard
 # ALLOW spawn: 4 slots free, rate 0/10 USD/min
 ```
 
-**Per-agent rate DENY** — triggering this live requires real spend recorded in cc-switch's `proxy_request_logs`; in an idle session the measured rate is `0` and the guard stays `ALLOW`. The guard's per-agent rate path (`src/cost.js`, the `guard()` function) emits this format when a session crosses the `$1/min` cap:
+**Per-agent rate DENY** — triggering this live requires real spend recorded in cc-switch's `proxy_request_logs`; in an idle session the measured rate is `0` and the guard stays `ALLOW`. The guard's per-agent rate path (`src/cost.js`, the `guard()` function) emits this format when a session crosses the `$5/min` cap:
 
 ```
 DENY spawn: session abcd1234ef56 at 1.2 USD/min >= per-agent limit 1 (rate 1.2/10, 4/4 free)
@@ -439,11 +439,11 @@ becomes a fail with the documented fix: `cc-switch database not found → run ma
 By the end of the run:
 
 - **Batch 1** — the orchestrator decomposed the SaaS refactor into independent slices and wrote `.maw/plan.md`.
-- **Batch 2** — `researcher` and `researcher-2` explored the landscape and returned **compressed findings** (each in its own context window); `implementer` and `implementer-2` each shipped a **vertical slice end-to-end** (compressed summary + diffs), all four running in parallel under the max-concurrency-4 ceiling.
+- **Batch 2** — `researcher` and `researcher-2` explored the landscape and returned **compressed findings** (each in its own context window); `implementer` and `implementer-2` each shipped a **vertical slice end-to-end** (compressed summary + diffs), all four running in parallel under the max-concurrency-16 ceiling.
 - **Batch 3** — the orchestrator merged the subagent results and resolved conflicts into a single coherent change set.
 - **Batches 4 & 5** — the **Codex reviewer** (`gpt-5.2-codex`, via `codex-plugin-cc`) signed off at both gates: *post-implementation review* (scope `auto`) and *architecture/security review* (scope `working-tree`).
 
-Throughout, the budget held: the guard denied any spawn that would breach the **$1/min per-agent** rate or the **$10/min total** rate, and capped concurrency at **4**. The plan was never hardcoded — agents were edited/added/removed via `maw add-agent` / `maw remove-agent` and re-read at execute time, and the whole thing would have kept working (with a Claude Code reviewer instead of Codex) even if Codex had been unavailable.
+Throughout, the budget held: the guard denied any spawn that would breach the **$5/min per-agent** rate or the **$10/min total** rate, and capped concurrency at **16**. The plan was never hardcoded — agents were edited/added/removed via `maw add-agent` / `maw remove-agent` and re-read at execute time, and the whole thing would have kept working (with a Claude Code reviewer instead of Codex) even if Codex had been unavailable.
 
 That is the MAW contract: a **dynamic**, **portable**, **cost-bounded** plan with **Codex review gates** and graceful degradation — driven by your host, bounded by real spend.
 

@@ -5,9 +5,9 @@ workflow:
   - dynamic
   host_app: claude-code
 cost:
-  per_agent_limit_usd_per_min: 1
+  per_agent_limit_usd_per_min: 5
   total_limit_usd_per_min: 10
-  max_concurrency: 4
+  max_concurrency: 16
   window_seconds: 3600
   pricing_sources:
   - "cc-switch:model_pricing"
@@ -21,21 +21,21 @@ codex:
   - working-tree
 models:
   orchestrator:
-    model: claude-opus-5
+    model: claude-haiku-4-5
     app_type: claude
   researcher:
-    model: claude-opus-5
+    model: claude-haiku-4-5
     app_type: claude
   implementer:
-    model: claude-opus-5
+    model: deepseek-v4-flash
     app_type: claude
   implementer-2:
-    model: claude-opus-5
+    model: deepseek-v4-flash
     app_type: claude
   researcher-2:
-    model: claude-opus-5
+    model: claude-haiku-4-5
     app_type: claude
   reviewer:
-    model: gpt-5.2-codex
+    model: deepseek-v4-flash
     app_type: codex
 editable: "Every field above is user-editable. Re-run `maw plan` to regenerate from signals."
