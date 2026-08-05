@@ -106,6 +106,8 @@ curl -fsSL https://raw.githubusercontent.com/imBlanker/multi-agent-workflow-for-
 ## 2. 何時使用
 **全新的複雜專案**：`maw init -u <user>` → `maw plan`。當單一智慧體不敷使用（檔案繁多、多種語言、高風險、上下文超出單一視窗）且你需要有成本上限的多智慧體執行與 Codex 審查關卡時使用。**不要**用於微小的固定任務（單一迴圈工程智慧體更便宜）。
 
+**背景閱讀——智慧體系統概念。** 對 MAW 評分與選擇的這些範式仍陌生？請閱讀 [`docs/agent-architecture-paradigms.html`](./docs/agent-architecture-paradigms.html)（直接用瀏覽器開啟該 `.html`，檔案自包含）：一份短小的研究報告，釐清 **Augmented LLM**、**Workflow 與 Agent 的區別**、**Multi-Agent**、**Subagents**、**Orchestrator-Worker**、**Loop Engineering**、**Graph Engineering** —— 各自是什麼、何時用、需要什麼前提。
+
 ## 3. 系統架構
 ```
    user/project → maw plan: probe → score architectures → select → generate per-agent configs (.maw/)

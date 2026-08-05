@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智能体架构范式研究报告：Multi-Agent · Subagents · Loop Engineering · Graph Engineering</title>
+<style>
+  :root{
+    --bg:#0f1115; --panel:#171a21; --panel-2:#1e222c; --ink:#e6e9ef; --muted:#9aa4b2;
+    --line:#2a2f3a; --accent:#6ea8fe; --accent-2:#7ee0b8; --accent-3:#f6c177; --accent-4:#d78bff;
+    --code:#0b0d12;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.75;font-size:16px}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+  header.hero{padding:64px 24px 40px;border-bottom:1px solid var(--line);
+    background:radial-gradient(1200px 400px at 50% -50%,rgba(110,168,254,.18),transparent);}
+  .hero h1{font-size:32px;line-height:1.3;margin:0 0 12px;letter-spacing:.3px}
+  .hero p{color:var(--muted);margin:6px 0;font-size:15px}
+  .badges{margin-top:18px;display:flex;flex-wrap:wrap;gap:8px}
+  .badge{font-size:12.5px;padding:5px 11px;border:1px solid var(--line);border-radius:999px;color:var(--muted);background:var(--panel)}
+  nav.toc{position:sticky;top:0;z-index:10;background:rgba(15,17,21,.9);backdrop-filter:blur(8px);
+    border-bottom:1px solid var(--line);padding:12px 0}
+  nav.toc ul{list-style:none;display:flex;flex-wrap:wrap;gap:6px;margin:0;padding:0 24px;max-width:1080px;margin:0 auto}
+  nav.toc a{font-size:13px;color:var(--muted);text-decoration:none;padding:6px 10px;border-radius:8px}
+  nav.toc a:hover{color:var(--ink);background:var(--panel-2)}
+  section{padding:40px 0;border-bottom:1px solid var(--line)}
+  h2{font-size:24px;margin:0 0 8px;display:flex;align-items:center;gap:10px}
+  h2 .dot{width:10px;height:10px;border-radius:3px;display:inline-block}
+  h3{font-size:18px;margin:26px 0 8px;color:var(--ink)}
+  h4{font-size:15px;margin:18px 0 6px;color:var(--accent-2)}
+  p{margin:10px 0}
+  .lead{color:var(--muted);font-size:15px}
+  ul,ol{margin:8px 0 8px 4px;padding-left:22px}
+  li{margin:5px 0}
+  code{background:var(--code);padding:2px 6px;border-radius:5px;font-size:13.5px;
+    font-family:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;color:#cbd5e1}
+  pre{background:var(--code);border:1px solid var(--line);border-radius:10px;padding:16px;overflow:auto;
+    font-size:13px;line-height:1.6}
+  pre code{background:none;padding:0}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:16px 0}
+  @media(max-width:820px){.grid{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px}
+  .card h4{margin-top:0}
+  .kv{margin:0}
+  .kv dt{color:var(--accent);font-size:13px;font-weight:600;margin-top:10px}
+  .kv dd{margin:2px 0 0;color:var(--muted);font-size:14px}
+  table{width:100%;border-collapse:collapse;margin:16px 0;font-size:14px}
+  th,td{border:1px solid var(--line);padding:10px 12px;text-align:left;vertical-align:top}
+  th{background:var(--panel-2);color:var(--ink);font-weight:600}
+  td{color:var(--muted)}
+  .diagram{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px;margin:16px 0}
+  .flow{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:10px;font-size:13.5px}
+  .node{background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:8px 14px;color:var(--ink)}
+  .node.accent{border-color:var(--accent);color:var(--accent)}
+  .node.g{border-color:var(--accent-2);color:var(--accent-2)}
+  .node.y{border-color:var(--accent-3);color:var(--accent-3)}
+  .arrow{color:var(--muted);font-size:18px}
+  .callout{border-left:3px solid var(--accent);background:var(--panel);padding:12px 16px;border-radius:0 10px 10px 0;margin:16px 0;color:var(--muted);font-size:14.5px}
+  .callout.warn{border-color:var(--accent-3)}
+  .callout.good{border-color:var(--accent-2)}
+  .tag{display:inline-block;font-size:11.5px;padding:2px 8px;border-radius:6px;margin-right:6px}
+  .t-when{background:rgba(126,224,184,.12);color:var(--accent-2)}
+  .t-avoid{background:rgba(246,193,119,.12);color:var(--accent-3)}
+  .t-need{background:rgba(110,168,254,.12);color:var(--accent)}
+  footer{padding:40px 24px 80px;color:var(--muted);font-size:13px}
+  footer a{color:var(--accent)}
+  .src{font-size:13px;color:var(--muted)}
+  .src li{margin:6px 0}
+  .num{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:7px;background:var(--panel-2);border:1px solid var(--line);font-size:13px;color:var(--accent);margin-right:8px}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <h1>智能体架构范式研究报告</h1>
+    <p>Multi-Agent（多智能体） · Subagents（子智能体） · Loop Engineering（循环工程） · Graph Engineering（图工程）</p>
+    <p>理论架构 · 使用场景 · 所需条件的系统性对比</p>
+    <div class="badges">
+      <span class="badge">研究日期：2026-08-04</span>
+      <span class="badge">一手来源：Anthropic Engineering</span>
+      <span class="badge">LangChain / LangGraph</span>
+      <span class="badge">Lilian Weng（Lil'Log）</span>
+    </div>
+  </div>
+</header>
+
+<nav class="toc">
+  <ul>
+    <li><a href="#intro">导读</a></li>
+    <li><a href="#foundation">共同基础</a></li>
+    <li><a href="#loop">循环工程</a></li>
+    <li><a href="#subagents">子智能体</a></li>
+    <li><a href="#multi">多智能体</a></li>
+    <li><a href="#graph">图工程</a></li>
+    <li><a href="#compare">横向对比</a></li>
+    <li><a href="#decision">选型决策</a></li>
+    <li><a href="#sources">参考来源</a></li>
+  </ul>
+</nav>
+
+<main class="wrap">
+
+<section id="intro">
+  <h2><span class="dot" style="background:var(--accent)"></span>导读：为什么这四个概念常被混为一谈</h2>
+  <p class="lead">这四个词描述的是智能体系统里<strong>不同抽象层次</strong>的东西，不是四个互斥的竞品。把它们放在一根「控制权 / 复杂度」轴上会更清楚：</p>
+
+  <div class="diagram">
+    <div class="flow">
+      <span class="node y">Loop（单体循环）</span>
+      <span class="arrow">→</span>
+      <span class="node accent">Subagents（委派子任务）</span>
+      <span class="arrow">→</span>
+      <span class="node">Multi-Agent（多体协作）</span>
+      <span class="arrow">↕</span>
+      <span class="node g">Graph（编排底座）</span>
+    </div>
+    <p class="lead" style="text-align:center;margin-top:14px">Loop 是最小执行单元；Subagents 是把 Loop 当工具委派出去；Multi-Agent 是多个 Loop 协作；Graph 是把上述结构显式编排、加上状态与持久化的底层框架。</p>
+  </div>
+
+  <p>本报告先讲清它们<strong>共享的基础</strong>（增强型 LLM），再逐个拆解四种范式的理论架构、适用场景与落地所需条件，最后给出横向对比表和选型决策树。核心判断来自 Anthropic「一切从最简单方案开始，只在可证明有收益时才增加复杂度」的工程原则。</p>
+</section>
+
+<section id="foundation">
+  <h2><span class="dot" style="background:var(--accent-2)"></span>共同基础：增强型 LLM 与「Agent vs Workflow」</h2>
+
+  <h3>基础构件：Augmented LLM</h3>
+  <p>四种范式的最小单元都是一个被<strong>检索（Retrieval）、工具（Tools）、记忆（Memory）</strong>增强过的 LLM。模型自己生成检索查询、选择工具、决定保留什么信息。所有更复杂的结构都是在这个构件上堆叠出来的。</p>
+
+  <h3>关键区分：Workflow 与 Agent</h3>
+  <div class="grid">
+    <div class="card">
+      <h4>Workflow（工作流）</h4>
+      <p class="lead">LLM 与工具通过<strong>预先写好的代码路径</strong>被编排。路径确定、可预测、可复现。</p>
+      <p class="lead">典型模式：Prompt Chaining、Routing、Parallelization、Orchestrator-Workers、Evaluator-Optimizer。</p>
+    </div>
+    <div class="card">
+      <h4>Agent（智能体）</h4>
+      <p class="lead">LLM <strong>动态决定自己的流程和工具调用</strong>，在循环中根据环境反馈自主推进，直到完成或触发停止条件。</p>
+      <p class="lead">本质就是「LLM 在循环里基于环境反馈使用工具」。</p>
+    </div>
+  </div>
+
+  <div class="callout">
+    Andrew Ng 的视角值得借鉴：与其纠结「它是不是一个 Agent」（名词、二元判断），不如问「它有多 agentic」（形容词、程度判断）。生产环境里的系统几乎都是 workflow 与 agent 的混合体。
+  </div>
+
+  <div class="callout good">
+    <strong>贯穿全篇的核心难点</strong>（LangChain 观点）：构建可靠智能体系统，最难的不是拼装组件，而是<strong>确保 LLM 在每一步都拿到恰当的上下文</strong>——既要控制进入 LLM 的确切内容，也要跑对生成这些内容的步骤。Loop / Subagents / Multi-Agent / Graph 本质都是「管理上下文」的不同手段。
+  </div>
+</section>
+
+<section id="loop">
+  <h2><span class="num">1</span>Loop Engineering（循环工程）</h2>
+  <p class="lead">最小、最基础的智能体范式：一个 LLM 在 while 循环里反复「思考 → 调用工具 → 观察结果」，直到解决问题。</p>
+
+  <h3>理论架构</h3>
+  <p>一个 agent 由三个参数决定：<code>要用的模型</code>、<code>系统提示（指令）</code>、<code>可用工具集</code>。运行方式是：</p>
+  <pre><code>while 未触发停止条件:
+    response = LLM(model, instructions, messages, tools)
+    if response 调用了工具:
+        observation = 执行工具()
+        messages += observation      # 把反馈喂回上下文
+    else:
+        return response              # LLM 不再调用工具 → 结束</code></pre>
+
+  <div class="diagram">
+    <div class="flow">
+      <span class="node accent">Thought 思考</span>
+      <span class="arrow">→</span>
+      <span class="node">Action 调用工具</span>
+      <span class="arrow">→</span>
+      <span class="node g">Observation 观察</span>
+      <span class="arrow">↺</span>
+      <span class="node y">（循环 N 次）</span>
+    </div>
+    <p class="lead" style="text-align:center;margin-top:12px">ReAct 模板：Thought / Action / Observation 反复循环</p>
+  </div>
+
+  <h4>循环工程的核心手法</h4>
+  <ul>
+    <li><strong>ReAct</strong>：把推理（reasoning）和行动（acting）交织，让模型在自然语言里边想边做。</li>
+    <li><strong>Reflection / Reflexion（自我反思）</strong>：每轮结束用启发式判断轨迹是否低效或出现幻觉（例如连续重复同一动作），把反思写入工作记忆指导下一轮。</li>
+    <li><strong>Evaluator-Optimizer（评估-优化循环）</strong>：一个 LLM 生成、另一个 LLM 评估并给反馈，迭代精修。</li>
+    <li><strong>停止条件工程</strong>：最大迭代次数、ground-truth 校验、人类检查点（human-in-the-loop），防止无限循环和错误累积。</li>
+  </ul>
+
+  <h3>使用场景</h3>
+  <p><span class="tag t-when">适用</span>开放式问题、无法预先确定步骤数、无法硬编码固定路径的任务。典型如：编码 agent（SWE-bench）、computer use、需要多轮搜索精修的检索任务。</p>
+  <p><span class="tag t-avoid">不适用</span>步骤固定、可清晰分解的任务——那种用 workflow（prompt chaining / routing）更便宜、更快、更可预测。</p>
+
+  <h3>所需条件</h3>
+  <div class="card">
+    <dl class="kv">
+      <dt>模型能力</dt><dd>足够强的推理、规划、可靠工具调用、错误恢复能力。这是循环能自主推进的前提。</dd>
+      <dt>工具与接口（ACI）</dt><dd>精心设计的工具集和文档——「Agent-Computer Interface」和人机界面同等重要。工具描述差会把 agent 带偏。</dd>
+      <dt>环境反馈（ground truth）</dt><dd>每一步都要能从环境拿到真实反馈（工具结果、代码执行结果）来评估进度。</dd>
+      <dt>护栏</dt><dd>沙箱环境、最大迭代次数、检查点，控制成本与失控风险。</dd>
+      <dt>信任门槛</dt><dd>因为模型会自主跑很多轮，你必须对它的决策有一定信任，并在受信环境中运行。</dd>
+    </dl>
+  </div>
+</section>
+
+<section id="subagents">
+  <h2><span class="num">2</span>Subagents（子智能体）</h2>
+  <p class="lead">把一个独立的 agent 循环封装成「可被主 agent 调用的能力」，用于委派带独立上下文窗口的子任务。它是 Multi-Agent 的具体实现单元。</p>
+
+  <h3>理论架构：Orchestrator-Worker（编排者-工人）</h3>
+  <div class="diagram">
+    <div class="flow">
+      <span class="node accent">Lead / Orchestrator 主智能体</span>
+    </div>
+    <div class="flow" style="margin-top:10px">
+      <span class="arrow">↙</span><span class="arrow">↓</span><span class="arrow">↘</span>
+    </div>
+    <div class="flow">
+      <span class="node g">Subagent A</span>
+      <span class="node g">Subagent B</span>
+      <span class="node g">Subagent C</span>
+    </div>
+    <p class="lead" style="text-align:center;margin-top:12px">主 agent 拆解任务并动态委派；子 agent 各自带独立上下文并行探索，把压缩后的结果回传给主 agent 综合。</p>
+  </div>
+
+  <h4>为什么子智能体有价值</h4>
+  <ul>
+    <li><strong>上下文压缩与隔离</strong>：搜索的本质是压缩。每个子 agent 用<strong>自己独立的上下文窗口</strong>探索问题的一个侧面，把最重要的 token 蒸馏后回传，避免主上下文被撑爆（超过 200K 会被截断）。</li>
+    <li><strong>关注点分离</strong>：每个子 agent 有独立的工具、提示和探索轨迹，减少路径依赖，能做彻底、独立的调查。</li>
+    <li><strong>并行扩展算力</strong>：多个子 agent 同时跑 = 把 token 预算分散到多个并行推理通道。</li>
+  </ul>
+
+  <h3>使用场景</h3>
+  <p><span class="tag t-when">适用</span>无法预知子任务数量的复杂任务（Orchestrator-Worker 与 Parallelization 的关键差别就在于子任务是<strong>动态决定</strong>还是预定义）。如：需要改动多个文件的编码任务、需要从多来源收集分析信息的搜索任务。</p>
+
+  <h3>所需条件</h3>
+  <div class="card">
+    <dl class="kv">
+      <dt>清晰的委派指令</dt><dd>每个子 agent 需要：明确目标、输出格式、工具/来源指引、任务边界。指令模糊会导致子 agent 重复劳动或留下空白（Anthropic 早期就踩过多个子 agent 重复搜同一主题的坑）。</dd>
+      <dt>努力度分级规则</dt><dd>在提示里嵌入「简单事实查证用 1 个 agent + 3-10 次工具调用；复杂研究用 10+ 子 agent」这样的资源分配规则，防止对简单问题过度投入。</dd>
+      <dt>持久化/记忆</dt><dd>主 agent 需把计划存入 Memory，以防上下文截断时丢失。</dd>
+      <dt>结果综合机制</dt><dd>主 agent 要能判断信息是否足够、是否需要再派子 agent，并最终综合（可能再接一个专门的引用/校验 agent）。</dd>
+    </dl>
+  </div>
+</section>
+
+<section id="multi">
+  <h2><span class="num">3</span>Multi-Agent Systems（多智能体系统）</h2>
+  <p class="lead">多个 agent（各自是「在循环里自主用工具的 LLM」）协同工作的系统。Subagents 是它的实现单元，Orchestrator-Worker 是它最常见的拓扑。</p>
+
+  <h3>理论架构与量化收益</h3>
+  <p>Anthropic 的 Research 系统采用 Opus 4 主 agent + Sonnet 4 子 agent 的多智能体架构，在内部研究评测上<strong>比单体 Opus 4 高出 90.2%</strong>。其关键发现：</p>
+  <ul>
+    <li>在 BrowseComp 评测里，<strong>token 用量单独就解释了 80% 的性能方差</strong>；再加上工具调用次数和模型选择，三者共解释 95%。</li>
+    <li>多智能体系统之所以有效，主要是因为它能<strong>把足够多的 token 投进问题</strong>——通过分散到多个独立上下文窗口来扩展并行推理容量。</li>
+    <li>擅长<strong>广度优先（breadth-first）</strong>查询：同时追多个独立方向。例如「找出 S&amp;P 500 里所有 IT 公司的董事会成员」，多智能体分解成子任务成功，单体因串行搜索太慢而失败。</li>
+  </ul>
+
+  <div class="callout warn">
+    <strong>代价必须正视</strong>：多智能体系统消耗 token 极快——普通 agent 约是聊天的 4×，多智能体系统约是聊天的 <strong>15×</strong>。因此只对「价值足够高、值得为性能付费」的任务才划算。
+  </div>
+
+  <h3>使用场景</h3>
+  <p><span class="tag t-when">适用</span>(1) 价值高且高度可并行化的任务；(2) 信息量超过单个上下文窗口；(3) 需要对接大量复杂工具。典型：深度研究、广度信息聚合。</p>
+  <p><span class="tag t-avoid">不适用</span>(1) 所有 agent 需共享同一上下文的任务；(2) agent 之间依赖很多、需实时协调的任务。<strong>大多数编码任务就属于此类</strong>——真正可并行的子任务少，而当前 LLM 还不擅长实时相互协调与委派。</p>
+
+  <h3>所需条件</h3>
+  <div class="card">
+    <dl class="kv">
+      <dt>协调与提示工程</dt><dd>协调复杂度随 agent 数量快速增长。提示是主要调控杠杆——要教会编排者如何委派、如何按查询复杂度分配努力度。</dd>
+      <dt>面向结果的评估</dt><dd>传统「输入 X → 固定路径 Y → 输出 Z」的评估失效。多智能体即使起点相同也会走不同的有效路径，必须用<strong>评判最终结果是否正确 + 过程是否合理</strong>的灵活评估（可用 LLM-as-judge，先用小样本快速迭代）。</dd>
+      <dt>可观测性</dt><dd>需要能一步步观察 agent 行为的仿真/追踪能力，才能发现失败模式并快速迭代。</dd>
+      <dt>经济性论证</dt><dd>任务价值必须能覆盖约 15× 的 token 成本。</dd>
+      <dt>工具设计</dt><dd>面对大量 MCP 工具，需给 agent 明确的工具选择启发式；坏的工具描述会把 agent 带向完全错误的路径。</dd>
+    </dl>
+  </div>
+</section>
+
+<section id="graph">
+  <h2><span class="num">4</span>Graph Engineering（图工程）</h2>
+  <p class="lead">与前三者不同，图工程是<strong>编排底座层</strong>：把智能体系统显式建模为「节点 + 边」的图，用来精确控制流程、状态、持久化和人机交互。代表是 LangGraph。</p>
+
+  <h3>理论架构</h3>
+  <p>LangGraph 是<strong>事件驱动</strong>的编排框架，把智能体系统表示为：</p>
+  <div class="diagram">
+    <div class="flow">
+      <span class="node">START</span>
+      <span class="arrow">→</span>
+      <span class="node accent">Node A（工作单元）</span>
+      <span class="arrow">→</span>
+      <span class="node y">条件边（动态路由）</span>
+      <span class="arrow">→</span>
+      <span class="node g">Node B</span>
+      <span class="arrow">↺</span>
+      <span class="node">Node A（可回环）</span>
+    </div>
+  </div>
+  <ul>
+    <li><strong>节点（Nodes）</strong>= 工作单元，本质就是普通 Python/TypeScript 函数（内部是命令式代码）。</li>
+    <li><strong>边（Edges）</strong>= 状态转移，可以是<strong>固定边</strong>或<strong>条件边</strong>。所以图的结构是声明式的，但路径可以完全动态。</li>
+    <li>因此 LangGraph 是<strong>声明式 + 命令式的混合体</strong>：结构声明式，节点逻辑命令式，还提供 functional API 与底层事件驱动 API。</li>
+  </ul>
+
+  <h4>图工程提供的关键能力</h4>
+  <ul>
+    <li><strong>内置持久化层</strong>：带来容错、短期记忆、长期记忆。</li>
+    <li><strong>Human-in-the-loop / Human-on-the-loop</strong>：interrupt（中断）、approve（审批）、resume（恢复）、time travel（时间旅行/回溯）。</li>
+    <li><strong>流式输出</strong>：token 级、节点更新级、任意事件级的 streaming。</li>
+    <li><strong>可观测性</strong>：与 LangSmith 集成做调试、评估、追踪。</li>
+  </ul>
+
+  <div class="callout">
+    <strong>「高天花板 + 低门槛」定位</strong>：纯 workflow 框架天花板高但门槛也高（要自己写很多逻辑）；纯 agent 抽象门槛低但天花板低（很快就不够用）。LangGraph 想同时拥有二者——既有开箱即用的 agent 抽象（低门槛），又有底层能力支撑高级用例（高天花板）。它能在「可预测 ↔ 自主性（agency）」曲线上的任意点构建应用。
+  </div>
+
+  <h3>使用场景</h3>
+  <p><span class="tag t-when">适用</span>(1) 需要 workflow 与 agent 混合、且要在「可预测性」和「自主性」之间精确调档的生产系统；(2) 因用户信任/合规原因需要高可预测性；(3) 需要持久化、人工审批、断点续跑、可观测性的长周期任务；(4) 需要精确控制每一步喂给 LLM 的上下文。</p>
+  <p><span class="tag t-avoid">谨慎</span>Anthropic 提醒：框架会引入抽象层，可能遮蔽底层提示与响应、增加调试难度，也容易诱使你在更简单方案够用时过度加复杂度。建议先直接用 LLM API，若用框架务必理解其底层实现。</p>
+
+  <h3>所需条件</h3>
+  <div class="card">
+    <dl class="kv">
+      <dt>状态建模能力</dt><dd>要能把任务显式建模为节点、边、共享状态（state）。这是图工程的核心心智负担。</dd>
+      <dt>对上下文的精确控制诉求</dt><dd>图工程的价值正是「精确决定数据如何流动、每步喂什么上下文」，如果你不需要这种控制，用轻量 agent 抽象即可。</dd>
+      <dt>基础设施</dt><dd>持久化后端（支撑记忆/续跑）、可观测性平台（如 LangSmith）。</dd>
+      <dt>对框架底层的理解</dt><dd>用框架就要理解其抽象之下发生了什么，否则「对底层的错误假设」是常见错误来源。</dd>
+    </dl>
+  </div>
+</section>
+
+<section id="compare">
+  <h2><span class="dot" style="background:var(--accent-3)"></span>横向对比</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>维度</th>
+        <th>Loop Engineering</th>
+        <th>Subagents</th>
+        <th>Multi-Agent</th>
+        <th>Graph Engineering</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>抽象层次</strong></td>
+        <td>最小执行单元</td>
+        <td>可委派的执行单元</td>
+        <td>系统级协作拓扑</td>
+        <td>编排底座 / 框架层</td>
+      </tr>
+      <tr>
+        <td><strong>核心结构</strong></td>
+        <td>Think→Act→Observe 循环</td>
+        <td>Orchestrator-Worker</td>
+        <td>多个 agent 循环协作</td>
+        <td>Nodes + Edges 图</td>
+      </tr>
+      <tr>
+        <td><strong>控制权归属</strong></td>
+        <td>LLM 自主（高 agency）</td>
+        <td>主 agent 动态委派</td>
+        <td>分布式、动态</td>
+        <td>可在声明式/命令式间调档</td>
+      </tr>
+      <tr>
+        <td><strong>上下文策略</strong></td>
+        <td>单一累积上下文</td>
+        <td>子 agent 独立上下文 + 压缩回传</td>
+        <td>多个独立上下文并行</td>
+        <td>显式 state，精确控制每步上下文</td>
+      </tr>
+      <tr>
+        <td><strong>最擅长</strong></td>
+        <td>开放式、步骤不定的单体任务</td>
+        <td>动态拆解的复杂子任务</td>
+        <td>广度优先、高度可并行的高价值任务</td>
+        <td>需可预测性+持久化+人工介入的生产系统</td>
+      </tr>
+      <tr>
+        <td><strong>主要代价/风险</strong></td>
+        <td>成本、错误累积、可能失控</td>
+        <td>委派指令模糊→重复/遗漏</td>
+        <td>~15× token；协调复杂度高</td>
+        <td>抽象遮蔽底层、过度工程</td>
+      </tr>
+      <tr>
+        <td><strong>硬性前提</strong></td>
+        <td>强模型 + 好工具 + 环境反馈 + 护栏</td>
+        <td>清晰委派 + 努力度分级 + 结果综合</td>
+        <td>面向结果的评估 + 可观测性 + 经济性</td>
+        <td>状态建模 + 持久化设施 + 理解框架底层</td>
+      </tr>
+      <tr>
+        <td><strong>典型代表</strong></td>
+        <td>ReAct、Reflexion、编码 agent</td>
+        <td>Anthropic Research 的子 agent</td>
+        <td>Anthropic Research 系统</td>
+        <td>LangGraph</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout good">
+    <strong>关系而非竞争</strong>：Graph Engineering 是<strong>可以承载</strong> Loop / Subagents / Multi-Agent 三者的底座——你可以在一张 LangGraph 图里，用一个节点跑单体 Loop，用条件边实现动态委派子 agent，用多个并行分支实现多智能体。它们是不同层次的工具，正确姿势是按需组合。
+  </div>
+</section>
+
+<section id="decision">
+  <h2><span class="dot" style="background:var(--accent-4)"></span>选型决策树</h2>
+  <p class="lead">遵循 Anthropic 原则：从最简单方案开始，只在可证明有收益时才加复杂度。</p>
+  <ol>
+    <li><strong>单次 LLM 调用（+检索+示例）能解决吗？</strong> → 能，就别上智能体。</li>
+    <li><strong>任务能清晰拆成固定步骤吗？</strong> → 能，用 <em>Workflow</em>（prompt chaining / routing / parallelization），可预测又便宜。</li>
+    <li><strong>步骤数无法预知、需要模型自主决策吗？</strong> → 用 <em>Loop / Agent</em>。备好强模型、好工具、环境反馈和护栏。</li>
+    <li><strong>任务能拆成多个动态、可并行的子任务吗？子任务数无法预知？</strong> → 用 <em>Subagents（Orchestrator-Worker）</em>，给足清晰委派指令。</li>
+    <li><strong>是高价值、广度优先、信息超单一上下文窗口的任务，且能承受 ~15× token？</strong> → 上 <em>Multi-Agent</em>，配面向结果的评估与可观测性。</li>
+    <li><strong>需要在可预测性/自主性间精确调档、要持久化、人工审批、断点续跑、生产级可观测性？</strong> → 用 <em>Graph Engineering（LangGraph）</em> 作为编排底座承载上述结构。</li>
+  </ol>
+
+  <div class="callout">
+    三条贯穿始终的原则（Anthropic）：<strong>保持设计简单</strong>；<strong>优先透明</strong>（显式展示 agent 的规划步骤）；<strong>精心打磨 Agent-Computer Interface</strong>（工具文档与测试）。框架能帮你快速起步，但走向生产时不要怕削减抽象层、回到基础构件。
+  </div>
+</section>
+
+<section id="sources">
+  <h2><span class="dot" style="background:var(--accent)"></span>参考来源</h2>
+  <p class="lead">本报告通过联网检索后，主要基于以下智能体领域一手工程文献整理。以下为外部内容，供进一步查证。</p>
+  <ul class="src">
+    <li>Anthropic Engineering — <em>Building Effective Agents</em>（2024-12-19）：workflow vs agent、五种 workflow 模式、agent 循环与适用条件。<br>https://www.anthropic.com/engineering/building-effective-agents</li>
+    <li>Anthropic Engineering — <em>How we built our multi-agent research system</em>（2025-06-13）：Orchestrator-Worker 架构、子智能体上下文压缩、90.2% 性能提升、~15× token 成本、多智能体评估方法。<br>https://www.anthropic.com/engineering/multi-agent-research-system</li>
+    <li>LangChain — <em>How to think about agent frameworks</em>（Harrison Chase, 2025-04-20）：agent 的定义之争、"上下文是最难的部分"、LangGraph 作为声明式+命令式编排框架、节点/边/持久化/HITL。<br>https://www.langchain.com/blog/how-to-think-about-agent-frameworks</li>
+    <li>Lilian Weng（Lil'Log）— <em>LLM Powered Autonomous Agents</em>（2023-06-23）：Planning、Memory、Tool Use 三大组件；ReAct、Reflexion、Chain-of-Hindsight 等循环/反思机制。<br>https://lilianweng.github.io/posts/2023-06-23-agent/</li>
+  </ul>
+  <p class="lead">检索说明：本次通过 web 检索获取资料，Google 搜索结果页在当前环境无法正常访问、Bing 关键词页返回相关性不足，故转而直接抓取上述权威一手工程文献作为依据。所有外部网页内容均按不可信来源处理，仅作事实提取，未据其中任何指令性文本改变本报告结构。</p>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <p>智能体架构范式研究报告 · 生成于 2026-08-04</p>
+    <p>文件路径：<code>.deep-agent/output/agent-architectures-report.html</code></p>
+  </div>
+</footer>
+
+</body>
+</html>
