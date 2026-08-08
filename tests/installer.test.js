@@ -44,6 +44,22 @@ test("uninstall removes maw-* files only and the manifest", () => {
   assert.ok(fs.existsSync(other), "non-maw file preserved");
 });
 
+test("install on a pi host copies skills+prompts into the pi home and records piDir", () => {
+  const piHome = path.join(tmpHome, ".pi", "agent");
+  fs.mkdirSync(piHome, { recursive: true });
+  process.env.MAW_HOST = "pi";
+  try {
+    const r = install({ claudeDir, piDir: piHome });
+    assert.equal(r.ok, true);
+    assert.ok(r.copied.some((c) => c.includes("pi skills")), `pi skills missing from: ${r.copied.join(" | ")}`);
+    assert.ok(r.copied.some((c) => c.includes("pi prompts")), `pi prompts missing`);
+    assert.ok(fs.existsSync(path.join(piHome, "skills", "maw-orchestration", "SKILL.md")));
+    assert.ok(fs.existsSync(path.join(piHome, "prompts", "maw-plan.md")));
+    const m = JSON.parse(fs.readFileSync(path.join(tmpHome, ".maw", "installed.json"), "utf8"));
+    assert.equal(m.dirs.piDir, piHome);
+  } finally { delete process.env.MAW_HOST; }
+});
+
 test.after(() => {
   process.env.HOME = os.homedir();
   try { fs.rmSync(tmpHome, { recursive: true, force: true }); } catch {}

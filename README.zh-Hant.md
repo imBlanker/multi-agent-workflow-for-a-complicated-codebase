@@ -10,7 +10,7 @@
 
 > 一個可攜、**動態**的多智慧體工作流系統。面對全新的複雜專案，MAW 會讀取你的 [cc-switch](https://github.com/farion1231/cc-switch) 設定，探測程式碼庫，並挑選合適的智慧體架構 —— *迴圈工程*、*編排者-工人*（子智慧體）、*多智慧體*、*圖工作流*、*動態工作流* 或 *ultracode* —— 或其組合。它為每個智慧體產生可獨立編輯的設定，強制執行**真實消費的成本速率限制**，並透過 [`codex-plugin-cc`](https://github.com/openai/codex-plugin-cc) 整合 **Codex 審查**。
 
-> **支援的宿主：僅 Claude Code 與 Codex。** 其他智慧體軟體（Gemini CLI、opencode……）刻意**不予**支援。
+> **支援的宿主：Claude Code、Codex 與 Pi Agent。** 其他智慧體軟體（Gemini CLI、opencode……）刻意**不予**支援。注意：Pi Agent **不**經 cc-switch 管理——其設定位於 `~/.pi/agent/`，其成本控制降級為僅並發（花費不可測）。
 
 ---
 
@@ -97,7 +97,7 @@ curl -fsSL https://raw.githubusercontent.com/imBlanker/multi-agent-workflow-for-
 
 ## 1. 專案目標
 - **動態，而非固定。** MAW 依據真實專案訊號＋宿主能力對六種架構評分，挑選最適配者 —— 或其組合。見 [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md)。
-- **可攜＋限定智慧體軟體。** 僅 Claude Code 與 Codex（依策略收窄）。規劃＋各智慧體設定為宿主可讀的純 JSON/YAML/Markdown。
+- **可攜＋限定智慧體軟體。** 僅 Claude Code、Codex 與 Pi Agent（依策略收窄）。規劃＋各智慧體設定為宿主可讀的純 JSON/YAML/Markdown。
 - **成本有界。** 來自 cc-switch 日誌的真實推理消費，而非權杖估計。預設：**每智慧體 $5/分鐘**、**總計 $10/分鐘**、最大並發 16 —— 皆可編輯。
 - **能力感知的模型選擇。** 模型在**同一榜單內**也有差異（有些 agentic 模型是全多模態；有些僅限推理／對話；有些多模態模型根本不具 agentic 能力），因此每個智慧體／子智慧體會先依能力適配過濾可用的供應商模型，再依剩餘額度／餘額與花銷速率挑選 provider（API key）＋模型。
 - **Codex 審查，依風險設關卡。** 當 [`codex-plugin-cc`](https://github.com/openai/codex-plugin-cc) 可用時，Codex 在基於風險的關卡擔任獨立審查者 —— 而非每一步。
@@ -129,6 +129,7 @@ curl -fsSL https://raw.githubusercontent.com/imBlanker/multi-agent-workflow-for-
 |---|---|---|
 | **[Claude Code](https://docs.claude.com/en/docs/claude-code)** | ✅ 完整 | 指令、智慧體、hook、技能；原生 `Task`/delegate 支援子智慧體與多智慧體；**本地路由＋自動故障轉移恆為開啟**。 |
 | **[Codex](https://github.com/openai/codex)** | ✅ 支援 | 智慧體定義＋透過 [`codex-plugin-cc`](https://github.com/openai/codex-plugin-cc) 的審查者；除非 OpenAI OAuth 登入，否則本地路由為開啟。 |
+| **Pi Agent** | ✅ 支援 | 設定位於 `~/.pi/agent/`（不經 cc-switch）；智慧體 → `.pi/agents/maw-*.md`、prompts → pi prompts、技能 → `.agents/skills`；透過原生子智慧體工具呼叫；花費不可測（僅並發的成本控制）。 |
 | Gemini CLI / opencode / 其他 | ❌ 不支援 | （其 cc-switch 定價仍可能被讀取用於成本估計。） |
 
 `maw doctor` 回報宿主＋路由策略合規性。

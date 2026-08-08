@@ -118,7 +118,7 @@ Commands:
   review        Invoke a Codex review via codex-plugin-cc (when available)
   graph         Print the workflow graph (nodes/edges) + topo batches
   routing       Show the cc-switch local-routing policy (claude on+failover;
-                codex on-except-OAuth). Use --fix to apply.
+                codex on-except-OAuth; pi N/A). Use --fix to apply.
   install       Install the MAW plugin + skills into the host agent software
   uninstall     Remove the MAW plugin + skills
   update        Reinstall (overwrites templates, keeps user edits)
@@ -163,23 +163,27 @@ function cmdInit(f, flags) {
   );
   generateConfigs(project, plan, ctx.cc);
   writeText(path.join(project, ".maw", "AGENTS.md"), AGENTS_INIT);
-  out(`  host: ${ctx.host.app} (caps: ${hostCapabilities(ctx.host).join(", ") || "none"}); supported: Claude Code + Codex only`);
+  out(`  host: ${ctx.host.app} (caps: ${hostCapabilities(ctx.host).join(", ") || "none"}); supported: Claude Code + Codex + Pi`);
   out(`  cc-switch: ${ctx.cc.dbPath ? "ok (read-only)" : "not found"}; user: ${user}`);
   out(`  primary architecture: ${plan.primary}`);
 
   // 1) cc-switch project profile (NEW; never touches 默认 profiles)
   if (ctx.cc.dbPath) {
     const profName = `MAW: ${path.basename(project)}${user ? ` (${user})` : ""}`;
-    const pr = createProjectProfile({ name: profName, user, dbPath: ctx.cc.dbPath });
+    const pr = createProjectProfile({ name: profName, user, hostApp: ctx.host.app, dbPath: ctx.cc.dbPath });
     if (pr.ok) {
-      out(`  cc-switch project: ${pr.created ? `created "${profName}" (${pr.id})` : `reused "${profName}"`}` + (pr.protectedDefaults?.length ? `; protected 默认 profiles: ${pr.protectedDefaults.join(", ")}` : ""));
+      if (pr.skipped) out(`  cc-switch project: skipped — ${pr.reason}`);
+      else out(`  cc-switch project: ${pr.created ? `created "${profName}" (${pr.id})` : `reused "${profName}"`}` + (pr.protectedDefaults?.length ? `; protected 默认 profiles: ${pr.protectedDefaults.join(", ")}` : ""));
     } else {
       out(`  cc-switch project: not created — ${pr.error}`, false);
     }
   }
 
-  // 2) routing policy check (read-only; --fix-routing applies the carve-out)
-  if (ctx.cc.dbPath) {
+  // 2) routing policy check (read-only; --fix-routing applies the carve-out).
+  //    pi is NOT cc-switch-managed → routing is N/A for a pi host.
+  if (ctx.host.app === "pi") {
+    out(`  routing policy: N/A — pi is not cc-switch-managed (providers/MCP/skills live in ~/.pi/agent/)`);
+  } else if (ctx.cc.dbPath) {
     const routing = readRouting({ dbPath: ctx.cc.dbPath });
     const pol = routingPolicy(routing);
     if (pol.compliant) {
@@ -203,7 +207,7 @@ function cmdInit(f, flags) {
     return;
   }
   out(`  next step: trellis init -u ${user} (chained automatically)`);
-  const tr = runTrellisInit({ project, user, nonInteractive: !process.stdin.isTTY });
+  const tr = runTrellisInit({ project, user, hostApp: ctx.host.app, nonInteractive: !process.stdin.isTTY });
   if (tr.stdout) process.stdout.write(tr.stdout);
   if (tr.stderr && !tr.ok) process.stderr.write(tr.stderr);
   out(`  trellis init: ${tr.ok ? "ok" : (tr.code == null ? "interrupted" : `exit ${tr.code}`)} (via ${tr.via}); log: ${path.relative(project, tr.logPath)}`);
@@ -225,6 +229,7 @@ function cmdModels(f, flags) {
   if (!ctx.cc.dbPath) { out(`cc-switch database not found`, false); return; }
   const appType = flags.app || "claude";
   const cands = candidatesForAppType(ctx.cc, appType);
+  if (appType === "pi") out(`  note: pi models come from ~/.pi/agent/models.json (estimated; pi is not cc-switch-managed)`);
   out(`Model capability view — curated catalog, estimated (dimensions mirror the artificialanalysis.ai model leaderboards: intelligence / coding / math / agentic / multimodal-vision / image / image-edit / video / tts / stt)`);
   out(`Available ${appType} provider models (${cands.length}):`);
   for (const c of cands) {
@@ -253,6 +258,7 @@ function cmdRouting(f, flags) {
   out(`  codex OAuth login in use: ${pol.codexOAuthInUse}`);
   out(`  claude: routing ${routing.claude?.enabled ? "on" : "off"}, failover ${routing.claude?.autoFailoverEnabled ? "on" : "off"} (queue: ${pol.claudeFailoverProviders.join(", ") || "none"})`);
   out(`  codex:  routing ${routing.codex?.enabled ? "on" : "off"} (queue: ${pol.codexFailoverProviders.join(", ") || "none"})`);
+  out(`  pi:     N/A (not cc-switch-managed; config lives in ~/.pi/agent/)`);
   if (pol.compliant) { out(`  status: compliant ✓`); return; }
   out(`  status: NOT compliant — ${pol.violations.length} violation(s):`);
   for (const v of pol.violations) out(`    - ${v.app}.${v.field}: expected ${v.expected}, actual ${v.actual}${v.reason ? ` — ${v.reason}` : ""}`);

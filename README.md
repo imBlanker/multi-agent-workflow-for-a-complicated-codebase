@@ -10,7 +10,7 @@
 
 > A portable, **dynamic** multi-agent workflow system. For a new complex project, MAW reads your [cc-switch](https://github.com/farion1231/cc-switch) config, probes the codebase, and picks the right agent architecture — *loop*, *orchestrator-workers* (subagents), *multi-agent*, *graph*, *dynamic*, or *ultracode* — or a combination. It generates per-agent, independently-editable configs, enforces **real-spend cost-rate limits**, and integrates **Codex review via [`codex-plugin-cc`](https://github.com/openai/codex-plugin-cc)**.
 
-> **Supported hosts: Claude Code and Codex only.** Other agent software (Gemini CLI, opencode, …) is intentionally **not** supported.
+> **Supported hosts: Claude Code, Codex, and Pi Agent.** Other agent software (Gemini CLI, opencode, …) is intentionally **not** supported. Note: Pi Agent is NOT cc-switch-managed — its config lives in `~/.pi/agent/` and its cost control degrades to concurrency-only (spend is not measured).
 
 ---
 
@@ -97,7 +97,7 @@ Minimal agent prompt: *"Install and configure MAW by following `docs/AGENT_INSTA
 
 ## 1. Project Goals
 - **Dynamic, not fixed.** MAW scores six architectures against real project signals + host capabilities, and selects the best fit — or a combination. See [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md).
-- **Portable + agent-software-scoped.** Claude Code and Codex only (narrowed per policy). The plan + per-agent configs are plain JSON/YAML/Markdown the host reads.
+- **Portable + agent-software-scoped.** Claude Code, Codex and Pi Agent (narrowed per policy). The plan + per-agent configs are plain JSON/YAML/Markdown the host reads.
 - **Cost-bounded.** Real inference spend from cc-switch logs, not token estimates. Defaults: **$5/min per agent**, **$10/min total**, max concurrency 16 — all editable.
 - **Capability-aware model choice.** Models differ WITHIN a leaderboard (some agentic models are full-multimodal; some are reasoning/dialogue-only; some multimodal models aren't agentic at all), so each agent/subagent first filters the available provider models by capability fit, then picks provider(api key)+model by remaining quota/balance and cost rate.
 - **Codex review, risk-gated.** When [`codex-plugin-cc`](https://github.com/openai/codex-plugin-cc) is available, Codex acts as the independent reviewer at risk-based gates — not every step.
@@ -129,6 +129,7 @@ A **new complex project**: `maw init -u <user>` → `maw plan`. Use when one age
 |---|---|---|
 | **[Claude Code](https://docs.claude.com/en/docs/claude-code)** | ✅ Full | Commands, agents, hooks, skills; native `Task`/delegate for subagents & multi-agent; **local routing + auto-failover always ON**. |
 | **[Codex](https://github.com/openai/codex)** | ✅ Supported | Agent definitions + reviewer via [`codex-plugin-cc`](https://github.com/openai/codex-plugin-cc); local routing ON unless OpenAI-OAuth login. |
+| **Pi Agent** | ✅ Supported | Config lives in `~/.pi/agent/` (NOT cc-switch); agents → `.pi/agents/maw-*.md`, prompts → pi prompts, skills → `.agents/skills`; spawn via native subagent tool; spend not measured (concurrency-only cost control). |
 | Gemini CLI / opencode / others | ❌ Not supported | (Their cc-switch pricing may still be READ for cost estimates.) |
 
 `maw doctor` reports the host + the routing-policy compliance.
