@@ -86,6 +86,14 @@ export function generateConfigs(projectRoot, plan, ccSwitch = {}, opts = {}) {
 
     // agent definition (portable)
     files.push(writeText(`${base}.md`, agentMarkdown(a, price, plan)));
+
+    // When the host is pi (or this specific agent is pi-native), also
+    // materialize the native pi agent file so pi-subagents can spawn it
+    // directly. Non-destructive: only `maw-*` files are managed (pruned below).
+    if (plan.hostApp === "pi" || a.agent === "pi") {
+      const piAgentsDir = path.join(projectRoot, ".pi", "agents");
+      files.push(writeText(path.join(piAgentsDir, `maw-${slug(a.role)}.md`), piAgentFileMd(a, plan)));
+    }
   }
 
   // .maw/runtime/ dir for concurrency state
@@ -97,6 +105,20 @@ export function generateConfigs(projectRoot, plan, ccSwitch = {}, opts = {}) {
     for (const f of fs.readdirSync(agentsDir)) {
       const m = f.match(/^(.*)\.(md|json)$/);
       if (m && !keep.has(m[1])) { fs.unlinkSync(path.join(agentsDir, f)); files.push(`(pruned) ${path.join(agentsDir, f)}`); }
+    }
+  } catch {}
+
+  // prune stale maw-* pi agent files (only when pi materialization is active).
+  // NEVER touch trellis-* or other non-maw pi agent files.
+  try {
+    const piAgentsDir = path.join(projectRoot, ".pi", "agents");
+    if (exists(piAgentsDir)) {
+      const keepPi = new Set(plan.agents.filter((a) => plan.hostApp === "pi" || a.agent === "pi").map((a) => `maw-${slug(a.role)}`));
+      for (const f of fs.readdirSync(piAgentsDir)) {
+        if (f.startsWith("maw-") && f.endsWith(".md") && !keepPi.has(f.slice(0, -3))) {
+          fs.unlinkSync(path.join(piAgentsDir, f)); files.push(`(pruned) ${path.join(piAgentsDir, f)}`);
+        }
+      }
     }
   } catch {}
 
@@ -148,7 +170,39 @@ ${a.agent === "codex" ? `This agent runs via **codex-plugin-cc**. From Claude Co
 node "$CLAUDE_PLUGIN_ROOT/scripts/codex-companion.mjs" review --wait
 \`\`\`
 
-or use the slash command \`/codex:review\` (review-only). For adversarial review use \`/codex:adversarial-review\`.` : `Spawn this agent from the orchestrator as a subagent with the tool list above. Pass the task verbatim and require it to return a compressed summary + file diffs.`}
+or use the slash command \`/codex:review\` (review-only). For adversarial review use \`/codex:adversarial-review\`.` : (plan.hostApp === "pi" || a.agent === "pi") ? `This agent runs via **pi-subagents**. Spawn it from the orchestrator with the native \`trellis_subagent\` tool (single/parallel/chain) or the \`/agents\` command, pointing at the pi agent file \`.pi/agents/maw-${slug(a.role)}.md\`:
+
+- Pass the task verbatim (see the Task section above) and require it to return a compressed summary + file diffs.
+- Cost control for pi is **concurrency-only**: pi is not routed via the cc-switch proxy, so real-spend is not measured. Wrap spawns with \`maw acquire --role ${a.role}\` / \`maw release --role ${a.role}\` to enforce concurrency.` : `Spawn this agent from the orchestrator as a subagent with the tool list above. Pass the task verbatim and require it to return a compressed summary + file diffs.`}
+`;
+}
+
+/**
+ * Render the native pi agent file (`.pi/agents/maw-<role>.md`) for pi hosts.
+ * Frontmatter mirrors the pi agent format (name/description/tools); the body
+ * points at the portable `.maw/agents/<role>.md` spec.
+ * @param {import("./planner.js").AgentSpec} a
+ * @param {import("./planner.js").Plan} plan
+ */
+function piAgentFileMd(a, plan) {
+  const fm = [
+    "---",
+    `name: maw-${slug(a.role)}`,
+    `description: ${a.role} agent for the MAW "${plan.name}" workflow`,
+    `tools: ${a.tools.join(", ")}`,
+    "---",
+    "",
+  ].join("\n");
+  return `${fm}# maw-${slug(a.role)}
+
+This is the pi-native spawn target for the MAW agent \`${a.role}\`. The full
+spec (model, model-selection, cost control, task) lives in the portable files
+\`.maw/agents/${slug(a.role)}.md\` / \`${slug(a.role)}.json\` — read those for the
+verbatim task and tool list.
+
+- Role: ${a.role}
+- Model: ${a.model}
+- Task: ${a.task}
 `;
 }
 
@@ -237,7 +291,7 @@ function planMarkdown(plan, ccSwitch) {
   lines.push(`- Pricing sources: ${plan.cost.sources.join(", ") || "cc-switch unavailable"}`);
   lines.push("");
   lines.push("## Dynamic mutation");
-  lines.push("- Add an agent: `maw add-agent --role NAME --model ID --app claude`");
+  lines.push("- Add an agent: `maw add-agent --role NAME --model ID --app claude` (or `--app codex` / `--app pi`)");
   lines.push("- Remove an agent: `maw remove-agent --role NAME`");
   lines.push("- Re-plan: `maw plan --project .`");
   lines.push("");

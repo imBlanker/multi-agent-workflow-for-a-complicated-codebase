@@ -10,7 +10,7 @@
 
 > 一个可移植的、**动态的**多智能体工作流系统。面对一个新的复杂项目，MAW 会读取你的 [cc-switch](https://github.com/farion1231/cc-switch) 配置，探测代码库，并选择合适的智能体架构——*循环*、*编排者-工人*（子智能体）、*多智能体*、*图工作流*、*动态工作流*或 *ultracode*——或它们的组合。它会为每个智能体生成可独立编辑的配置，强制执行基于真实花费的成本速率限制，并通过 [`codex-plugin-cc`](https://github.com/openai/codex-plugin-cc) 集成 **Codex 审查**。
 
-> **仅支持宿主：Claude Code 与 Codex。** 其他智能体软件（Gemini CLI、opencode 等）有意地**不予支持**。
+> **支持的宿主：Claude Code、Codex 与 Pi Agent。** 其他智能体软件（Gemini CLI、opencode 等）有意地**不予支持**。注意：Pi Agent **不**通过 cc-switch 管理——其配置位于 `~/.pi/agent/`，其成本控制降级为仅并发（花费不可测）。
 
 ---
 
@@ -97,7 +97,7 @@ curl -fsSL https://raw.githubusercontent.com/imBlanker/multi-agent-workflow-for-
 
 ## 1. 项目目标
 - **动态，而非固定。** MAW 依据真实的项目信号 + 宿主能力对六种架构打分，并选择最合适的——或一个组合。见 [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md)。
-- **可移植 + 限定于智能体软件。** 仅 Claude Code 与 Codex（依策略收窄）。plan + 各智能体配置都是宿主可读的纯 JSON/YAML/Markdown。
+- **可移植 + 限定于智能体软件。** 仅 Claude Code、Codex 与 Pi Agent（依策略收窄）。plan + 各智能体配置都是宿主可读的纯 JSON/YAML/Markdown。
 - **成本有界。** 来自 cc-switch 日志的真实推理花费，而非 token 估算。默认值：**每智能体 $5/分钟**、**总计 $10/分钟**、最大并发 16——全部可编辑。
 - **能力适配的模型选择。** 同一榜单之内的模型也各不相同（有些 agentic（智能体化）模型是全多模态的；有些仅支持推理/对话；有些多模态模型完全不具备 agentic 能力），因此每个智能体/子智能体先按能力适配筛选可用的 provider 模型，再按剩余额度/余额与花销速率挑选 provider（api key）+模型。
 - **Codex 审查，按风险把关。** 当 [`codex-plugin-cc`](https://github.com/openai/codex-plugin-cc) 可用时，Codex 在基于风险的关卡充当独立审查者——而非每一步都审查。
@@ -129,6 +129,7 @@ curl -fsSL https://raw.githubusercontent.com/imBlanker/multi-agent-workflow-for-
 |---|---|---|
 | **[Claude Code](https://docs.claude.com/en/docs/claude-code)** | ✅ 完整 | 命令、智能体、hooks、技能；针对子智能体与多智能体的原生 `Task`/delegate；**本地路由 + 自动故障转移始终开启**。 |
 | **[Codex](https://github.com/openai/codex)** | ✅ 支持 | 智能体定义 + 通过 [`codex-plugin-cc`](https://github.com/openai/codex-plugin-cc) 的审查者；除非使用 OpenAI OAuth 登录，否则本地路由开启。 |
+| **Pi Agent** | ✅ 支持 | 配置位于 `~/.pi/agent/`（不经 cc-switch）；智能体 → `.pi/agents/maw-*.md`、prompts → pi prompts、技能 → `.agents/skills`；通过原生子智能体工具调用；花费不可测（仅并发的成本控制）。 |
 | Gemini CLI / opencode / 其他 | ❌ 不支持 | （其 cc-switch 定价仍可能被读取用于成本估算。） |
 
 `maw doctor` 报告宿主 + 路由策略合规情况。

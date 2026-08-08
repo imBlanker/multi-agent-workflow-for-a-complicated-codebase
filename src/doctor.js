@@ -1,7 +1,7 @@
 // @ts-check
 // `maw doctor` — environment + capability + policy report.
 import { execFileSync } from "node:child_process";
-import { readJson } from "./util.js";
+import { exists, readJson } from "./util.js";
 import { readCcSwitch, findDb, readRouting, routingPolicy } from "./ccswitch.js";
 import { detectHost, hostCapabilities } from "./host.js";
 import { status as codexStatus } from "./codex.js";
@@ -10,7 +10,7 @@ import path from "node:path";
 import os from "node:os";
 
 const PKG_ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
-const SUPPORTED = ["claude-code", "codex"]; // narrowed per project policy
+const SUPPORTED = ["claude-code", "codex", "pi"]; // supported host agents (pi per MAW support-surface policy)
 
 /** @returns {{ ok: boolean, checks: { name: string, status: "ok"|"warn"|"fail", detail: string }[], summary: string }} */
 export function doctor() {
@@ -31,7 +31,7 @@ export function doctor() {
   // host (claude-code + codex only are supported)
   const host = detectHost();
   const supported = SUPPORTED.includes(host.app);
-  checks.push({ name: "Host agent software", status: host.app === "unknown" ? "warn" : (supported ? "ok" : "warn"), detail: `${host.app} at ${host.homeDir || "(none)"}; caps: ${hostCapabilities(host).join(", ") || "none"}${supported ? "" : " — only Claude Code and Codex are supported"}` });
+  checks.push({ name: "Host agent software", status: host.app === "unknown" ? "warn" : (supported ? "ok" : "warn"), detail: `${host.app} at ${host.homeDir || "(none)"}; caps: ${hostCapabilities(host).join(", ") || "none"}${supported ? "" : " — only Claude Code, Codex and Pi are supported"}` });
 
   // cc-switch (read-only)
   const db = findDb();
@@ -58,6 +58,19 @@ export function doctor() {
   const cs = codexStatus();
   checks.push({ name: "Codex CLI", status: cs.binary ? "ok" : "warn", detail: cs.binary || "not found" });
   checks.push({ name: "codex-plugin-cc", status: cs.companion ? "ok" : "warn", detail: cs.companion || cs.reason });
+
+  // pi agent — config lives in ~/.pi/agent/ (NOT cc-switch-managed; spend is
+  // not measurable, so cost-rate degrades to concurrency-only)
+  const piHome = path.join(os.homedir(), ".pi", "agent");
+  if (exists(piHome)) {
+    const settings = readJson(path.join(piHome, "settings.json"), null);
+    const models = readJson(path.join(piHome, "models.json"), null);
+    checks.push({ name: "Pi Agent config", status: "ok", detail: `${piHome}; default provider/model: ${settings?.defaultProvider || "?"} / ${settings?.defaultModel || "?"}` });
+    checks.push({ name: "Pi models store", status: models ? "ok" : "warn", detail: models ? `${Object.keys(models.providers || {}).length} providers in models.json` : "models.json not found — provider/model view will be empty" });
+    checks.push({ name: "Pi spend tracking", status: "warn", detail: "pi is not routed via the cc-switch proxy — cost-rate is concurrency-only; real spend is not measured" });
+  } else {
+    checks.push({ name: "Pi Agent config", status: "warn", detail: "~/.pi/agent not found (not installed)" });
+  }
 
   // trellis (the mandatory next-step init)
   try {

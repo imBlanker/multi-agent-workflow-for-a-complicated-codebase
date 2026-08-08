@@ -89,3 +89,41 @@ test("regenerating with fewer agents prunes stale agent files", () => {
   assert.equal(after, small.agents.length, "stale agent files must be pruned to match the new roster");
   fs.rmSync(proj, { recursive: true, force: true });
 });
+
+test("pi host materializes .pi/agents/maw-*.md and advertises pi-subagents invocation", () => {
+  const proj = mkTmpProject();
+  const piHost = { ...host, app: "pi" };
+  const plan = planWorkflow({ files: 30, parallelizableSubtasks: 4, risk: "high", contextNeed: "large", valuePerRun: "high", taskType: "coding" }, { host: piHost, ccSwitch: cc });
+  const gen = generateConfigs(proj, plan, cc);
+  assert.equal(plan.hostApp, "pi");
+  assert.ok(gen.files.some((f) => f.includes(path.join(".pi", "agents"))), "pi agent files must be in the generated list");
+  for (const a of plan.agents) {
+    const f = path.join(proj, ".pi", "agents", `maw-${a.role}.md`);
+    assert.ok(exists(f), `missing pi agent file ${f}`);
+    const md = fs.readFileSync(f, "utf8");
+    assert.match(md, /^---\nname: maw-/m);
+    assert.match(md, /^description: /m);
+    assert.match(md, /^tools: /m);
+    assert.match(md, /\.maw\/agents/);
+  }
+  // the portable markdown points non-codex roles at pi-subagents
+  const impl = fs.readFileSync(path.join(proj, ".maw", "agents", "implementer.md"), "utf8");
+  assert.match(impl, /pi-subagents/);
+  fs.rmSync(proj, { recursive: true, force: true });
+});
+
+test("pi materialization prunes stale maw-* pi files but never trellis-*", () => {
+  const proj = mkTmpProject();
+  const piHost = { ...host, app: "pi" };
+  const big = planWorkflow({ files: 40, parallelizableSubtasks: 5, risk: "medium", contextNeed: "medium", taskType: "coding" }, { host: piHost, ccSwitch: cc });
+  generateConfigs(proj, big, cc);
+  const piAgents = path.join(proj, ".pi", "agents");
+  // a user/trellis pi agent file must survive pruning
+  fs.writeFileSync(path.join(piAgents, "trellis-implement.md"), "# keep me\n");
+  const small = planWorkflow({ files: 5, parallelizableSubtasks: 1, risk: "low", contextNeed: "small", taskType: "coding" }, { host: piHost, ccSwitch: cc });
+  generateConfigs(proj, small, cc);
+  const files = fs.readdirSync(piAgents).filter((f) => f.endsWith(".md"));
+  assert.ok(files.includes("trellis-implement.md"), "trellis-* must be preserved");
+  for (const a of small.agents) assert.ok(files.includes(`maw-${a.role}.md`), `expected maw-${a.role}.md`);
+  fs.rmSync(proj, { recursive: true, force: true });
+});

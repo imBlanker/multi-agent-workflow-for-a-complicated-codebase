@@ -379,7 +379,7 @@ export function routingPolicy(routing) {
   const codexShouldOn = !routing.codexOAuthInUse;
   if (codexShouldOn && (!cx || !cx.enabled)) violations.push({ app: "codex", field: "local_routing", expected: "on", actual: cx ? (cx.enabled ? "on" : "off") : "missing", reason: "codex is NOT using OpenAI-OAuth login → local routing must be ON", fix: "UPDATE proxy_config SET proxy_enabled=1, enabled=1 WHERE app_type='codex'" });
   if (!codexShouldOn && cx && cx.enabled) violations.push({ app: "codex", field: "local_routing", expected: "off", actual: "on", reason: "codex is using OpenAI-OAuth login → local routing must be OFF", fix: "UPDATE proxy_config SET enabled=0, proxy_enabled=0 WHERE app_type='codex'" });
-  return { compliant: violations.length === 0, violations, codexOAuthInUse: routing.codexOAuthInUse, claudeFailoverProviders: routing.claudeFailoverProviders, codexFailoverProviders: routing.codexFailoverProviders };
+  return { compliant: violations.length === 0, violations, codexOAuthInUse: routing.codexOAuthInUse, claudeFailoverProviders: routing.claudeFailoverProviders, codexFailoverProviders: routing.codexFailoverProviders, pi: "N/A (not cc-switch-managed; pi config lives in ~/.pi/agent/)" };
 }
 
 /**
@@ -430,7 +430,7 @@ function runWrite(dbPath, sql) {
  * mcp/skills/prompts — all provisioning is scoped to this new project only.
  * NEVER touches any profile whose name contains "默认". Idempotent (reuses an
  * existing same-named profile without modifying it).
- * @param {{ name: string, user?: string, dbPath?: string }} opts
+ * @param {{ name: string, user?: string, hostApp?: string, dbPath?: string }} opts
  */
 export function createProjectProfile(opts) {
   const name = opts.name;
@@ -438,6 +438,9 @@ export function createProjectProfile(opts) {
   const dbPath = opts.dbPath ?? findDb();
   if (!name) return { ok: false, error: "project name required" };
   if (/默认/.test(name)) return { ok: false, error: "refused: project name contains '默认' (protected)", name };
+  // pi is NOT cc-switch-managed: skip profile creation; providers/MCP/skills
+  // live in ~/.pi/agent/ directly. The cc-switch snapshot still happens (read-only).
+  if (opts.hostApp === "pi") return { ok: true, skipped: true, name, user, reason: "pi is not cc-switch-managed; providers/MCP/skills live in ~/.pi/agent/" };
   if (!dbPath) return { ok: false, error: "cc-switch database not found", name };
   const { profiles } = readProfiles({ dbPath });
   const protectedDefaults = profiles.filter((p) => p.isDefault).map((p) => p.name);

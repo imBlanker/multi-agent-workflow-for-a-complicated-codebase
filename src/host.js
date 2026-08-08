@@ -3,7 +3,7 @@
 // planner can prefer native dynamic-workflow / multi-agent mechanisms when the
 // host provides them instead of re-implementing them.
 //
-// Supported hosts are narrowed to ONLY Claude Code and Codex (project policy).
+// Supported hosts are Claude Code, Codex, and Pi Agent (project policy).
 // Other agent software (Gemini CLI, opencode, …) is NOT supported; their
 // cc-switch pricing data may still be READ for cost estimates.
 import { execSync } from "node:child_process";
@@ -13,8 +13,8 @@ import os from "node:os";
 import { exists, readJson } from "./util.js";
 
 /**
- * @typedef {"claude-code"|"codex"|"unknown"} HostApp
- * Note: only claude-code and codex are supported. Everything else is "unknown".
+ * @typedef {"claude-code"|"codex"|"pi"|"unknown"} HostApp
+ * Note: claude-code, codex, and pi are supported. Everything else is "unknown".
  * @typedef {{
  *   app: HostApp,
  *   homeDir: string,
@@ -27,6 +27,7 @@ import { exists, readJson } from "./util.js";
  *   skillsDirs: string[],
  *   commandsDirs: string[],
  *   agentsDirs: string[],
+ *   extensionsDirs: string[],
  *   detected: string[]
  * }} HostInfo
  */
@@ -51,20 +52,26 @@ function sh(cmd) {
 /**
  * Detect installed host agent software and its capabilities.
  * @param {object} [opts]
- * @param {string} [opts.claudeDir]  override ~/.claude
- * @param {string} [opts.codexDir]   override ~/.codex
+ * @param {string} [opts.claudeDir]   override ~/.claude
+ * @param {string} [opts.codexDir]    override ~/.codex
+ * @param {string} [opts.piDir]       override ~/.pi/agent
+ * @param {string} [opts.projectDir]  override process.cwd() (for project-level .pi/ dirs)
  * @returns {HostInfo}
  */
 export function detectHost(opts = {}) {
   const detected = [];
   const claudeDir = opts.claudeDir ?? path.join(home(), ".claude");
   const codexDir = opts.codexDir ?? path.join(home(), ".codex");
+  const piDir = opts.piDir ?? (process.env.PI_AGENT_DIR || path.join(home(), ".pi", "agent"));
+  const projectDir = opts.projectDir ?? process.cwd();
+  const envHost = (process.env.MAW_HOST || "").toLowerCase();
 
   let /** @type {HostApp} */ app = "unknown";
   let homeDir = "";
   const skillsDirs = [];
   const commandsDirs = [];
   const agentsDirs = [];
+  const extensionsDirs = [];
 
   if (exists(claudeDir)) {
     app = "claude-code";
@@ -75,14 +82,31 @@ export function detectHost(opts = {}) {
     agentsDirs.push(path.join(claudeDir, "agents"));
   }
 
-  // Supported hosts are Claude Code and Codex ONLY. Gemini CLI / opencode /
-  // others are intentionally NOT detected as supported (they may still be
-  // read for pricing).
+  // Supported hosts are Claude Code, Codex, and Pi Agent. Gemini CLI /
+  // opencode / others are intentionally NOT detected as supported (they may
+  // still be read for pricing).
   const codexBinary = sh("command -v codex 2>/dev/null || which codex 2>/dev/null") || null;
   if (exists(codexDir)) {
     detected.push(`Codex home at ${codexDir}`);
-    if (app === "unknown") { app = "codex"; homeDir = codexDir; }
+    if (envHost !== "pi" && app === "unknown") { app = "codex"; homeDir = codexDir; }
     agentsDirs.push(path.join(codexDir, "agents"));
+  }
+
+  // Pi Agent manages its own config in ~/.pi/agent/ (NOT via cc-switch).
+  // Detect it as a supported host; project-level .pi/ dirs + global ~/.pi/agent/
+  // dirs feed the installer. MAW_HOST=pi forces app="pi" even when Claude Code
+  // is also installed (otherwise Claude Code keeps precedence).
+  if (exists(piDir)) {
+    detected.push(`Pi Agent home at ${piDir}`);
+    agentsDirs.push(path.join(projectDir, ".pi", "agents"));
+    agentsDirs.push(path.join(piDir, "agents"));
+    commandsDirs.push(path.join(projectDir, ".pi", "prompts"));
+    commandsDirs.push(path.join(piDir, "prompts"));
+    skillsDirs.push(path.join(projectDir, ".agents", "skills"));
+    extensionsDirs.push(path.join(projectDir, ".pi", "extensions"));
+    extensionsDirs.push(path.join(piDir, "extensions"));
+    if (envHost === "pi") { app = "pi"; homeDir = piDir; }
+    else if (app === "unknown") { app = "pi"; homeDir = piDir; }
   }
 
   let codexPluginInstalled = false;
@@ -99,9 +123,9 @@ export function detectHost(opts = {}) {
     detected.push("openai-codex marketplace present");
   }
 
-  const hasSubagents = app === "claude-code" || app === "codex";
-  const hasMultiAgent = app === "claude-code";
-  const hasDynamicWorkflow = app === "claude-code";
+  const hasSubagents = app === "claude-code" || app === "codex" || app === "pi";
+  const hasMultiAgent = app === "claude-code" || app === "pi";
+  const hasDynamicWorkflow = app === "claude-code" || app === "pi";
   const hasGraphWorkflow = false;
 
   return {
@@ -116,6 +140,7 @@ export function detectHost(opts = {}) {
     skillsDirs: [...new Set(skillsDirs)],
     commandsDirs: [...new Set(commandsDirs)],
     agentsDirs: [...new Set(agentsDirs)],
+    extensionsDirs: [...new Set(extensionsDirs)],
     detected,
   };
 }

@@ -90,12 +90,32 @@ export function install(opts = {}) {
     if (exists(agentsSrc)) { copyTree(agentsSrc, codexAgentsDest); copied.push(`${codexAgentsDest} (codex agents)`); }
   }
 
+  // Pi Agent. Pi is NOT cc-switch-managed; its config lives in ~/.pi/agent/.
+  // Copy skills + prompts into pi's dirs ONLY when pi is the detected host, so
+  // a claude/codex host never touches a real ~/.pi/agent. Pi agent files need
+  // pi frontmatter, so per-agent .pi/agents/maw-*.md are materialized by
+  // configgen (project-level) rather than copied here as claude-format files.
+  const piDir = host.app === "pi" && host.homeDir ? host.homeDir : "";
+  if (host.app === "pi" && piDir) {
+    const skillsSrcPi = path.join(PKG_ROOT, "skills");
+    if (exists(skillsSrcPi)) {
+      const piSkillsDest = path.join(piDir, "skills");
+      copyTree(skillsSrcPi, piSkillsDest); copied.push(`${piSkillsDest} (pi skills)`);
+    }
+    const cmdsSrcPi = path.join(PKG_ROOT, "plugin", "commands");
+    if (exists(cmdsSrcPi)) {
+      const piPromptsDest = path.join(piDir, "prompts");
+      copyTree(cmdsSrcPi, piPromptsDest); copied.push(`${piPromptsDest} (pi prompts, best-effort format)`);
+    }
+    copied.push(`${piDir} (pi home)`);
+  }
+
   const pkg = readJson(path.join(PKG_ROOT, "package.json"), { version: "0.0.0" });
   writeManifest({
     version: pkg.version,
     installedAt: new Date().toISOString(),
     host: { app: host.app, codexPluginInstalled: host.codexPluginInstalled, codexBinary: host.codexBinary, capabilities: hostCapabilities(host) },
-    dirs: { claudeDir, codexDir },
+    dirs: { claudeDir, codexDir, piDir: host.app === "pi" ? piDir : undefined },
   });
 
   return { ok: true, copied, host, warnings };
@@ -119,6 +139,15 @@ export function uninstall() {
   const codexDir = m.dirs?.codexDir ?? path.join(os.homedir(), ".codex");
   const codexAgents = path.join(codexDir, "agents");
   if (exists(codexAgents)) removeIfOurs(codexAgents);
+  // Pi: remove only our maw-* skills/prompts, and only from a piDir a prior pi
+  // install recorded (never fall back to a real ~/.pi/agent on a claude host).
+  const piDir = m.dirs?.piDir;
+  if (piDir) {
+    for (const sub of ["skills", "prompts"]) {
+      const p = path.join(piDir, sub);
+      if (exists(p)) removeIfOurs(p);
+    }
+  }
   const portable = path.join(manifestDir(), "skills");
   if (exists(portable)) { fs.rmSync(portable, { recursive: true, force: true }); removed.push(portable); }
   const manifestPath = path.join(manifestDir(), "installed.json");

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { detectTrellis, mawManagedFiles, snapshotFiles, detectConflicts, applyConflictChoice } from "../src/trellis.js";
+import { detectTrellis, mawManagedFiles, snapshotFiles, detectConflicts, applyConflictChoice, trellisPlatformFlags } from "../src/trellis.js";
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "maw-tr-"));
 const project = path.join(tmp, "proj");
@@ -61,6 +61,30 @@ test("applyConflictChoice returns the chosen disposition", () => {
   assert.match(applyConflictChoice("maw").applied, /regenerate/i);
   assert.match(applyConflictChoice("trellis").applied, /kept/i);
   assert.match(applyConflictChoice("rerun").applied, /re-running/i);
+});
+
+test("trellisPlatformFlags: pi host -> --pi (empty home, no ~/.claude)", () => {
+  const oldHome = process.env.HOME;
+  process.env.HOME = tmp; // tmp has no .claude
+  try {
+    assert.deepEqual(trellisPlatformFlags("pi"), ["--pi"]);
+  } finally { process.env.HOME = oldHome; }
+});
+
+test("trellisPlatformFlags: pi host with ~/.claude present -> --pi --claude", () => {
+  const oldHome = process.env.HOME;
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), "maw-tr-pi-"));
+  fs.mkdirSync(path.join(d, ".claude"), { recursive: true });
+  try {
+    process.env.HOME = d;
+    assert.deepEqual(trellisPlatformFlags("pi"), ["--pi", "--claude"]);
+  } finally { process.env.HOME = oldHome; try { fs.rmSync(d, { recursive: true, force: true }); } catch {} }
+});
+
+test("trellisPlatformFlags: claude/codex/unknown keep --claude --codex", () => {
+  assert.deepEqual(trellisPlatformFlags("claude-code"), ["--claude", "--codex"]);
+  assert.deepEqual(trellisPlatformFlags("codex"), ["--claude", "--codex"]);
+  assert.deepEqual(trellisPlatformFlags(""), ["--claude", "--codex"]);
 });
 
 test.after(() => { try { fs.rmSync(tmp, { recursive: true, force: true }); } catch {} });

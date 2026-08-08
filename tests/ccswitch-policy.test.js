@@ -64,6 +64,20 @@ test("routingPolicy flags claude off + codex off as violations (no OAuth)", () =
   assert.ok(pol.violations.some((v) => v.app === "codex" && v.field === "local_routing" && v.expected === "on"));
 });
 
+test("createProjectProfile skips pi hosts (not cc-switch-managed) and writes nothing", () => {
+  const r = createProjectProfile({ name: "MAW: pi-proj", user: "x", hostApp: "pi", dbPath });
+  assert.equal(r.ok, true);
+  assert.equal(r.skipped, true);
+  assert.match(r.reason, /not cc-switch-managed/);
+  const { profiles } = readProfiles({ dbPath });
+  assert.ok(!profiles.some((p) => p.name === "MAW: pi-proj"), "no profile row must be written for pi");
+});
+
+test("routingPolicy reports pi as N/A (not cc-switch-managed)", () => {
+  const pol = routingPolicy(readRouting({ dbPath }));
+  assert.match(String(pol.pi), /N\/A/);
+});
+
 test("applyRouting({fix:true}) writes ONLY proxy_config (claude on+failover; codex on) -> compliant", () => {
   const ar = applyRouting({ dbPath, fix: true });
   assert.equal(ar.ok, true);

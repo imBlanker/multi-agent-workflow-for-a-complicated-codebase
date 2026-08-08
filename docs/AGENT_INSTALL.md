@@ -6,7 +6,7 @@
 
 ## 0. Identity & scope
 - MAW = `multi-agent-workflow`, CLI `maw`, MIT, zero runtime deps (Node ≥ 20.17).
-- **Supported hosts: Claude Code and Codex ONLY.** If the user runs Gemini CLI / opencode / others, tell them MAW does not support their host.
+- **Supported hosts: Claude Code, Codex, and Pi Agent.** If the user runs Gemini CLI / opencode / others, tell them MAW does not support their host.
 - Repo: <https://github.com/imBlanker/multi-agent-workflow-for-a-complicated-codebase>
 
 ## 1. Fork-first (ask the user)
@@ -18,7 +18,7 @@ git clone https://github.com/<user-or-you>/multi-agent-workflow-for-a-complicate
 cd multi-agent-workflow-for-a-complicated-codebase
 npx . install          # or: node bin/maw.js install
 ```
-- Copies commands/agents/hooks/skills into Claude Code (and Codex agents, best-effort).
+- Copies commands/agents/hooks/skills into Claude Code (and Codex agents, best-effort; and Pi skills/prompts into `~/.pi/agent/` when pi is the host).
 - Non-destructive: `uninstall` removes only `maw-*` files.
 - If `npx .` is unavailable, run `node bin/maw.js install`.
 
@@ -26,7 +26,7 @@ npx . install          # or: node bin/maw.js install
 ```bash
 node bin/maw.js doctor
 ```
-Verify: Node ≥ 20, git, **host = claude-code or codex**, cc-switch DB found (read-only), model pricing loaded, **routing policy compliant**, codex+codex-plugin-cc available, trellis detectable. Warnings are non-fatal; fix what you can.
+Verify: Node ≥ 20, git, **host = claude-code | codex | pi**, cc-switch DB found (read-only), model pricing loaded, **routing policy compliant** (N/A for pi — pi is not cc-switch-managed), codex+codex-plugin-cc available (pi host uses native subagents instead), trellis detectable. Warnings are non-fatal; fix what you can.
 
 ## 4. cc-switch policy (HARD RULES — do not violate)
 - All existing cc-switch data is **read-only**.
@@ -36,6 +36,7 @@ Verify: Node ≥ 20, git, **host = claude-code or codex**, cc-switch DB found (r
 - Routing (checked by `maw doctor` / `maw routing`; applied by `maw routing --fix`, writing ONLY `proxy_config` for claude/codex):
   - **Claude Code:** local routing **always ON** + auto-failover **always ON**.
   - **Codex:** OpenAI-OAuth (ChatGPT) login in use → local routing **OFF**; otherwise **ON**.
+  - **Pi Agent:** N/A — pi is **not** cc-switch-managed; providers/MCP/skills live in `~/.pi/agent/`.
 
 If `maw routing` reports violations, run `maw routing --fix` (after the user consents — it writes to their cc-switch). For Claude Code, routing+failover should be ON; if off, fix it.
 

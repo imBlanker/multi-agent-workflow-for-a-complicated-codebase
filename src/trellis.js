@@ -20,7 +20,7 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
-import { exists, readText, writeText, ensureDir, isoNow } from "./util.js";
+import { exists, readText, writeText, ensureDir, isoNow, home } from "./util.js";
 
 /**
  * Detect how to invoke trellis.
@@ -99,13 +99,30 @@ export function applyConflictChoice(choice) {
 }
 
 /**
+ * Build the trellis `init` platform flags host-aware. Claude Code / Codex /
+ * unknown hosts scope to `--claude --codex` (current behaviour). A pi host
+ * scopes to `--pi` (plus `--claude` when ~/.claude is also installed, so a
+ * dual-host machine keeps both surfaces). Trellis already supports `--pi`.
+ * @param {string} hostApp
+ * @returns {string[]}
+ */
+export function trellisPlatformFlags(hostApp) {
+  if (hostApp === "pi") {
+    const flags = ["--pi"];
+    try { if (exists(path.join(home(), ".claude"))) flags.push("--claude"); } catch {}
+    return flags;
+  }
+  return ["--claude", "--codex"];
+}
+
+/**
  * Run `trellis init -u <user>` (non-interactive `-y`, scoped to the supported
- * hosts `--claude --codex`), teeing output to a log file, then detect + report
- * conflicts. If nonInteractive, returns conflicts for the caller to print
- * (no stdin prompt). If interactive and conflicts exist, prompts the user and
- * re-runs trellis init to resume progress.
+ * hosts via `trellisPlatformFlags`), teeing output to a log file, then detect
+ * + report conflicts. If nonInteractive, returns conflicts for the caller to
+ * print (no stdin prompt). If interactive and conflicts exist, prompts the
+ * user and re-runs trellis init to resume progress.
  *
- * @param {{ project: string, user: string, nonInteractive?: boolean, timeoutMs?: number }} opts
+ * @param {{ project: string, user: string, hostApp?: string, nonInteractive?: boolean, timeoutMs?: number }} opts
  * @returns {{ ok: boolean, code: number|null, conflicts: any[], logPath: string, via: string, stdout: string, stderr: string, resumed?: boolean }}
  */
 export function runTrellisInit(opts) {
@@ -118,20 +135,22 @@ export function runTrellisInit(opts) {
 
   const det = detectTrellis();
   const before = snapshotFiles(project);
+  const flags = trellisPlatformFlags(opts.hostApp || "");
   const header = [
     `# MAW → trellis init log`,
     `started: ${isoNow()}`,
     `project: ${project}`,
     `user: ${user}`,
+    `hostApp: ${opts.hostApp || "(auto)"}`,
     `trellis: ${det.via} ${det.bin || det.args.join(" ")}`,
-    `command: trellis init -u ${user} -y --claude --codex`,
+    `command: trellis init -u ${user} -y ${flags.join(" ")}`,
     ``,
   ].join("\n");
   writeText(logPath, header);
 
   let cmd, args;
-  if (det.via === "npx") { cmd = "npx"; args = [...det.args, "init", "-u", user, "-y", "--claude", "--codex"]; }
-  else { cmd = det.bin; args = ["init", "-u", user, "-y", "--claude", "--codex"]; }
+  if (det.via === "npx") { cmd = "npx"; args = [...det.args, "init", "-u", user, "-y", ...flags]; }
+  else { cmd = det.bin; args = ["init", "-u", user, "-y", ...flags]; }
 
   const r = spawnSync(cmd, args, {
     cwd: project,

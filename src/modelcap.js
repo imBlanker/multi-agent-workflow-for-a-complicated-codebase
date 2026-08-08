@@ -206,6 +206,13 @@ export function providerModels(settingsConfig, appType) {
       push(sc.config.model);
     }
   }
+  if (appType === "pi") {
+    // pi providers carry their full model id list in settings_config._piModels
+    // (populated by readPiAsCc from ~/.pi/agent/models.json). The default model
+    // is also in settings_config.model.
+    if (Array.isArray(sc._piModels)) for (const m of sc._piModels) push(m);
+    push(sc.model);
+  }
   if (!out.length) push(sc.model);
   return out.filter((m) => typeof m === "string" && m.length > 0);
 }

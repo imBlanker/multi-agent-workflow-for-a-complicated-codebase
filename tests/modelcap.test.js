@@ -116,3 +116,8 @@ test("providerModels parses the codex TOML config string (model = \"...\")", () 
   const models = providerModels({ auth: { OPENAI_API_KEY: "sk-x" }, config: 'model_provider = "custom"\nmodel = "gpt-5.5"\n\n[model_providers]\n' }, "codex");
   assert.deepEqual(models, ["gpt-5.5"]);
 });
+
+test("providerModels extracts the pi provider model list via _piModels", () => {
+  const models = providerModels({ model: "deepseek-v4-flash", _piModels: ["deepseek-v4-flash", "glm-5.2"] }, "pi");
+  assert.deepEqual(models.sort(), ["deepseek-v4-flash", "glm-5.2"]);
+});
