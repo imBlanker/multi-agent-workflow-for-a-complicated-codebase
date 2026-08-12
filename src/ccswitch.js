@@ -282,6 +282,16 @@ export function perSessionRate(opts = {}) {
 // MCP, skills, prompts) lives in `profiles.payload`. The existing profiles are
 // named "Claude Code 默认" / "Codex 默认" — they contain "默认" and are PROTECTED.
 //
+// DECOUPLING POLICY (2026-08-12): cc-switch's "project" feature (the `profiles`
+// table) is incomplete and cc-switch-cli has not caught up, so MAW's project
+// functionality is TEMPORARILY DECOUPLED from cc-switch: MAW no longer reads or
+// writes profiles by default. MAW keeps full authority over project-level
+// agent/subagent model configs (`.maw/agents/*.json`) and only syncs provider
+// config info (the high-value settings in each provider's config.toml /
+// config.json, e.g. base_url / model / auth_mode / failover) READ-ONLY from
+// cc-switch. The profile code modules below are KEPT (with tests) but disabled
+// unless `MAW_CC_PROJECT_SYNC=1` is set (ops escape hatch, documented).
+//
 // Hard policy (enforced in guardSql / createProjectProfile):
 //   - all existing cc-switch data is READ-ONLY
 //   - MAW may only INSERT a new profile (its own project) and UPDATE that new
@@ -290,6 +300,18 @@ export function perSessionRate(opts = {}) {
 //   - the only other allowed write is UPDATE proxy_config for app_type IN
 //     ('claude','codex') — the explicit routing carve-out the user mandated
 // -----------------------------------------------------------------------------
+
+/**
+ * Whether cc-switch project-profile sync is enabled. Default: DISABLED
+ * (decoupled from cc-switch's incomplete "project" feature). Set
+ * `MAW_CC_PROJECT_SYNC=1|true|yes` to temporarily re-enable the legacy
+ * behavior (create/reuse a `profiles` row for this MAW project).
+ * @returns {boolean}
+ */
+export function projectSyncEnabled() {
+  const v = String(process.env.MAW_CC_PROJECT_SYNC || "").trim().toLowerCase();
+  return v === "1" || v === "true" || v === "yes";
+}
 
 /**
  * Read all cc-switch profiles (projects), read-only.
@@ -437,6 +459,15 @@ export function createProjectProfile(opts) {
   const user = opts.user || "";
   const dbPath = opts.dbPath ?? findDb();
   if (!name) return { ok: false, error: "project name required" };
+  // DECOUPLED by default (2026-08-12): cc-switch's project feature is
+  // incomplete; MAW manages project-level agent/subagent model configs itself
+  // and only syncs provider configs read-only. Code kept for rollback.
+  if (!projectSyncEnabled()) {
+    return {
+      ok: false, disabled: true, name,
+      error: "cc-switch project-profile sync is decoupled (temporarily disabled); MAW manages project-level agent/subagent model configs in .maw/ and only syncs provider configs read-only. Set MAW_CC_PROJECT_SYNC=1 to re-enable.",
+    };
+  }
   if (/默认/.test(name)) return { ok: false, error: "refused: project name contains '默认' (protected)", name };
   // pi is NOT cc-switch-managed: skip profile creation; providers/MCP/skills
   // live in ~/.pi/agent/ directly. The cc-switch snapshot still happens (read-only).

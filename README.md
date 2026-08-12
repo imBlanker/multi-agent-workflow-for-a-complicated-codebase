@@ -42,7 +42,7 @@ cd multi-agent-workflow-for-a-complicated-codebase
 # 2. Install the plugin + skills into Claude Code (and Codex, best-effort):
 npx . install          # or: node bin/maw.js install
 
-# 3. Initialize a project (this also creates a NEW cc-switch project profile):
+# 3. Initialize a project (cc-switch project-profile sync is DECOUPLED by default):
 maw init -u <your-name>
 
 # 4. The next step is automatic: MAW runs `trellis init -u <your-name>` for you.
@@ -101,7 +101,7 @@ Minimal agent prompt: *"Install and configure MAW by following `docs/AGENT_INSTA
 - **Cost-bounded.** Real inference spend from cc-switch logs, not token estimates. Defaults: **$5/min per agent**, **$10/min total**, max concurrency 16 — all editable.
 - **Capability-aware model choice.** Models differ WITHIN a leaderboard (some agentic models are full-multimodal; some are reasoning/dialogue-only; some multimodal models aren't agentic at all), so each agent/subagent first filters the available provider models by capability fit, then picks provider(api key)+model by remaining quota/balance and cost rate.
 - **Codex review, risk-gated.** When [`codex-plugin-cc`](https://github.com/openai/codex-plugin-cc) is available, Codex acts as the independent reviewer at risk-based gates — not every step.
-- **cc-switch-safe.** All existing cc-switch data is read-only; MAW only creates a NEW project profile and (opt-in) the routing carve-out.
+- **cc-switch-safe + decoupled projects.** All existing cc-switch data is read-only; MAW's **project** feature is DECOUPLED from cc-switch's incomplete `profiles` functionality (code kept, disabled by default; `MAW_CC_PROJECT_SYNC=1` temporarily re-enables it). MAW keeps full authority over project-level agent/subagent model configs (`.maw/agents/*.json`) and only syncs **provider config info** from cc-switch — the high-value settings in each provider's `config.toml`/`config.json` (base_url, model, auth_mode, failover …). Plus the (opt-in) routing carve-out.
 
 ## 2. When to Use
 A **new complex project**: `maw init -u <user>` → `maw plan`. Use when one agent is insufficient (many files, multiple languages, high risk, context exceeds one window) and you need cost-bounded multi-agent runs with Codex review gates. **Don't** use it for tiny fixed tasks (a single loop agent is cheaper).
@@ -120,7 +120,7 @@ A **new complex project**: `maw init -u <user>` → `maw plan`. Use when one age
  model_pricing, ▼
  request_logs   cost guard (pre-spawn): $/min per-agent + total, concurrency cap
 ```
-- **Engine** (`src/`): [`ccswitch.js`](./src/ccswitch.js) (read-only DB + project-profile creation + routing), [`planner.js`](./src/planner.js), [`graph.js`](./src/graph.js), [`configgen.js`](./src/configgen.js), [`cost.js`](./src/cost.js), [`codex.js`](./src/codex.js), [`trellis.js`](./src/trellis.js), [`installer.js`](./src/installer.js), [`doctor.js`](./src/doctor.js), [`host.js`](./src/host.js), [`probe.js`](./src/probe.js).
+- **Engine** (`src/`): [`ccswitch.js`](./src/ccswitch.js) (read-only provider-config sync + routing; project-profile sync DECOUPLED by default), [`planner.js`](./src/planner.js), [`graph.js`](./src/graph.js), [`configgen.js`](./src/configgen.js), [`cost.js`](./src/cost.js), [`codex.js`](./src/codex.js), [`trellis.js`](./src/trellis.js), [`pricegate.js`](./src/pricegate.js), [`installer.js`](./src/installer.js), [`doctor.js`](./src/doctor.js), [`host.js`](./src/host.js), [`probe.js`](./src/probe.js).
 - **Plugin** (`plugin/`): Claude Code commands (`/maw:plan`, `/maw:run`, `/maw:cost`, `/maw:doctor`, `/maw:add-agent`, `/maw:review`), agent definitions, a `PreToolUse` cost-guard hook.
 - **Skills** (`skills/`): portable skill files.
 
@@ -159,13 +159,19 @@ maw models --app codex    # same for the codex app_type
 
 Each agent's `.json`/`.md` carries the full `model_selection` record (chosen provider+model, capability fit, remaining quota, price, reasons, alternates) — see [`examples/.maw-sample/agents/orchestrator.json`](./examples/.maw-sample/agents/orchestrator.json).
 
+**Model price gate (HITL, mandatory).** Whenever MAW is about to assign a model whose unit price is high — **Input > $2/1M Tokens or Output > $10/1M Tokens** ([`src/pricegate.js`](./src/pricegate.js), single source of truth) — it **pauses the related work and reports to a human first**:
+
+- `maw plan` / `maw init` / `maw add-agent` print a ⚠ PRICE GATE report (role, provider, model, prices, thresholds) and **exit 3** instead of proceeding; the generated `.maw/` files stay on disk so you can inspect the assignments.
+- `maw guard` / `maw acquire` **deny** any role whose expensive model is not yet approved, so paused work stays paused.
+- A human resumes work in one of three ways: pick a cheaper model (edit `.maw/agents/<role>.json`, re-run `maw plan`), explicitly approve per role (`maw approve-model --role <role> --yes` — sticky across re-plans), or override for one run (`--allow-pricey`).
+
 ## 7. cc-switch Integration & Routing Policy
 MAW treats your cc-switch as **read-only by default**. The rules below are enforced in code ([`src/ccswitch.js`](./src/ccswitch.js), `guardSql`):
 
-- **Snapshot before every init.** `maw init` FIRST packages **all** cc-switch config files into a timestamped archive at `~/.cc-switch/maw-backups/cc-switch-snapshot-<timestamp>.tar.gz` (falls back to a directory copy + sha256 manifest where `tar` is unavailable) — before MAW creates its project profile or touches routing. Only reads existing files; writes only NEW files under `maw-backups/`.
+- **Snapshot before every init.** `maw init` FIRST packages **all** cc-switch config files into a timestamped archive at `~/.cc-switch/maw-backups/cc-switch-snapshot-<timestamp>.tar.gz` (falls back to a directory copy + sha256 manifest where `tar` is unavailable) — before MAW touches anything else. Only reads existing files; writes only NEW files under `maw-backups/`.
 - **All existing cc-switch data is read-only.** Reads use a read-only SQLite connection (`node:sqlite` `readOnly:true`).
-- **A NEW project per init.** `maw init -u <user>` creates a fresh cc-switch **project** (a row in the `profiles` table) named `MAW: <project> (<user>)`, scoped to claude+codex. Providers / MCP / Skills / memory are provisioned **only within this new project's payload**.
-- **Never touch "默认" profiles.** Any profile whose name contains `默认` (e.g. `Claude Code 默认`, `Codex 默认`) is **never** written, updated, or deleted — a hard guard refuses it.
+- **Project functionality DECOUPLED by default.** cc-switch's "project" feature (the `profiles` table) is incomplete, so MAW no longer reads/writes profiles: MAW manages project-level agent/subagent model configs itself in `.maw/agents/*.json` and syncs only **provider config info** read-only (the high-value settings in each provider's `config.toml`/`config.json` — base_url, model, auth_mode, failover queue …). The profile code modules stay in `src/ccswitch.js` (with tests) but are disabled; set `MAW_CC_PROJECT_SYNC=1` to temporarily re-enable the legacy create/reuse of a `MAW: <project> (<user>)` profile.
+- **Never touch "默认" profiles.** Any profile whose name contains `默认` (e.g. `Claude Code 默认`, `Codex 默认`) is **never** written, updated, or deleted — a hard guard refuses it (this guard stays even when the legacy sync is re-enabled).
 - **Routing rules** (`maw routing` / `maw doctor` checks; `maw routing --fix` applies the carve-out, writing **only** `proxy_config` for claude/codex):
   - **Claude Code:** local routing **always ON** + auto-failover **always ON**.
   - **Codex:** when an **OpenAI OAuth (ChatGPT) login** is in use → local routing **OFF**; otherwise **ON**. (OAuth is detected from `codex_oauth_auth.json` + the provider's `auth.auth_mode === "chatgpt"`.)
@@ -181,6 +187,8 @@ Because trellis and MAW can both manage files, on conflict MAW **pauses** trelli
 5. MAW applies your choice and continues.
 
 (A black-box CLI can't be paused mid-write, so MAW detects conflicts immediately after the conflicting write, then resumes by re-running the idempotent `trellis init`.) See [`src/trellis.js`](./src/trellis.js).
+
+**Trellis update tracker.** The repo's GitHub Actions workflow [`trellis-update-tracker`](./.github/workflows/trellis-tracker.yml) automatically tracks `@mindfoldhq/trellis` updates (weekly + manual dispatch): when a new npm version appears it opens an `[trellis-tracker]` issue with version + links and advances `.github/trellis-tracker/state.json`. The only exception: **if trellis deletes its repo** (upstream 404), the tracker opens ONE notice issue, pauses tracking, and the workflow still succeeds — it resumes automatically when the upstream comes back. MAW invokes trellis via `@latest`, so no upgrade action is required in MAW itself; the issue is a heads-up to review the changelog.
 
 ## 9. Cost Control Mechanism
 Real inference spend from cc-switch's `proxy_request_logs` → USD/min. **Per-agent** $5/min, **total** $10/min (independent), **max concurrency** 16 — editable in `.maw/config.yaml` or via flags. Pricing source chain: cc-switch `model_pricing` → provider `cost_multiplier` → vendored **estimate** (tagged `estimated:true`) → `null` (never faked).
@@ -217,7 +225,7 @@ bin/maw.js  src/  plugin/  skills/  defaults/  examples/  tests/  docs/
 ```
 
 ## 13. Security Notes
-cc-switch is read-only; the only writes are (a) a NEW project profile and (b) the opt-in `proxy_config` carve-out for claude/codex — both hard-guarded (no `DELETE`/`DROP`, no `UPDATE` on profiles/providers/skills, never on `默认`). The `PreToolUse` hook only **blocks** over-budget spawns. External code was reviewed (license + no hidden network/credential-harvesting) before reuse — see [`NOTICE.md`](./NOTICE.md), [`ACKNOWLEDGEMENTS.md`](./ACKNOWLEDGEMENTS.md).
+cc-switch is read-only by default; the only writes are (a) the DECOUPLED project-profile sync — **disabled by default**, re-enabled only via `MAW_CC_PROJECT_SYNC=1` (creates a NEW profile only, never touches `默认`) — and (b) the opt-in `proxy_config` carve-out for claude/codex — both hard-guarded (no `DELETE`/`DROP`, no `UPDATE` on profiles/providers/skills, never on `默认`). The price gate pauses expensive model assignments until a human acts. The `PreToolUse` hook only **blocks** over-budget spawns. External code was reviewed (license + no hidden network/credential-harvesting) before reuse — see [`NOTICE.md`](./NOTICE.md), [`ACKNOWLEDGEMENTS.md`](./ACKNOWLEDGEMENTS.md).
 
 ## 14. Known Limitations
 - Not yet on npm (use `npx . install`).

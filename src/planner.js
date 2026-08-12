@@ -33,11 +33,13 @@
  *   role: string, agent: string, model: string, appType: string,
  *   costRateLimitUsdPerMin: number, concurrency: number, tools: string[],
  *   reviewRequired: boolean, task: string, modelChoice?: object,
+ *   priceGateBlocked?: boolean,
  * }} AgentSpec
  *
  * @typedef {{
  *   name: string, selected: Arch[], primary: Arch,
  *   rationale: string[], agents: AgentSpec[],
+ *   priceGate?: { thresholds: { inputPerM: number, outputPerM: number }, blockedRoles: { role: string, model: string, appType: string, provider?: string|null, price?: object|null, gate?: object|null }[] },
  *   groups: { parallel?: boolean, agents: string[], steps?: { role: string, agent: string, task: string }[], label?: string }[],
  *   reviewPoints: { by: string, scope: string, label?: string }[],
  *   loops: { maxIterations: number, exitWhen: string, label?: string }[],
@@ -50,6 +52,8 @@
 
 import { isoNow, round, slug } from "./util.js";
 import { selectModelForRole, baseRole } from "./modelcap.js";
+import { resolvePrice } from "./pricing.js";
+import { checkPriceGate, PRICE_GATE_THRESHOLDS } from "./pricegate.js";
 
 const DEFAULT_PER_AGENT = 5.0;   // USD/min (real inference spend from cc-switch logs)
 const DEFAULT_TOTAL = 10.0;      // USD/min
@@ -186,13 +190,23 @@ export function planWorkflow(signals, ctx = {}) {
   function modelFor(role, appType, fallbackId, preferCheap = false) {
     const key = `${baseRole(role)}|${appType}|${preferCheap ? "cheap" : "std"}`;
     if (!selCache[key]) {
-      const sel = selectModelForRole({ role, appType, cc, quota: cc.quota, preferCheap });
-      selCache[key] = sel ?? {
+      let sel = selectModelForRole({ role, appType, cc, quota: cc.quota, preferCheap });
+      sel = sel ?? {
         role, appType, model: pickModel(cc, appType, fallbackId), providerId: null, providerName: null,
         capabilityScore: null, quota: null, price: null,
         reasons: ["cc-switch provider list unavailable; using the current provider's default model"],
         estimated: true, alternates: [], considered: 0,
       };
+      // Price gate (HITL): resolve the FULL price chain (cc-switch model_pricing
+      // + provider cost_multiplier + vendored fallback — the same chain
+      // configgen writes into .maw/agents/*.json) and check the thresholds.
+      // A blocked assignment pauses the related work and is reported to a human.
+      const price = resolvePrice(sel.model, {
+        modelPricing: cc.modelPricing,
+        costMultiplier: Number(cc.currentProviders?.[appType]?.cost_multiplier ?? 1),
+      });
+      sel.priceGate = checkPriceGate(sel.model, price);
+      selCache[key] = sel;
     }
     return selCache[key];
   }
@@ -283,6 +297,15 @@ export function planWorkflow(signals, ctx = {}) {
     reviewPoints,
     loops,
     cost: { perAgentLimitUsdPerMin: perAgent, totalLimitUsdPerMin: total, maxConcurrency, sources },
+    priceGate: {
+      thresholds: PRICE_GATE_THRESHOLDS,
+      blockedRoles: agents.filter((a) => a.priceGateBlocked).map((a) => ({
+        role: a.role, model: a.model, appType: a.appType,
+        provider: a.modelChoice?.provider ?? null,
+        price: a.modelChoice?.price ?? null,
+        gate: a.modelChoice?.priceGate ?? null,
+      })),
+    },
     hostApp: host.app || "unknown",
     hostCapabilities: [
       host.hasSubagents && "subagents",
@@ -330,11 +353,13 @@ function mkAgent(role, agent, model, appType, perAgent, tools, task, reviewRequi
       capabilityScore: modelChoice.capabilityScore ?? null,
       quota: modelChoice.quota ?? null,
       price: modelChoice.price ?? null,
+      priceGate: modelChoice.priceGate ?? null,
       reasons: modelChoice.reasons ?? [],
       estimated: modelChoice.estimated ?? true,
       considered: modelChoice.considered ?? 0,
       alternates: (modelChoice.alternates ?? []).map((a) => ({ provider: a.providerName, model: a.model, capabilityScore: a.capabilityScore })),
     };
+    if (modelChoice.priceGate?.blocked) spec.priceGateBlocked = true;
   }
   return spec;
 }

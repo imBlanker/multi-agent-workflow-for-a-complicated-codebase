@@ -31,12 +31,13 @@ Verify: Node ≥ 20, git, **host = claude-code | codex | pi**, cc-switch DB foun
 ## 4. cc-switch policy (HARD RULES — do not violate)
 - All existing cc-switch data is **read-only**.
 - **Before every `maw init`, a packaged snapshot of ALL cc-switch config files is taken** → `~/.cc-switch/maw-backups/cc-switch-snapshot-<timestamp>.tar.gz` (directory copy + sha256 manifest if `tar` is unavailable). Mention the snapshot path to the user.
-- `maw init` creates a **NEW** cc-switch project profile (`MAW: <project> (<user>)`); providers/MCP/Skills/memory are provisioned **only within that new project**.
+- **Project functionality is DECOUPLED by default** (2026-08-12): cc-switch's "project" feature (`profiles`) is incomplete, so MAW no longer reads/writes profiles. MAW manages project-level agent/subagent model configs itself in `.maw/agents/*.json` and only **syncs provider config info read-only** (the high-value settings in each provider's `config.toml`/`config.json`: base_url, model, auth_mode, failover …). The legacy `MAW: <project> (<user>)` profile create/reuse is disabled unless `MAW_CC_PROJECT_SYNC=1` is set — then it creates a **NEW** profile only (never modifies existing ones).
 - **NEVER** touch any profile whose name contains `默认` (e.g. `Claude Code 默认`, `Codex 默认`). The engine hard-refuses this; you must not bypass it.
 - Routing (checked by `maw doctor` / `maw routing`; applied by `maw routing --fix`, writing ONLY `proxy_config` for claude/codex):
   - **Claude Code:** local routing **always ON** + auto-failover **always ON**.
   - **Codex:** OpenAI-OAuth (ChatGPT) login in use → local routing **OFF**; otherwise **ON**.
   - **Pi Agent:** N/A — pi is **not** cc-switch-managed; providers/MCP/skills live in `~/.pi/agent/`.
+- **Model price gate (HITL, mandatory):** assigning a model with **Input > $2/1M Tokens or Output > $10/1M Tokens** pauses the work and reports to the human first — `maw plan`/`maw init`/`maw add-agent` exit 3 with a ⚠ PRICE GATE report; `maw guard`/`maw acquire` deny gated roles until `maw approve-model --role <role> --yes` (or a cheaper model, or `--allow-pricey`).
 
 If `maw routing` reports violations, run `maw routing --fix` (after the user consents — it writes to their cc-switch). For Claude Code, routing+failover should be ON; if off, fix it.
 
@@ -44,7 +45,7 @@ If `maw routing` reports violations, run `maw routing --fix` (after the user con
 ```bash
 maw init -u <user-name>
 ```
-This: (a) **snapshots all cc-switch config** to `~/.cc-switch/maw-backups/`, (b) writes `.maw/` configs, (c) creates the cc-switch project profile, (d) checks the routing policy, (e) **automatically runs `trellis init -u <user-name>`** as the mandatory next step.
+This: (a) **snapshots all cc-switch config** to `~/.cc-switch/maw-backups/`, (b) writes `.maw/` configs (paused with a ⚠ PRICE GATE report + exit 3 if any model assignment is expensive — resolve via `maw approve-model --role <role> --yes` or a cheaper model, then re-run), (c) notes that cc-switch project-profile sync is DECOUPLED by default (`MAW_CC_PROJECT_SYNC=1` re-enables), (d) checks the routing policy, (e) **automatically runs `trellis init -u <user-name>`** as the mandatory next step.
 
 **trellis conflict handling** (see README §8): if trellis touches a MAW-managed file, MAW pauses, prints the conflict + overview + log path (`.maw/logs/trellis-init-*.log`), and asks the user to choose `[m]` keep MAW / `[t]` keep trellis / `[r]` re-run trellis. Apply the user's choice and resume. In a non-interactive context, surface the conflicts + log and let the user decide.
 

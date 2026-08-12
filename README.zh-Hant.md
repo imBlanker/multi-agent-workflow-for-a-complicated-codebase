@@ -42,7 +42,7 @@ cd multi-agent-workflow-for-a-complicated-codebase
 # 2. Install the plugin + skills into Claude Code (and Codex, best-effort):
 npx . install          # or: node bin/maw.js install
 
-# 3. Initialize a project (this also creates a NEW cc-switch project profile):
+# 3. Initialize a project (cc-switch 專案設定檔同步預設脫鉤):
 maw init -u <your-name>
 
 # 4. The next step is automatic: MAW runs `trellis init -u <your-name>` for you.
@@ -101,7 +101,7 @@ curl -fsSL https://raw.githubusercontent.com/imBlanker/multi-agent-workflow-for-
 - **成本有界。** 來自 cc-switch 日誌的真實推理消費，而非權杖估計。預設：**每智慧體 $5/分鐘**、**總計 $10/分鐘**、最大並發 16 —— 皆可編輯。
 - **能力感知的模型選擇。** 模型在**同一榜單內**也有差異（有些 agentic 模型是全多模態；有些僅限推理／對話；有些多模態模型根本不具 agentic 能力），因此每個智慧體／子智慧體會先依能力適配過濾可用的供應商模型，再依剩餘額度／餘額與花銷速率挑選 provider（API key）＋模型。
 - **Codex 審查，依風險設關卡。** 當 [`codex-plugin-cc`](https://github.com/openai/codex-plugin-cc) 可用時，Codex 在基於風險的關卡擔任獨立審查者 —— 而非每一步。
-- **cc-switch 安全。** 既有 cc-switch 資料皆為唯讀；MAW 只建立新的專案設定檔與（可選）路由豁免。
+- **cc-switch 安全＋專案脫鉤。** 既有 cc-switch 資料皆為唯讀；MAW 的**專案**功能與 cc-switch 不完整的 `profiles` 功能**暫時脫鉤**（程式碼保留、預設停用；`MAW_CC_PROJECT_SYNC=1` 可臨時重開）。MAW 仍對專案級各 agents/subagents 的模型設定握有強力權限（`.maw/agents/*.json`），只從 cc-switch **唯讀同步供應商設定資訊**——各供應商 `config.toml`／`config.json` 中的高價值設定（base_url、model、auth_mode、failover……）。另有（可選）路由豁免。
 
 ## 2. 何時使用
 **全新的複雜專案**：`maw init -u <user>` → `maw plan`。當單一智慧體不敷使用（檔案繁多、多種語言、高風險、上下文超出單一視窗）且你需要有成本上限的多智慧體執行與 Codex 審查關卡時使用。**不要**用於微小的固定任務（單一迴圈工程智慧體更便宜）。
@@ -120,7 +120,7 @@ curl -fsSL https://raw.githubusercontent.com/imBlanker/multi-agent-workflow-for-
  model_pricing, ▼
  request_logs   cost guard (pre-spawn): $/min per-agent + total, concurrency cap
 ```
-- **引擎**（`src/`）：[`ccswitch.js`](./src/ccswitch.js)（唯讀 DB＋專案設定檔建立＋路由）、[`planner.js`](./src/planner.js)、[`graph.js`](./src/graph.js)、[`configgen.js`](./src/configgen.js)、[`cost.js`](./src/cost.js)、[`codex.js`](./src/codex.js)、[`trellis.js`](./src/trellis.js)、[`installer.js`](./src/installer.js)、[`doctor.js`](./src/doctor.js)、[`host.js`](./src/host.js)、[`probe.js`](./src/probe.js)。
+- **引擎**（`src/`）：[`ccswitch.js`](./src/ccswitch.js)（唯讀供應商設定同步＋路由；專案設定檔同步預設脫鉤）、[`planner.js`](./src/planner.js)、[`graph.js`](./src/graph.js)、[`configgen.js`](./src/configgen.js)、[`cost.js`](./src/cost.js)、[`codex.js`](./src/codex.js)、[`trellis.js`](./src/trellis.js)、[`pricegate.js`](./src/pricegate.js)、[`installer.js`](./src/installer.js)、[`doctor.js`](./src/doctor.js)、[`host.js`](./src/host.js)、[`probe.js`](./src/probe.js)。
 - **外掛**（`plugin/`）：Claude Code 指令（`/maw:plan`、`/maw:run`、`/maw:cost`、`/maw:doctor`、`/maw:add-agent`、`/maw:review`）、智慧體定義、一個 `PreToolUse` 成本護欄 hook。
 - **技能**（`skills/`）：可攜的技能檔案。
 
@@ -159,13 +159,19 @@ maw models --app codex    # same for the codex app_type
 
 每個智慧體的 `.json`／`.md` 都帶有完整的 `model_selection` 記錄（所選 provider＋模型、能力適配、剩餘額度、價格、理由、備選）—— 見 [`examples/.maw-sample/agents/orchestrator.json`](./examples/.maw-sample/agents/orchestrator.json)。
 
+**模型價格閘門（HITL，強制）。** 每當 MAW 要配用單價較高的模型——**Input > $2/1M Tokens 或 Output > $10/1M Tokens**（[`src/pricegate.js`](./src/pricegate.js)，唯一事實來源）——都會**暫停相關工作並先向人工報告**：
+
+- `maw plan`／`maw init`／`maw add-agent` 列印 ⚠ PRICE GATE 報告（角色、供應商、模型、價格、閾值）並**以退出碼 3 暫停**；生成的 `.maw/` 檔案保留在磁碟上供人工審查。
+- `maw guard`／`maw acquire` 對尚未獲人工批准的昂貴模型角色**拒絕放行**，暫停狀態得以維持。
+- 人工可透過三種方式恢復：改用更便宜的模型（編輯 `.maw/agents/<role>.json` 後重跑 `maw plan`）、按角色明確批准（`maw approve-model --role <role> --yes`——重跑 plan 後仍然有效）、或單次執行覆蓋（`--allow-pricey`）。
+
 ## 7. cc-switch 整合與路由策略
 MAW 預設將你的 cc-switch 視為**唯讀**。以下規則在程式碼中強制執行（[`src/ccswitch.js`](./src/ccswitch.js)、`guardSql`）：
 
-- **每次 init 前先做快照。** `maw init` **首先**將**所有** cc-switch 設定檔打包為帶時間戳的歸檔，位於 `~/.cc-switch/maw-backups/cc-switch-snapshot-<timestamp>.tar.gz`（在無 `tar` 可用的環境退為目錄複製＋sha256 清單）—— 早於 MAW 建立其專案設定檔或觸碰路由之前。只讀取既有檔案；只在 `maw-backups/` 下寫入**新**檔案。
+- **每次 init 前先做快照。** `maw init` **首先**將**所有** cc-switch 設定檔打包為帶時間戳的歸檔，位於 `~/.cc-switch/maw-backups/cc-switch-snapshot-<timestamp>.tar.gz`（在無 `tar` 可用的環境退為目錄複製＋sha256 清單）——早於 MAW 觸碰任何其他內容之前。只讀取既有檔案；只在 `maw-backups/` 下寫入**新**檔案。
 - **既有 cc-switch 資料皆為唯讀。** 讀取使用唯讀 SQLite 連線（`node:sqlite` `readOnly:true`）。
-- **每次 init 一個新專案。** `maw init -u <user>` 建立一個全新的 cc-switch **專案**（`profiles` 表中的一列），命名為 `MAW: <project> (<user>)`，範圍限定於 claude+codex。供應商／MCP／技能／記憶體**只在此新專案的 payload 內**供應。
-- **絕不碰 `默认` 設定檔。** 任何名稱含 `默认`（例如 `Claude Code 默认`、`Codex 默认`）的設定檔**絕不**被寫入、更新或刪除 —— 一道硬性護欄會予以拒絕。
+- **專案功能預設脫鉤。** cc-switch 的「專案」功能（`profiles` 表）不完整，MAW 不再讀寫 profiles：MAW 自己在 `.maw/agents/*.json` 管理專案級 agents/subagents 模型設定，只**唯讀同步供應商設定資訊**（各供應商 `config.toml`／`config.json` 的高價值設定——base_url、model、auth_mode、failover 佇列……）。profile 相關程式碼模組保留在 `src/ccswitch.js`（含測試）但已停用；設 `MAW_CC_PROJECT_SYNC=1` 可臨時重開舊的建立／重用 `MAW: <project> (<user>)` profile 行為。
+- **絕不碰 `默认` 設定檔。** 任何名稱含 `默认`（例如 `Claude Code 默认`、`Codex 默认`）的設定檔**絕不**被寫入、更新或刪除 —— 一道硬性護欄會予以拒絕（即使重開舊同步也仍然生效）。
 - **路由規則**（`maw routing`／`maw doctor` 檢查；`maw routing --fix` 套用豁免，**只**寫入 claude/codex 的 `proxy_config`）：
   - **Claude Code：** 本地路由**恆為開啟**＋自動故障轉移**恆為開啟**。
   - **Codex：** 當使用 **OpenAI OAuth（ChatGPT）登入** 時 → 本地路由**關閉**；否則**開啟**。（OAuth 由 `codex_oauth_auth.json`＋供應商的 `auth.auth_mode === "chatgpt"` 偵測。）
@@ -181,6 +187,8 @@ MAW 預設將你的 cc-switch 視為**唯讀**。以下規則在程式碼中強�
 5. MAW 套用你的選擇並繼續。
 
 （黑箱 CLI 無法在寫入途中暫停，因此 MAW 在衝突寫入後立即偵測，再透過重新執行冪等的 `trellis init` 來恢復。）見 [`src/trellis.js`](./src/trellis.js)。
+
+**Trellis 更新追蹤器。** 本倉庫的 GitHub Actions 工作流程 [`trellis-update-tracker`](./.github/workflows/trellis-tracker.yml) 會自動追蹤 `@mindfoldhq/trellis` 的更新（每週＋手動觸發）：出現新 npm 版本時，它會開啟一個 `[trellis-tracker]` issue（含版本與連結）並推進 `.github/trellis-tracker/state.json`。唯一例外：**如果 trellis 刪庫**（上游 404），追蹤器會開啟一條 notice issue、暫停追蹤，且工作流程仍然成功——上游恢復後自動恢復追蹤。MAW 透過 `@latest` 呼叫 trellis，因此 MAW 本身無需升級動作；issue 只是提醒人工審閱變更日誌。
 
 ## 9. 成本控制機制
 來自 cc-switch `proxy_request_logs` 的真實推理消費 → USD/分鐘。**每智慧體** $5/分鐘、**總計** $10/分鐘（獨立）、**最大並發** 16 —— 可在 `.maw/config.yaml` 或透過旗標編輯。定價來源鏈：cc-switch `model_pricing` → 供應商 `cost_multiplier` → 內建**估計值**（標記 `estimated:true`）→ `null`（絕不偽造）。
@@ -217,7 +225,7 @@ bin/maw.js  src/  plugin/  skills/  defaults/  examples/  tests/  docs/
 ```
 
 ## 13. 安全性說明
-cc-switch 為唯讀；唯一的寫入為 (a) 一個新專案設定檔與 (b) claude/codex 的可選 `proxy_config` 豁免 —— 兩者皆有硬性護欄（無 `DELETE`／`DROP`，對 profiles／providers／skills 無 `UPDATE`，絕不作用於 `默认`）。`PreToolUse` hook 只**阻擋**超預算的產生。外部程式碼在重用前已審查（授權條款＋無隱藏網路／憑證竊取）—— 見 [`NOTICE.md`](./NOTICE.md)、[`ACKNOWLEDGEMENTS.md`](./ACKNOWLEDGEMENTS.md)。
+cc-switch 預設唯讀；唯一的寫入為 (a) 已脫鉤的專案設定檔同步——**預設停用**，僅當 `MAW_CC_PROJECT_SYNC=1` 時重開（只建立新設定檔，絕不觸碰 `默认`）——與 (b) claude/codex 的可選 `proxy_config` 豁免 —— 兩者皆有硬性護欄（無 `DELETE`／`DROP`，對 profiles／providers／skills 無 `UPDATE`，絕不作用於 `默认`）。價格閘門會暫停昂貴的模型配用直到人工處理。`PreToolUse` hook 只**阻擋**超預算的產生。外部程式碼在重用前已審查（授權條款＋無隱藏網路／憑證竊取）—— 見 [`NOTICE.md`](./NOTICE.md)、[`ACKNOWLEDGEMENTS.md`](./ACKNOWLEDGEMENTS.md)。
 
 ## 14. 已知限制
 - 尚未上架 npm（使用 `npx . install`）。

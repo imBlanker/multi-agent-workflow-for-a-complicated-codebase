@@ -20,12 +20,13 @@ const BIN = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", 
 
 /** @param {string[]} args @param {object} [opts] */
 function run(args, opts = {}) {
+  const { env: envOver, ...rest } = opts;
   return execFileSync("node", [BIN, ...args], {
     cwd: project,
     encoding: "utf8",
-    env: { ...process.env, CC_SWITCH_DB: dbPath, HOME: os.homedir() },
+    env: { ...process.env, CC_SWITCH_DB: dbPath, HOME: os.homedir(), ...(envOver ?? {}) },
     maxBuffer: 8 * 1024 * 1024,
-    ...opts,
+    ...rest,
   });
 }
 
@@ -40,14 +41,72 @@ test("maw doctor runs and reports checks", () => {
   assert.match(out, /cc-switch database/);
 });
 
-test("maw plan probes the project and writes .maw/", () => {
-  const out = run(["plan", "--project", project, "--risk", "high", "--parallel", "4"]);
+test("maw plan probes the project and writes .maw/ (price gate approved via --allow-pricey)", () => {
+  const out = run(["plan", "--project", project, "--risk", "high", "--parallel", "4", "--allow-pricey"]);
   assert.match(out, /plan:/);
   assert.match(out, /agents:/);
+  assert.match(out, /price gate: .*approved via --allow-pricey/);
   assert.ok(fs.existsSync(path.join(project, ".maw", "workflow.json")));
   assert.ok(fs.existsSync(path.join(project, ".maw", "config.yaml")));
   assert.ok(fs.existsSync(path.join(project, ".maw", "plan.md")));
   assert.ok(fs.existsSync(path.join(project, ".maw", "agents", "reviewer.json")));
+});
+
+test("maw plan PAUSES (exit 3) with a human report when an expensive model is assigned", () => {
+  const proj2 = path.join(tmp, "proj-gated");
+  fs.mkdirSync(proj2, { recursive: true });
+  fs.writeFileSync(path.join(proj2, "a.js"), "console.log(1)\n");
+  let out = "", err = "";
+  try {
+    out = run(["plan", "--project", proj2, "--risk", "high", "--parallel", "4"]);
+  } catch (e) {
+    out = e.stdout || "";
+    err = e.stderr || "";
+    assert.equal(e.status, 3, "price gate must pause with exit code 3");
+  }
+  assert.match(out + err, /PRICE GATE/);
+  assert.match(out + err, /PAUSED by the price gate/);
+  // files are still written so the human can inspect the assignments
+  assert.ok(fs.existsSync(path.join(proj2, ".maw", "agents", "orchestrator.json")));
+  const oj = JSON.parse(fs.readFileSync(path.join(proj2, ".maw", "agents", "orchestrator.json"), "utf8"));
+  assert.equal(oj.price_gate.blocked, true);
+  assert.equal(oj.price_gate.approved, false);
+});
+
+test("approve-model records the human decision; acquire then allows the role", () => {
+  const proj3 = path.join(tmp, "proj-approve");
+  fs.mkdirSync(proj3, { recursive: true });
+  fs.writeFileSync(path.join(proj3, "a.js"), "console.log(1)\n");
+  try {
+    run(["plan", "--project", proj3, "--risk", "high", "--parallel", "4"]);
+  } catch { /* expected: paused */ }
+  // acquire is denied while paused
+  let denied = "";
+  try {
+    denied = run(["acquire", "--project", proj3, "--role", "implementer", "--id", "x1", "--per-agent", "100", "--total", "100"]);
+  } catch (e) {
+    denied = e.stdout || "";
+    assert.equal(e.status, 3);
+  }
+  assert.match(denied, /PRICE GATE/);
+  assert.match(denied, /"allowed":false/);
+  // approve WITHOUT --yes must refuse (human confirmation required)
+  let noYesErr = null;
+  try { run(["approve-model", "--project", proj3, "--role", "implementer"]); } catch (e) { noYesErr = e; }
+  assert.ok(noYesErr, "approve-model without --yes must refuse");
+  assert.match(String(noYesErr.stdout || ""), /requires --yes/);
+  // approve with --yes
+  const appr = run(["approve-model", "--project", proj3, "--role", "implementer", "--yes"]);
+  assert.match(appr, /approved: role "implementer"/);
+  const j = JSON.parse(fs.readFileSync(path.join(proj3, ".maw", "agents", "implementer.json"), "utf8"));
+  assert.equal(j.price_gate.approved, true);
+  // acquire now allows the role
+  const ok = run(["acquire", "--project", proj3, "--role", "implementer", "--id", "x2", "--per-agent", "100", "--total", "100"]);
+  assert.match(ok, /"allowed":true/);
+  // approval is sticky across a re-plan
+  run(["plan", "--project", proj3, "--risk", "high", "--parallel", "4", "--allow-pricey"]);
+  const j2 = JSON.parse(fs.readFileSync(path.join(proj3, ".maw", "agents", "implementer.json"), "utf8"));
+  assert.equal(j2.price_gate.approved, true);
 });
 
 test("maw cost reports real rate from fixture logs", () => {
@@ -65,7 +124,7 @@ test("maw guard allows then denies at the per-agent limit", () => {
 });
 
 test("maw add-agent / remove-agent mutate the plan", () => {
-  run(["add-agent", "--project", project, "--role", "static-analyzer", "--model", "claude-sonnet-5", "--app", "claude", "--task", "Static analysis pass."]);
+  run(["add-agent", "--project", project, "--role", "static-analyzer", "--model", "claude-sonnet-5", "--app", "claude", "--task", "Static analysis pass.", "--allow-pricey"]);
   assert.ok(fs.existsSync(path.join(project, ".maw", "agents", "static-analyzer.json")));
   run(["remove-agent", "--project", project, "--role", "static-analyzer"]);
   assert.ok(!fs.existsSync(path.join(project, ".maw", "agents", "static-analyzer.json")));
@@ -84,8 +143,8 @@ test("maw graph reports nodes/edges and batches", () => {
   assert.ok(j.batches > 0);
 });
 
-test("maw init --no-trellis -u <user> creates .maw + a cc-switch project (never 默认)", () => {
-  const out = run(["init", "--project", project, "-u", "alice", "--no-trellis"]);
+test("maw init --no-trellis -u <user> creates .maw + a cc-switch project when MAW_CC_PROJECT_SYNC=1 (never 默认)", () => {
+  const out = run(["init", "--project", project, "-u", "alice", "--no-trellis", "--allow-pricey"], { env: { MAW_CC_PROJECT_SYNC: "1" } });
   assert.match(out, /Initialized .maw\//);
   assert.match(out, /cc-switch project: created/);
   assert.match(out, /protected 默认 profiles: Claude Code 默认, Codex 默认|protected 默认 profiles: Codex 默认, Claude Code 默认/);
@@ -93,6 +152,26 @@ test("maw init --no-trellis -u <user> creates .maw + a cc-switch project (never 
   assert.match(out, /trellis init: skipped/);
   // routing violation surfaced (fixture has claude OFF)
   assert.match(out, /routing policy: NOT compliant|routing applied/);
+});
+
+test("maw init is DECOUPLED from cc-switch projects by default and PAUSES on expensive models", () => {
+  const proj4 = path.join(tmp, "proj-init-decoupled");
+  fs.mkdirSync(proj4, { recursive: true });
+  let out = "", err = "";
+  try {
+    out = run(["init", "--project", proj4, "-u", "bob", "--no-trellis"]);
+  } catch (e) {
+    out = e.stdout || "";
+    err = e.stderr || "";
+    assert.equal(e.status, 3, "init must pause on the price gate");
+  }
+  const all = out + err;
+  assert.match(all, /cc-switch project: DECOUPLED/);
+  assert.match(all, /PRICE GATE/);
+  assert.match(all, /maw init PAUSED by the price gate/);
+  // paused before touching cc-switch/trellis: no routing line, no trellis line
+  assert.doesNotMatch(all, /routing policy:/);
+  assert.doesNotMatch(all, /trellis init:/);
 });
 
 test("maw routing reports violations; --fix applies the carve-out", () => {

@@ -14,10 +14,12 @@ import { doctor } from "./doctor.js";
 import { runReview, shouldReview, status as codexStatus } from "./codex.js";
 import { probeProject } from "./probe.js";
 import { WorkflowGraph, graphFromPlan } from "./graph.js";
-import { createProjectProfile, readRouting, routingPolicy, applyRouting, readProviderQuota } from "./ccswitch.js";
+import { createProjectProfile, readRouting, routingPolicy, applyRouting, readProviderQuota, projectSyncEnabled } from "./ccswitch.js";
 import { runTrellisInit } from "./trellis.js";
 import { snapshotCcSwitch } from "./backup.js";
 import { classifyModel, selectModelForRole, candidatesForAppType, baseRole } from "./modelcap.js";
+import { resolvePrice } from "./pricing.js";
+import { checkPriceGate, priceGateReport } from "./pricegate.js";
 
 /**
  * Load cc-switch + host context once.
@@ -69,6 +71,7 @@ export function main(argv = process.argv.slice(2)) {
     case "guard": return cmdGuard(f, flags);
     case "acquire": return cmdAcquire(f, flags);
     case "release": return cmdRelease(f, flags);
+    case "approve-model": return cmdApproveModel(f, flags);
     case "add-agent": return cmdAddAgent(f, flags);
     case "remove-agent": return cmdRemoveAgent(f, flags);
     case "run": return cmdRun(f, flags);
@@ -105,6 +108,8 @@ Usage: maw <command> [options]
 
 Commands:
   init          Snapshot cc-switch, then initialize a .maw/ workspace
+                (cc-switch project-profile sync is DECOUPLED by default; set
+                MAW_CC_PROJECT_SYNC=1 to temporarily re-enable)
   plan          Probe the project and generate a workflow plan + per-agent configs
   models        Show capability-aware model/provider selection per role
   config        Print the effective .maw/config.yaml
@@ -113,6 +118,8 @@ Commands:
   acquire       Acquire a concurrency/cost slot for an agent run
   release       Release an acquired slot
   add-agent     Dynamically add an agent/role to the current plan
+  approve-model Mark a price-gated role's expensive model as human-approved
+                (unblocks guard/acquire for that role; sticky across re-plans)
   remove-agent  Dynamically remove an agent/role
   run           Emit execution guidance for the current plan (host-driven)
   review        Invoke a Codex review via codex-plugin-cc (when available)
@@ -135,7 +142,14 @@ Flags (common):
   --per-agent <usd>    per-agent cost-rate limit USD/min (default 5)
   --total <usd>        total workflow cost-rate limit USD/min (default 10)
   --concurrency <n>    max concurrent agents (default 16)
+  --allow-pricey       record human approval for every price-gated role and
+                       continue (same effect as "maw approve-model --role X --yes")
   --self-test          run planner against the maw repo itself (smoke)
+
+Price gate (mandatory policy): assigning a model with Input > $2/1M Tokens or
+Output > $10/1M Tokens pauses the related work and reports to a human first.
+plan/init/add-agent exit 3 when paused; guard/acquire deny gated roles until
+"maw approve-model --role <role> --yes" or a cheaper model is configured.
 `);
 }
 
@@ -166,9 +180,31 @@ function cmdInit(f, flags) {
   out(`  host: ${ctx.host.app} (caps: ${hostCapabilities(ctx.host).join(", ") || "none"}); supported: Claude Code + Codex + Pi`);
   out(`  cc-switch: ${ctx.cc.dbPath ? "ok (read-only)" : "not found"}; user: ${user}`);
   out(`  primary architecture: ${plan.primary}`);
+  if (ctx.cc.dbPath && !projectSyncEnabled()) {
+    out(`  cc-switch project: DECOUPLED — profiles sync disabled by policy; MAW manages project-level agent/subagent model configs in .maw/; cc-switch is a read-only provider-config source`);
+  }
 
-  // 1) cc-switch project profile (NEW; never touches 默认 profiles)
-  if (ctx.cc.dbPath) {
+  // 0b) PRICE GATE — pause + report to a human BEFORE anything else when a
+  //     model assignment is expensive (Input > $2/1M or Output > $10/1M).
+  const gateBlocks = (plan.priceGate?.blockedRoles ?? []).map((b) => ({ role: b.role, model: b.model, provider: b.provider, check: b.gate }));
+  if (gateBlocks.length) {
+    out("");
+    out(priceGateReport(gateBlocks));
+    if (!flags["allow-pricey"]) {
+      out(`maw init PAUSED by the price gate (exit 3) — resolve the roles above (\`maw approve-model --role <role> --yes\` or edit .maw/agents/*.json to a cheaper model), then re-run \`maw init -u ${user}\`.`, false);
+      process.exitCode = 3;
+      return;
+    }
+    for (const b of gateBlocks) approveRoleModel(project, b.role, { yes: true });
+    out(`  price gate: ${gateBlocks.length} expensive assignment(s) approved via --allow-pricey (recorded in .maw/agents/*.json)`);
+  }
+
+  // 1) cc-switch project profile — DECOUPLED by default (2026-08-12): cc-switch's
+  //    "project" feature (profiles) is incomplete, so MAW manages project-level
+  //    agent/subagent model configs itself (.maw/agents/*.json) and only syncs
+  //    provider configs read-only. The profile code is kept but disabled;
+  //    MAW_CC_PROJECT_SYNC=1 temporarily re-enables the legacy create/reuse.
+  if (ctx.cc.dbPath && projectSyncEnabled()) {
     const profName = `MAW: ${path.basename(project)}${user ? ` (${user})` : ""}`;
     const pr = createProjectProfile({ name: profName, user, hostApp: ctx.host.app, dbPath: ctx.cc.dbPath });
     if (pr.ok) {
@@ -243,7 +279,11 @@ function cmdModels(f, flags) {
     const at = baseRole(role) === "reviewer" && appType !== "codex" ? appType : appType;
     const sel = selectModelForRole({ role, appType: at, cc: ctx.cc, quota: ctx.cc.quota, preferCheap: /-2$/.test(role) });
     if (!sel) { out(`  ${role}: no available candidates for app_type "${at}"`); continue; }
-    out(`  ${role} → ${sel.providerName} / ${sel.model} (fit ${sel.capabilityScore}/100${sel.quota?.remainingTodayUsd != null ? `, quota today $${sel.quota.remainingTodayUsd}` : ", quota unknown"}${sel.price ? `, $${sel.price.input_per_m}/$${sel.price.output_per_m} per M${sel.price.estimated ? " est." : ""}` : ""})`);
+    const gate = checkPriceGate(sel.model, resolvePrice(sel.model, {
+      modelPricing: ctx.cc.modelPricing,
+      costMultiplier: Number(ctx.cc.currentProviders?.[at]?.cost_multiplier ?? 1),
+    }));
+    out(`  ${role} → ${sel.providerName} / ${sel.model} (fit ${sel.capabilityScore}/100${sel.quota?.remainingTodayUsd != null ? `, quota today $${sel.quota.remainingTodayUsd}` : ", quota unknown"}${sel.price ? `, $${sel.price.input_per_m}/$${sel.price.output_per_m} per M${sel.price.estimated ? " est." : ""}` : ""})${gate.blocked ? " ⚠ PRICE GATE (would pause: " + gate.reason + ")" : ""}`);
     for (const al of sel.alternates) out(`    alt: ${al.providerName} / ${al.model} (fit ${al.capabilityScore})`);
   }
 }
@@ -304,6 +344,22 @@ function cmdPlan(f, flags) {
 
   const plan = planWorkflow(signals, { host: ctx.host, ccSwitch: ctx.cc, cost: costFrom(flags) });
   const gen = generateConfigs(project, plan, ctx.cc);
+
+  // Price gate (HITL): a model assignment with Input > $2/1M or Output >
+  // $10/1M pauses the plan and reports to a human. --allow-pricey records the
+  // human approval (same effect as `maw approve-model`) and continues.
+  const gateBlocks = (plan.priceGate?.blockedRoles ?? []).map((b) => ({ role: b.role, model: b.model, provider: b.provider, check: b.gate }));
+  if (gateBlocks.length) {
+    out("");
+    out(priceGateReport(gateBlocks));
+    if (!flags["allow-pricey"]) {
+      out(`maw plan PAUSED by the price gate (exit 3) — resolve via \`maw approve-model --role <role> --yes\`, a cheaper model in .maw/agents/*.json, or re-run with --allow-pricey.`, false);
+      process.exitCode = 3;
+      return;
+    }
+    for (const b of gateBlocks) approveRoleModel(project, b.role, { yes: true });
+    out(`price gate: ${gateBlocks.length} expensive assignment(s) approved via --allow-pricey (recorded in .maw/agents/*.json)`);
+  }
   const outDir = flags.out ? path.resolve(flags.out) : path.join(project, ".maw");
   if (flags.out) {
     const g = generateConfigs(project, plan, ctx.cc, { outDir: flags.out });
@@ -348,6 +404,14 @@ function cmdGuard(f, flags) {
   const ctx = loadCtx({ dbPath: flags.db });
   const cfg = costCfgFrom(flags, ctx);
   const stateDir = path.join(project, ".maw", "runtime");
+  // Price gate first (most restrictive): paused roles deny until a human acts.
+  const blocks = blockedRolesFromAgents(project);
+  if (blocks.length) {
+    out(`DENY spawn: price gate blocks ${blocks.length} role(s) (${blocks.map((b) => b.role).join(", ")}) — paused for human review`, false);
+    out(priceGateReport(blocks.map((b) => ({ role: b.role, model: b.model, provider: null, check: { ...b.gate, model: b.model } }))), false);
+    process.exitCode = 3;
+    return;
+  }
   const g = costGuard(stateDir, cfg);
   // guard is a status query: exit 0 in both cases so callers parse output.
   out(g.allowed ? `ALLOW spawn: ${g.remainingConcurrency} slots free, rate ${g.totalRatePerMin}/${g.totalLimitUsdPerMin} USD/min` : `DENY spawn: ${g.reason} (rate ${g.totalRatePerMin}/${g.totalLimitUsdPerMin}, ${g.remainingConcurrency}/${g.maxConcurrency} free)`);
@@ -360,7 +424,17 @@ function cmdAcquire(f, flags) {
   const cfg = costCfgFrom(flags, ctx);
   const stateDir = path.join(project, ".maw", "runtime");
   const agentId = flags.id || `agent-${Math.random().toString(36).slice(2, 8)}`;
-  const r = acquire(stateDir, cfg, { agentId, role: flags.role || "worker", appType: flags.app });
+  const role = flags.role || "worker";
+  // Price gate: a role whose expensive model is not yet human-approved cannot run.
+  const blocks = blockedRolesFromAgents(project).filter((b) => !flags.role || b.role === role);
+  if (blocks.length) {
+    const b = blocks[0];
+    const r = { allowed: false, priceGate: true, reason: `PRICE GATE: role "${b.role}" is paused for human review (expensive model ${b.model}) — approve with \`maw approve-model --role ${b.role} --yes\` or configure a cheaper model`, running: 0, ratePerMin: 0, remainingConcurrency: 0 };
+    out(JSON.stringify(r));
+    process.exitCode = 3;
+    return;
+  }
+  const r = acquire(stateDir, cfg, { agentId, role, appType: flags.app });
   out(JSON.stringify(r));
 }
 function cmdRelease(f, flags) {
@@ -368,6 +442,49 @@ function cmdRelease(f, flags) {
   const stateDir = path.join(project, ".maw", "runtime");
   const r = release(stateDir, { agentId: flags.id });
   out(JSON.stringify(r));
+}
+
+// --- approve-model (price gate HITL) ---
+function cmdApproveModel(f, flags) {
+  const project = flags.project ? path.resolve(flags.project) : process.cwd();
+  const role = flags.role;
+  if (!role) { out(`approve-model requires --role <role>`, false); return; }
+  const yes = flags.yes === true || flags.yes === "true" || flags.yes === "1";
+  if (!yes) { out(`approve-model requires --yes to confirm the human decision (expensive model for role "${role}")`, false); return; }
+  const r = approveRoleModel(project, role, { yes: true });
+  if (!r.ok) { out(`approve-model: ${r.error}`, false); return; }
+  out(`approved: role "${role}" model ${r.model} (in $${r.price_gate.inputPerM ?? "?"}/M, out $${r.price_gate.outputPerM ?? "?"}/M) — guard/acquire will now allow this role`);
+}
+
+/**
+ * Price-gate helpers.
+ * - `blockedRolesFromAgents`: scan .maw/agents/*.json for paused roles.
+ * - `approveRoleModel`: record a human approval (sticky across re-plans).
+ */
+function blockedRolesFromAgents(project) {
+  const out = [];
+  const dir = path.join(project, ".maw", "agents");
+  let entries = [];
+  try { entries = fs.readdirSync(dir); } catch { return out; }
+  for (const f of entries) {
+    if (!f.endsWith(".json")) continue;
+    const j = readJson(path.join(dir, f), null);
+    if (!j) continue;
+    const g = j.price_gate;
+    if (g && g.blocked && !g.approved) out.push({ role: j.role ?? f.slice(0, -5), model: j.model ?? null, gate: g });
+  }
+  return out;
+}
+
+function approveRoleModel(project, role, opts = {}) {
+  const p = path.join(project, ".maw", "agents", slug(role) + ".json");
+  const j = exists(p) ? readJson(p, null) : null;
+  if (!j) return { ok: false, error: `no agent json for role "${role}" (run maw plan first)` };
+  if (!j.price_gate) return { ok: false, error: `role "${role}" is not price-gated; nothing to approve` };
+  if (opts.yes !== true) return { ok: false, error: "pass --yes to confirm" };
+  j.price_gate = { ...j.price_gate, approved: true };
+  writeJson(p, j);
+  return { ok: true, role, model: j.model, price_gate: j.price_gate };
 }
 
 // --- add/remove agent ---
@@ -378,19 +495,40 @@ function cmdAddAgent(f, flags) {
   const plan = readJson(wfPath);
   const role = flags.role || `agent-${plan.agents.length + 1}`;
   if (plan.agents.some((a) => a.role === role)) { out(`role ${role} already exists`, false); return; }
+  const ctx = loadCtx({ dbPath: flags.db });
+  const model = flags.model || "claude-sonnet-5";
+  const appType = flags.app || "claude";
+  // Price gate: an explicit expensive model pauses the add (report to human).
+  const price = resolvePrice(model, {
+    modelPricing: ctx.cc.modelPricing,
+    costMultiplier: Number(ctx.cc.currentProviders?.[appType]?.cost_multiplier ?? 1),
+  });
+  const gate = checkPriceGate(model, price);
+  if (gate.blocked && !flags["allow-pricey"]) {
+    out(priceGateReport([{ role, model, provider: ctx.cc.currentProviders?.[appType]?.name ?? null, check: gate }]), false);
+    out(`add-agent PAUSED by the price gate (exit 3) — re-run with --allow-pricey to approve, or pick a cheaper --model.`, false);
+    process.exitCode = 3;
+    return;
+  }
   plan.agents.push({
     role,
     agent: flags.agent || "claude-code",
-    model: flags.model || "claude-sonnet-5",
-    appType: flags.app || "claude",
+    model,
+    appType,
     costRateLimitUsdPerMin: Number(flags["per-agent"]) || plan.cost.perAgentLimitUsdPerMin,
     concurrency: Number(flags.concurrency) || 1,
     tools: (flags.tools || "Read,Edit,Bash").split(","),
     reviewRequired: flags.review === true || flags.review === "true",
     task: flags.task || "Contributor agent added dynamically.",
   });
-  const ctx = loadCtx({ dbPath: flags.db });
+  const spec = plan.agents[plan.agents.length - 1];
+  spec.modelChoice = { provider: null, providerId: null, capabilityScore: null, quota: null, price, priceGate: gate, reasons: [], estimated: true, considered: 0, alternates: [] };
   const gen = generateConfigs(project, plan, ctx.cc);
+  if (gate.blocked) {
+    // --allow-pricey (or the refused path above) implies human approval:
+    // record it so guard/acquire release this role.
+    approveRoleModel(project, role, { yes: true });
+  }
   out(`added agent ${role}; regenerated ${gen.files.length} files`);
 }
 function cmdRemoveAgent(f, flags) {

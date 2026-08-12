@@ -1,0 +1,51 @@
+name: trellis-update-tracker
+
+# Auto-track updates of @mindfoldhq/trellis (the workflow system MAW chains
+# after `maw init`, invoked via `npx --yes @mindfoldhq/trellis@latest`).
+#
+# Behavior (see .github/scripts/trellis-tracker.mjs + src/trellistracker.js):
+#   - schedule: weekly (Monday 02:00 UTC) + manual dispatch
+#   - new npm version  -> opens an "[trellis-tracker]" issue + advances state
+#   - upstream 404     -> ONE notice issue, tracking paused, workflow SUCCEEDS
+#     (the "trellis deleted its repo" exception); resumes automatically later
+#   - state file .github/trellis-tracker/state.json is committed back to main
+
+"on":
+  schedule:
+    - cron: "0 2 * * 1"
+  workflow_dispatch: {}
+
+# Least privilege for THIS workflow only: write the state file back + open
+# issues. (The CI workflow keeps its read-only default.)
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  track:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+
+      - name: Check for trellis updates
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node .github/scripts/trellis-tracker.mjs
+
+      - name: Commit tracker state
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/trellis-tracker/state.json
+          if git diff --cached --quiet; then
+            echo "no state change"
+          else
+            git commit -m "chore(trellis-tracker): update tracker state"
+            git push
+          fi

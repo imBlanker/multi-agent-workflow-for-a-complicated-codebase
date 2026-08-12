@@ -93,7 +93,9 @@ Common types:
 
 The fork / branch / issue / PR rules MAW follows are written down in [`docs/GOVERNANCE.md`](./docs/GOVERNANCE.md) — read it before your first PR. Review routing is defined in [`.github/CODEOWNERS`](./.github/CODEOWNERS).
 
-**cc-switch is read-only by default.** Code changes must never `UPDATE`/`DELETE` existing cc-switch rows (providers, skills, mcp_servers, prompts, model_pricing) and must never touch any profile whose name contains `默认`. The only allowed writes are a NEW project profile (`createProjectProfile`) and the opt-in routing carve-out on `proxy_config` for claude/codex (`applyRouting`). Both are hard-guarded in `src/ccswitch.js` (`guardSql`) — do not weaken that guard.
+**cc-switch is read-only by default; the project feature is DECOUPLED.** Code changes must never `UPDATE`/`DELETE` existing cc-switch rows (providers, skills, mcp_servers, prompts, model_pricing) and must never touch any profile whose name contains `默认`. Since 2026-08-12, MAW's project functionality is **decoupled** from cc-switch's incomplete `profiles` feature: `createProjectProfile`/`readProfiles` are kept (with tests) but disabled by default — `projectSyncEnabled()` gates on `MAW_CC_PROJECT_SYNC`; do not re-enable in normal flows. The only active writes are the opt-in routing carve-out on `proxy_config` for claude/codex (`applyRouting`) and, when re-enabled, a NEW profile row only. Both are hard-guarded in `src/ccswitch.js` (`guardSql`) — do not weaken that guard.
+
+**Model price gate is mandatory.** Assigning a model with Input > $2/1M Tokens or Output > $10/1M Tokens must PAUSE the work and report to a human first (`src/pricegate.js` `PRICE_GATE_THRESHOLDS` is the single source of truth; planner/configgen/CLI/guard/acquire all enforce it). Never add a code path that silently assigns an expensive model without the gate.
 
 ## Licensing
 

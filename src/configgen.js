@@ -41,6 +41,7 @@ export function generateConfigs(projectRoot, plan, ccSwitch = {}, opts = {}) {
 
   // config.yaml — global knobs, all editable
   const costSources = plan.cost.sources.length ? plan.cost.sources : ["cc-switch:unavailable"];
+  const priceGate = plan.priceGate ?? { thresholds: { inputPerM: 2, outputPerM: 10 }, blockedRoles: [] };
   const configYaml = toYaml({
     workflow: { id: plan.name, primary: plan.primary, selected: plan.selected, host_app: plan.hostApp },
     cost: {
@@ -49,6 +50,11 @@ export function generateConfigs(projectRoot, plan, ccSwitch = {}, opts = {}) {
       max_concurrency: plan.cost.maxConcurrency,
       window_seconds: 3600,
       pricing_sources: costSources,
+    },
+    price_gate: {
+      thresholds: { input_per_m: priceGate.thresholds.inputPerM, output_per_m: priceGate.thresholds.outputPerM },
+      blocked_roles: (priceGate.blockedRoles ?? []).map((b) => b.role),
+      policy: "Assigning a model with Input > $2/1M or Output > $10/1M pauses the work and reports to a human; approve with `maw approve-model --role X --yes` or pick a cheaper model.",
     },
     codex: { enabled: plan.codex.enabled, when: plan.codex.when, review_scopes: plan.codex.reviewScopes },
     models: Object.fromEntries(plan.agents.map((a) => [a.role, { model: a.model, app_type: a.appType }])),
@@ -69,12 +75,26 @@ export function generateConfigs(projectRoot, plan, ccSwitch = {}, opts = {}) {
     if (!price) warnings.push(`No price found for ${a.role} model ${a.model}; tagged as unknown. Verify on Artificial Analysis/OpenRouter.`);
 
     // machine config
+    const gate = a.modelChoice?.priceGate ?? null;
+    // sticky human approval: keep `approved:true` across `maw plan` re-runs
+    let stickyApproved = false;
+    try {
+      const prev = JSON.parse(fs.readFileSync(`${base}.json`, "utf8"));
+      stickyApproved = !!prev?.price_gate?.approved;
+    } catch {}
+    const priceGateBlock = gate && (gate.blocked || stickyApproved)
+      ? { blocked: !!gate.blocked, approved: stickyApproved, thresholds: { input_per_m: gate.thresholdIn, output_per_m: gate.thresholdOut }, price: { input_per_m: gate.inputPerM, output_per_m: gate.outputPerM }, estimated: !!gate.estimated, model: a.model, reason: gate.reason }
+      : null;
+    if (gate?.blocked) {
+      warnings.push(`PRICE GATE: role ${a.role} model ${a.model} is expensive (${gate.reason}) — PAUSED until a human approves (maw approve-model --role ${a.role} --yes) or a cheaper model is configured.`);
+    }
     files.push(writeJson(`${base}.json`, {
       role: a.role,
       agent: a.agent,
       app_type: a.appType,
       model: a.model,
       model_selection: a.modelChoice ?? null,
+      price_gate: priceGateBlock,
       cost_rate_limit_usd_per_min: a.costRateLimitUsdPerMin,
       concurrency: a.concurrency,
       tools: a.tools,
@@ -134,8 +154,21 @@ function agentMarkdown(a, price, plan) {
   const priceLine = price
     ? `**Price** (${price.estimated ? "estimated" : "exact"}): ${price.input_per_m}/M in, ${price.output_per_m}/M out — source: \`${price.source}\`${price.notes ? `\n  - ${price.notes.join("\n  - ")}` : ""}`
     : `**Price**: unknown (not in cc-switch or fallback). Treat as estimate.`;
-  return `# Agent: ${a.role}
+  const gate = a.modelChoice?.priceGate ?? null;
+  const gateBlock = gate?.blocked
+    ? `
+## ⚠ PRICE GATE — PAUSED (human decision required)
 
+This agent's model is expensive and its assignment is **paused**: the work will not be
+released until a human acts. Thresholds: Input > $${gate.thresholdIn}/1M Tokens OR Output > $${gate.thresholdOut}/1M Tokens.
+
+- **Model**: \`${a.model}\` — ${gate.reason}${gate.estimated ? " (estimated price)" : ""}
+- **Continue**: (a) edit this file's machine config (\`.maw/agents/${slug(a.role)}.json\`) to use a cheaper
+  model, then re-run \`maw plan\`; or (b) explicitly approve: \`maw approve-model --role ${a.role} --yes\`.
+`
+    : "";
+  return `# Agent: ${a.role}
+${gateBlock}
 > Part of workflow \`${plan.name}\` (primary: ${plan.primary}). Edit freely; the runner re-reads this file at execute time.
 
 ## Identity
@@ -289,6 +322,21 @@ function planMarkdown(plan, ccSwitch) {
   lines.push(`- Total workflow limit: $${plan.cost.totalLimitUsdPerMin}/min (independent constraint; enforced via concurrency + rate gating)`);
   lines.push(`- Max concurrency: ${plan.cost.maxConcurrency}`);
   lines.push(`- Pricing sources: ${plan.cost.sources.join(", ") || "cc-switch unavailable"}`);
+  const gateBlocks = plan.priceGate?.blockedRoles ?? [];
+  if (gateBlocks.length) {
+    lines.push("");
+    lines.push("## ⚠ Price gate — PAUSED roles (human decision required)");
+    lines.push(`Thresholds: Input > $${plan.priceGate.thresholds.inputPerM}/1M Tokens OR Output > $${plan.priceGate.thresholds.outputPerM}/1M Tokens. The roles below were assigned an expensive model and are **paused** until a human approves or configures a cheaper model:`);
+    lines.push("");
+    lines.push("| Role | Provider | Model | Price (in/out per M) |");
+    lines.push("|---|---|---|---|");
+    for (const b of gateBlocks) {
+      const p = b.price ? `$${b.price.input_per_m}/$${b.price.output_per_m}` : (b.gate ? `$${b.gate.inputPerM ?? "?"}/$${b.gate.outputPerM ?? "?"}` : "unknown");
+      lines.push(`| ${b.role} | ${b.provider ?? "(current)"} | \`${b.model}\` | ${p} |`);
+    }
+    lines.push("");
+    lines.push("Continue with `maw approve-model --role <role> --yes` (per role) or edit `.maw/agents/<role>.json` to a cheaper model and re-run `maw plan`.");
+  }
   lines.push("");
   lines.push("## Dynamic mutation");
   lines.push("- Add an agent: `maw add-agent --role NAME --model ID --app claude` (or `--app codex` / `--app pi`)");

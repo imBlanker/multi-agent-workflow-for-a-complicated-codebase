@@ -3,8 +3,19 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { readProfiles, createProjectProfile, readRouting, routingPolicy, applyRouting } from "../src/ccswitch.js";
+import { readProfiles, createProjectProfile, readRouting, routingPolicy, applyRouting, projectSyncEnabled } from "../src/ccswitch.js";
 import { makeFixtureDb } from "./fixtures/make-db.mjs";
+
+// cc-switch "project" functionality is DECOUPLED by default (2026-08-12):
+// profiles are read/written only when MAW_CC_PROJECT_SYNC=1 is set. The
+// legacy profile tests below run with the env on; dedicated tests assert the
+// disabled-by-default behavior.
+const OLD_ENV = process.env.MAW_CC_PROJECT_SYNC;
+process.env.MAW_CC_PROJECT_SYNC = "1";
+test.after(() => {
+  if (OLD_ENV === undefined) delete process.env.MAW_CC_PROJECT_SYNC;
+  else process.env.MAW_CC_PROJECT_SYNC = OLD_ENV;
+});
 
 // non-OAuth fixture: claude routing OFF + failover OFF (violation), codex OFF (violation, should be ON)
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "maw-pol-"));
@@ -50,6 +61,40 @@ test("createProjectProfile REFUSES a name containing 默认", () => {
   const r = createProjectProfile({ name: "Claude Code 默认", user: "x", dbPath });
   assert.equal(r.ok, false);
   assert.match(r.error, /默认/);
+});
+
+test("projectSyncEnabled() defaults to FALSE (decoupled) and honors MAW_CC_PROJECT_SYNC", () => {
+  const old = process.env.MAW_CC_PROJECT_SYNC;
+  try {
+    delete process.env.MAW_CC_PROJECT_SYNC;
+    assert.equal(projectSyncEnabled(), false);
+    for (const v of ["1", "true", "yes", "TRUE", "Yes"]) {
+      process.env.MAW_CC_PROJECT_SYNC = v;
+      assert.equal(projectSyncEnabled(), true, v);
+    }
+    process.env.MAW_CC_PROJECT_SYNC = "0";
+    assert.equal(projectSyncEnabled(), false);
+  } finally {
+    if (old === undefined) delete process.env.MAW_CC_PROJECT_SYNC;
+    else process.env.MAW_CC_PROJECT_SYNC = old;
+  }
+});
+
+test("createProjectProfile is DISABLED by default (decoupled): refuses, writes nothing", () => {
+  const old = process.env.MAW_CC_PROJECT_SYNC;
+  try {
+    delete process.env.MAW_CC_PROJECT_SYNC;
+    const before = readProfiles({ dbPath }).profiles.map((p) => p.name);
+    const r = createProjectProfile({ name: "MAW: decoupled-proj", user: "alice", dbPath });
+    assert.equal(r.ok, false);
+    assert.equal(r.disabled, true);
+    assert.match(r.error, /decoupled/i);
+    const after = readProfiles({ dbPath }).profiles.map((p) => p.name);
+    assert.deepEqual(after, before, "no profile row must be written while decoupled");
+  } finally {
+    if (old === undefined) delete process.env.MAW_CC_PROJECT_SYNC;
+    else process.env.MAW_CC_PROJECT_SYNC = old;
+  }
 });
 
 test("routingPolicy flags claude off + codex off as violations (no OAuth)", () => {
