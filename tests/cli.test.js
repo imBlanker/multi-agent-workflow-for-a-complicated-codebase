@@ -24,7 +24,9 @@ function run(args, opts = {}) {
   return execFileSync("node", [BIN, ...args], {
     cwd: project,
     encoding: "utf8",
-    env: { ...process.env, CC_SWITCH_DB: dbPath, HOME: os.homedir(), ...(envOver ?? {}) },
+    // DSH_HOME points at a nonexistent dir so tests never depend on a real
+    // ~/.dsh (the dsh-specific tests override it with a fixture)
+    env: { ...process.env, CC_SWITCH_DB: dbPath, HOME: os.homedir(), DSH_HOME: path.join(tmp, "no-dsh"), ...(envOver ?? {}) },
     maxBuffer: 8 * 1024 * 1024,
     ...rest,
   });
@@ -180,6 +182,38 @@ test("maw routing reports violations; --fix applies the carve-out", () => {
   // fixture starts non-compliant (or already fixed by the init test above)
   const fixed = run(["routing", "--fix"]);
   assert.match(fixed, /applied:|status: compliant/);
+});
+
+test("maw models --app dsh lists fixture settings.yaml models with the not-managed note", () => {
+  const dshHome = fs.mkdtempSync(path.join(os.tmpdir(), "maw-cli-dsh-"));
+  fs.writeFileSync(path.join(dshHome, "settings.yaml"), [
+    "llm-pi-ai:",
+    "  providers:",
+    "    fixture-gw:",
+    "      baseURL: https://gw.example/v1",
+    "      apiKeyEnv: FIXTURE_GW_KEY",
+    "      models:",
+    "        - id: glm-5.2",
+    "          name: GLM-5.2",
+    "        - id: fixture-only-model",
+  ].join("\n"));
+  const out = run(["models", "--app", "dsh"], { env: { DSH_HOME: dshHome } });
+  assert.match(out, /note: dsh models come from \$DSH_HOME\/settings\.yaml/);
+  assert.match(out, /Available dsh provider models \(2\)/);
+  assert.match(out, /fixture-gw \(current\): glm-5\.2/);
+  assert.match(out, /fixture-gw \(current\): fixture-only-model/);
+});
+
+test("maw routing on a dsh host prints N/A and writes nothing", () => {
+  const dshHome = fs.mkdtempSync(path.join(os.tmpdir(), "maw-cli-dsh2-"));
+  fs.writeFileSync(path.join(dshHome, "settings.yaml"), "llm-pi-ai:\n  providers: {}\n");
+  const out = run(["routing"], { env: { MAW_HOST: "dsh", DSH_HOME: dshHome } });
+  assert.match(out, /N\/A — dsh is not cc-switch-managed/);
+});
+
+test("maw help lists dsh in the routing policy line", () => {
+  const out = run(["help"]);
+  assert.match(out, /pi\/dsh N\/A/);
 });
 
 test.after(() => { try { fs.rmSync(tmp, { recursive: true, force: true }); } catch {} });

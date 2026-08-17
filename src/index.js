@@ -20,6 +20,7 @@ import { snapshotCcSwitch } from "./backup.js";
 import { classifyModel, selectModelForRole, candidatesForAppType, baseRole } from "./modelcap.js";
 import { resolvePrice } from "./pricing.js";
 import { checkPriceGate, priceGateReport } from "./pricegate.js";
+import { readDshAsCc } from "./dshprovider.js";
 
 /**
  * Load cc-switch + host context once.
@@ -30,6 +31,21 @@ function loadCtx(opts = {}) {
   const host = detectHost();
   const cc = readCcSwitch(opts.dbPath ? { dbPath: opts.dbPath } : {});
   if (cc.dbPath) cc.quota = readProviderQuota({ dbPath: cc.dbPath });
+  // dsh merge (dsh is not cc-switch-managed): when a dsh home is detected,
+  // its settings.yaml providers join the candidate pool under app_type
+  // "dsh" and the cc-switch-synced model-pricing.json prices fill pricing
+  // gaps. Existing claude/codex rows and prices are never altered.
+  if (host.dshHome) {
+    const dsh = readDshAsCc({ dshHome: host.dshHome, ccSwitch: { modelPricing: cc.modelPricing } });
+    if (dsh) {
+      cc.allProviders = [...(cc.allProviders || []), ...dsh.allProviders];
+      if (dsh.currentProviders.dsh) cc.currentProviders.dsh = dsh.currentProviders.dsh;
+      cc.appTypes = [...new Set([...(cc.appTypes || []), "dsh"])];
+      const merged = { ...(cc.modelPricing || {}) };
+      for (const [k, v] of Object.entries(dsh.modelPricing)) if (!merged[k]) merged[k] = v;
+      cc.modelPricing = merged;
+    }
+  }
   return { host, cc };
 }
 
@@ -125,7 +141,7 @@ Commands:
   review        Invoke a Codex review via codex-plugin-cc (when available)
   graph         Print the workflow graph (nodes/edges) + topo batches
   routing       Show the cc-switch local-routing policy (claude on+failover;
-                codex on-except-OAuth; pi N/A). Use --fix to apply.
+                codex on-except-OAuth; pi/dsh N/A). Use --fix to apply.
   install       Install the MAW plugin + skills into the host agent software
   uninstall     Remove the MAW plugin + skills
   update        Reinstall (overwrites templates, keeps user edits)
@@ -177,7 +193,7 @@ function cmdInit(f, flags) {
   );
   generateConfigs(project, plan, ctx.cc);
   writeText(path.join(project, ".maw", "AGENTS.md"), AGENTS_INIT);
-  out(`  host: ${ctx.host.app} (caps: ${hostCapabilities(ctx.host).join(", ") || "none"}); supported: Claude Code + Codex + Pi`);
+  out(`  host: ${ctx.host.app} (caps: ${hostCapabilities(ctx.host).join(", ") || "none"}); supported: Claude Code + Codex + Pi + DeepSeek Harness (dsh)`);
   out(`  cc-switch: ${ctx.cc.dbPath ? "ok (read-only)" : "not found"}; user: ${user}`);
   out(`  primary architecture: ${plan.primary}`);
   if (ctx.cc.dbPath && !projectSyncEnabled()) {
@@ -216,9 +232,11 @@ function cmdInit(f, flags) {
   }
 
   // 2) routing policy check (read-only; --fix-routing applies the carve-out).
-  //    pi is NOT cc-switch-managed → routing is N/A for a pi host.
+  //    pi/dsh are NOT cc-switch-managed → routing is N/A for those hosts.
   if (ctx.host.app === "pi") {
     out(`  routing policy: N/A — pi is not cc-switch-managed (providers/MCP/skills live in ~/.pi/agent/)`);
+  } else if (ctx.host.app === "dsh") {
+    out(`  routing policy: N/A — dsh is not cc-switch-managed (providers/MCP/skills live in $DSH_HOME; models via dsh web → Settings → Models)`);
   } else if (ctx.cc.dbPath) {
     const routing = readRouting({ dbPath: ctx.cc.dbPath });
     const pol = routingPolicy(routing);
@@ -262,10 +280,11 @@ function capLine(caps) {
 }
 function cmdModels(f, flags) {
   const ctx = loadCtx({ dbPath: flags.db });
-  if (!ctx.cc.dbPath) { out(`cc-switch database not found`, false); return; }
+  if (!ctx.cc.dbPath && !(ctx.cc.allProviders || []).length) { out(`cc-switch database not found`, false); return; }
   const appType = flags.app || "claude";
   const cands = candidatesForAppType(ctx.cc, appType);
   if (appType === "pi") out(`  note: pi models come from ~/.pi/agent/models.json (estimated; pi is not cc-switch-managed)`);
+  if (appType === "dsh") out(`  note: dsh models come from $DSH_HOME/settings.yaml (not cc-switch-managed); prices from ~/.cc-switch/model-pricing.json where model ids match`);
   out(`Model capability view — curated catalog, estimated (dimensions mirror the artificialanalysis.ai model leaderboards: intelligence / coding / math / agentic / multimodal-vision / image / image-edit / video / tts / stt)`);
   out(`Available ${appType} provider models (${cands.length}):`);
   for (const c of cands) {
@@ -291,6 +310,10 @@ function cmdModels(f, flags) {
 // --- routing ---
 function cmdRouting(f, flags) {
   const ctx = loadCtx({ dbPath: flags.db });
+  if (ctx.host.app === "dsh") {
+    out(`routing policy: N/A — dsh is not cc-switch-managed (providers/MCP/skills live in $DSH_HOME; nothing to route or fix)`);
+    return;
+  }
   if (!ctx.cc.dbPath) { out(`cc-switch database not found`, false); return; }
   const routing = readRouting({ dbPath: ctx.cc.dbPath });
   const pol = routingPolicy(routing);
@@ -299,6 +322,7 @@ function cmdRouting(f, flags) {
   out(`  claude: routing ${routing.claude?.enabled ? "on" : "off"}, failover ${routing.claude?.autoFailoverEnabled ? "on" : "off"} (queue: ${pol.claudeFailoverProviders.join(", ") || "none"})`);
   out(`  codex:  routing ${routing.codex?.enabled ? "on" : "off"} (queue: ${pol.codexFailoverProviders.join(", ") || "none"})`);
   out(`  pi:     N/A (not cc-switch-managed; config lives in ~/.pi/agent/)`);
+  out(`  dsh:    N/A (not cc-switch-managed; config lives in $DSH_HOME/settings.yaml)`);
   if (pol.compliant) { out(`  status: compliant ✓`); return; }
   out(`  status: NOT compliant — ${pol.violations.length} violation(s):`);
   for (const v of pol.violations) out(`    - ${v.app}.${v.field}: expected ${v.expected}, actual ${v.actual}${v.reason ? ` — ${v.reason}` : ""}`);
@@ -565,6 +589,11 @@ function cmdRun(f, flags) {
   if (notes.length) { out(`\nnotes:`); for (const n of notes) out(`  - ${n}`); }
   out(`\nBefore each spawn, run: maw guard${flags.project ? ` --project ${flags.project}` : ""}`);
   out(`Acquire/release slots with: maw acquire --id <id>; maw release --id <id>`);
+  if (plan.hostApp === "dsh") {
+    out(`\ndsh invocation: run one orchestrator session via \`dsh web\` (workspace = ${project}) or`);
+    out(`\`dsh --profile headless "<task>"\`; spawn workers with the subagent tool using`);
+    out(`.maw/agents/<role>.md as the payload (see \"How to invoke\" in each agent file).`);
+  }
 }
 
 // --- review ---
