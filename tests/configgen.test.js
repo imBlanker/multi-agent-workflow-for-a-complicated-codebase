@@ -127,3 +127,28 @@ test("pi materialization prunes stale maw-* pi files but never trellis-*", () =>
   for (const a of small.agents) assert.ok(files.includes(`maw-${a.role}.md`), `expected maw-${a.role}.md`);
   fs.rmSync(proj, { recursive: true, force: true });
 });
+
+test("dsh host: portable specs are the payload, nothing materialized under .dsh/", () => {
+  const proj = mkTmpProject();
+  const dshHost = { ...host, app: "dsh" };
+  const plan = planWorkflow({ files: 30, parallelizableSubtasks: 4, risk: "high", contextNeed: "large", valuePerRun: "high", taskType: "coding" }, { host: dshHost, ccSwitch: cc });
+  const gen = generateConfigs(proj, plan, cc);
+  assert.equal(plan.hostApp, "dsh");
+  // no dsh-native surface — configgen must not write anything under .dsh/
+  assert.ok(!gen.files.some((f) => f.includes(path.join(proj, ".dsh"))), "no files may be written under .dsh/");
+  assert.ok(!exists(path.join(proj, ".dsh")) || fs.readdirSync(path.join(proj, ".dsh")).length === 0, "no .dsh materialization");
+  // agent markdown points at the prompt-driven subagent tool + portable spec + guards
+  const impl = fs.readFileSync(path.join(proj, ".maw", "agents", "implementer.md"), "utf8");
+  assert.match(impl, /prompt-driven subagent tool/);
+  assert.match(impl, new RegExp("\\.maw/agents/implementer\\.md"));
+  assert.match(impl, /maw acquire --role implementer/);
+  assert.match(impl, /model-pricing\.json/);
+  // machine config carries app_type dsh
+  const spec = readJson(path.join(proj, ".maw", "agents", "implementer.json"));
+  assert.equal(spec.app_type, "dsh");
+  // plan.md gains the dsh host notes section
+  const planMd = fs.readFileSync(path.join(proj, ".maw", "plan.md"), "utf8");
+  assert.match(planMd, /Host notes — DeepSeek Harness \(dsh\)/);
+  assert.match(planMd, /\.agents\/skills\//);
+  fs.rmSync(proj, { recursive: true, force: true });
+});
