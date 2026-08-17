@@ -84,6 +84,59 @@ test("install on a dsh host copies skills into $DSH_HOME/skills and records dshD
   } finally { delete process.env.MAW_HOST; }
 });
 
+test("manifest v2 records every written file; uninstall removes ALL (incl. non-prefixed agents/hooks) and prunes empty dirs", () => {
+  const r = install({ claudeDir });
+  assert.equal(r.ok, true);
+  // non-maw-prefixed plugin files ARE copied…
+  assert.ok(fs.existsSync(path.join(claudeDir, "agents", "orchestrator.md")));
+  assert.ok(fs.existsSync(path.join(claudeDir, "hooks", "hooks.json")));
+  // …and ARE recorded in the v2 manifest
+  const m = JSON.parse(fs.readFileSync(path.join(tmpHome, ".maw", "installed.json"), "utf8"));
+  assert.ok(Array.isArray(m.files) && m.files.length >= 15, `manifest.files must record every write, got ${m.files?.length}`);
+  assert.ok(m.files.some((f) => f.endsWith(path.join("agents", "orchestrator.md"))));
+  assert.ok(m.files.some((f) => f.endsWith(path.join("hooks", "hooks.json"))));
+  // a user file in the same tree must survive
+  fs.writeFileSync(path.join(claudeDir, "agents", "user-own.md"), "mine");
+  const u = uninstall({ project: tmpHome });
+  assert.equal(u.ok, true);
+  assert.ok(!fs.existsSync(path.join(claudeDir, "agents", "orchestrator.md")), "non-prefixed agent file must be removed");
+  assert.ok(!fs.existsSync(path.join(claudeDir, "hooks", "hooks.json")), "hooks.json must be removed");
+  assert.ok(fs.existsSync(path.join(claudeDir, "agents", "user-own.md")), "user file preserved");
+  assert.ok(!fs.existsSync(path.join(claudeDir, "hooks")), "empty hooks dir pruned");
+  assert.ok(!fs.existsSync(path.join(tmpHome, ".maw", "installed.json")), "manifest removed");
+});
+
+test("legacy manifest (dirs only) still uninstalls via the prefix fallback", () => {
+  install({ claudeDir });
+  const mp = path.join(tmpHome, ".maw", "installed.json");
+  const m = JSON.parse(fs.readFileSync(mp, "utf8"));
+  delete m.files; // pre-v2 shape
+  fs.writeFileSync(mp, JSON.stringify(m));
+  fs.writeFileSync(path.join(claudeDir, "commands", "user-own.md"), "mine");
+  const u = uninstall({ project: tmpHome });
+  assert.equal(u.ok, true);
+  assert.ok(!fs.existsSync(path.join(claudeDir, "commands", "maw-plan.md")), "maw-* removed by fallback");
+  assert.ok(fs.existsSync(path.join(claudeDir, "commands", "user-own.md")), "user file preserved by fallback");
+});
+
+test("uninstall keeps configs by default; --purge-config removes .maw and .pi/agents/maw-* (never trellis-*)", () => {
+  const proj = path.join(tmpHome, "proj-x");
+  fs.mkdirSync(path.join(proj, ".maw", "agents"), { recursive: true });
+  fs.writeFileSync(path.join(proj, ".maw", "workflow.json"), "{}");
+  fs.mkdirSync(path.join(proj, ".pi", "agents"), { recursive: true });
+  fs.writeFileSync(path.join(proj, ".pi", "agents", "maw-worker.md"), "#");
+  fs.writeFileSync(path.join(proj, ".pi", "agents", "trellis-implement.md"), "#");
+  install({ claudeDir });
+  const keep = uninstall({ project: proj });
+  assert.ok(fs.existsSync(path.join(proj, ".maw", "workflow.json")), "default keeps configs");
+  assert.ok(keep.kept.some((p) => p === path.join(proj, ".maw")));
+  const purge = uninstall({ project: proj, purgeConfig: true });
+  assert.ok(!fs.existsSync(path.join(proj, ".maw")), ".maw purged");
+  assert.ok(!fs.existsSync(path.join(proj, ".pi", "agents", "maw-worker.md")), "maw-* pi agent purged");
+  assert.ok(fs.existsSync(path.join(proj, ".pi", "agents", "trellis-implement.md")), "trellis-* pi agent preserved");
+  assert.ok(purge.purged.some((p) => p === path.join(proj, ".maw")));
+});
+
 test.after(() => {
   process.env.HOME = os.homedir();
   try { fs.rmSync(tmpHome, { recursive: true, force: true }); } catch {}

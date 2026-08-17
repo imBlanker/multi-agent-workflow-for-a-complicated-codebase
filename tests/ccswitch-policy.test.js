@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { readProfiles, createProjectProfile, readRouting, routingPolicy, applyRouting, projectSyncEnabled } from "../src/ccswitch.js";
+import { readProfiles, createProjectProfile, readRouting, routingPolicy, applyRouting, projectSyncEnabled, restoreRoutingFromSnapshot } from "../src/ccswitch.js";
 import { makeFixtureDb } from "./fixtures/make-db.mjs";
 
 // cc-switch "project" functionality is DECOUPLED by default (2026-08-12):
@@ -126,6 +126,42 @@ test("createProjectProfile skips dsh hosts (not cc-switch-managed) and writes no
   assert.match(r.reason, /\$DSH_HOME/);
   const { profiles } = readProfiles({ dbPath });
   assert.ok(!profiles.some((p) => p.name === "MAW: dsh-proj"), "no profile row must be written for dsh");
+});
+
+/** open a fixture db read-write via node:sqlite (test-only) @param {string} p */
+async function openRW(p) {
+  const { DatabaseSync } = await import("node:sqlite");
+  return new DatabaseSync(p);
+}
+
+test("restoreRoutingFromSnapshot rolls proxy_config back to snapshot values; missing snapshot degrades", async () => {
+  // live db: apply the MAW routing policy (claude on+failover)
+  const live = path.join(os.tmpdir(), `maw-restore-live-${Date.now()}.db`);
+  makeFixtureDb(live, {});
+  applyRouting({ dbPath: live, fix: true });
+  // snapshot db: pre-MAW state — claude fully off, codex on
+  const snapDir = fs.mkdtempSync(path.join(os.tmpdir(), "maw-restore-snap-"));
+  const snapDb = path.join(snapDir, "cc-switch-snapshot-fixture");
+  fs.mkdirSync(snapDb, { recursive: true });
+  const snapDbFile = path.join(snapDb, "cc-switch.db");
+  makeFixtureDb(snapDbFile, {});
+  const w = await openRW(snapDbFile);
+  w.exec("UPDATE proxy_config SET proxy_enabled=0, enabled=0, auto_failover_enabled=0 WHERE app_type='claude'");
+  w.close();
+
+  const r = restoreRoutingFromSnapshot({ dbPath: live, snapshot: snapDb });
+  assert.equal(r.ok, true, r.error || "");
+  assert.equal(r.applied.length, 2);
+  const after = readRouting({ dbPath: live });
+  assert.equal(Number(after.claude.enabled), 0, "claude routing rolled back to off");
+  assert.equal(Number(after.claude.autoFailoverEnabled), 0, "claude failover rolled back to off");
+
+  // missing backups dir -> clean failure, no throw
+  const none = restoreRoutingFromSnapshot({ dbPath: live, backupsDir: path.join(os.tmpdir(), `maw-none-${Date.now()}`) });
+  assert.equal(none.ok, false);
+  assert.match(none.error, /no snapshots/);
+  fs.rmSync(live, { force: true });
+  fs.rmSync(snapDir, { recursive: true, force: true });
 });
 
 test("routingPolicy reports pi as N/A (not cc-switch-managed)", () => {

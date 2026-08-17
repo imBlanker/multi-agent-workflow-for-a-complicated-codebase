@@ -111,9 +111,18 @@ Defaults: $5/min per agent, $10/min total, max concurrency 16. Edit `.maw/config
 
 ## 10. Uninstall / update
 ```bash
-npx . uninstall     # removes maw-* files only
+npx . uninstall     # removes EXACTLY what install wrote (manifest-driven, all
+                    # hosts — incl. the non-maw-* plugin agents/hooks), prunes
+                    # dirs it emptied; project .maw/ configs are KEPT
+npx . uninstall --purge-config [--project <dir>]
+                    # also deletes <dir>/.maw/ and .pi/agents/maw-*
+                    # (never trellis-*); --keep-config is the explicit default
+npx . uninstall --restore-routing
+                    # rolls cc-switch proxy_config (claude/codex) back to the
+                    # latest pre-MAW snapshot (~/.cc-switch/maw-backups/)
 npx . update        # re-copies templates, keeps user edits
 ```
+Uninstall never removes trellis-owned files (`.trellis/`, trellis entries in `.agents/skills` / `.dsh/skills`) — mention them for manual removal. Snapshots under `~/.cc-switch/maw-backups/` are the user's audit trail and are kept.
 
 ## 11. Report back to the user
 After install+plan, tell the user: the architecture chosen, the agents, the cost limits, the routing compliance, and whether the trellis chain succeeded (or what conflict needs resolving). Link the log: `.maw/logs/trellis-init-*.log`.

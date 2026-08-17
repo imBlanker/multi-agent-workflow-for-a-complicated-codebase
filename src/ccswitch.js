@@ -527,3 +527,62 @@ export function applyRouting(opts = {}) {
   }
   return { ok: true, applied, policy, routing, note: "routing applied to proxy_config (claude/codex only); restart cc-switch GUI to reflect" };
 }
+
+/**
+ * Restore cc-switch `proxy_config` (claude/codex rows) to the values captured
+ * in a MAW pre-init snapshot (`~/.cc-switch/maw-backups/cc-switch-snapshot-*`,
+ * written by `maw init` BEFORE anything touches cc-switch). Opt-in uninstall
+ * aid: ONLY proxy_config is touched (the same guardSql carve-out as
+ * applyRouting); the rest of the snapshot stays available for manual restore.
+ * Accepts a .tar.gz archive (extracted to a temp dir via the system tar) or a
+ * snapshot directory (the no-tar fallback format), both containing cc-switch.db
+ * at their root. opts.snapshot points at either; default = latest snapshot.
+ * @param {{ dbPath?: string, backupsDir?: string, snapshot?: string }} [opts]
+ * @returns {{ ok: boolean, applied: string[], error?: string, snapshot?: string }}
+ */
+export function restoreRoutingFromSnapshot(opts = {}) {
+  const dbPath = opts.dbPath ?? findDb();
+  if (!dbPath) return { ok: false, applied: [], error: "cc-switch database not found" };
+  const backupsDir = opts.backupsDir ?? path.join(path.dirname(dbPath), "maw-backups");
+  let snapDir = opts.snapshot ? path.resolve(opts.snapshot) : "";
+  let tmp = "";
+  try {
+    if (!snapDir) {
+      if (!exists(backupsDir)) return { ok: false, applied: [], error: `no snapshots under ${backupsDir}` };
+      const entries = fs.readdirSync(backupsDir).filter((f) => f.startsWith("cc-switch-snapshot-")).sort();
+      if (!entries.length) return { ok: false, applied: [], error: `no snapshots under ${backupsDir}` };
+      const latest = path.join(backupsDir, entries[entries.length - 1]);
+      if (latest.endsWith(".tar.gz")) {
+        tmp = fs.mkdtempSync(path.join(os.tmpdir(), "maw-restore-"));
+        execFileSync("tar", ["-xzf", latest, "-C", tmp], { stdio: ["ignore", "pipe", "pipe"], timeout: 30000 });
+        snapDir = tmp;
+      } else {
+        snapDir = latest;
+      }
+    }
+    const snapDb = path.join(snapDir, "cc-switch.db");
+    if (!exists(snapDb)) return { ok: false, applied: [], error: `snapshot database not found: ${snapDb}` };
+    const sr = makeReader(snapDb);
+    const snapRows = sr.all("SELECT app_type, proxy_enabled, enabled, auto_failover_enabled FROM proxy_config WHERE app_type IN ('claude','codex')");
+    sr.close();
+    if (!snapRows.length) return { ok: false, applied: [], error: "snapshot has no claude/codex proxy_config rows" };
+
+    const lr = makeReader(dbPath);
+    const liveRows = {};
+    for (const row of lr.all("SELECT app_type, proxy_enabled, enabled, auto_failover_enabled FROM proxy_config WHERE app_type IN ('claude','codex')")) liveRows[row.app_type] = row;
+    lr.close();
+
+    /** @type {string[]} */
+    const applied = [];
+    for (const s of snapRows) {
+      const live = liveRows[s.app_type] ?? {};
+      runWrite(dbPath, `UPDATE proxy_config SET proxy_enabled=${Number(s.proxy_enabled) || 0}, enabled=${Number(s.enabled) || 0}, auto_failover_enabled=${Number(s.auto_failover_enabled) || 0}, updated_at=datetime('now') WHERE app_type='${s.app_type}'`);
+      applied.push(`${s.app_type}: enabled ${live.enabled ?? "?"}→${Number(s.enabled) || 0}, proxy ${live.proxy_enabled ?? "?"}→${Number(s.proxy_enabled) || 0}, failover ${live.auto_failover_enabled ?? "?"}→${Number(s.auto_failover_enabled) || 0}`);
+    }
+    return { ok: true, applied, snapshot: tmp ? `${opts.snapshot || "(latest archive)"} → extracted` : snapDir };
+  } catch (e) {
+    return { ok: false, applied: [], error: String(e?.message || e) };
+  } finally {
+    if (tmp) try { fs.rmSync(tmp, { recursive: true, force: true }); } catch {}
+  }
+}
