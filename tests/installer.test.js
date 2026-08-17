@@ -60,6 +60,30 @@ test("install on a pi host copies skills+prompts into the pi home and records pi
   } finally { delete process.env.MAW_HOST; }
 });
 
+test("install on a dsh host copies skills into $DSH_HOME/skills and records dshDir; uninstall removes only maw-*", () => {
+  const dshHome = path.join(tmpHome, ".dsh");
+  fs.mkdirSync(dshHome, { recursive: true });
+  fs.writeFileSync(path.join(dshHome, "settings.yaml"), "llm-pi-ai:\n  providers: {}\n");
+  process.env.MAW_HOST = "dsh";
+  try {
+    const r = install({ claudeDir, dshHome });
+    assert.equal(r.ok, true);
+    assert.ok(r.copied.some((c) => c.includes("dsh skills")), `dsh skills missing from: ${r.copied.join(" | ")}`);
+    // no prompts surface for dsh
+    assert.ok(!r.copied.some((c) => c.includes("dsh prompts")), "dsh has no prompts surface");
+    assert.ok(fs.existsSync(path.join(dshHome, "skills", "maw-orchestration", "SKILL.md")));
+    const m = JSON.parse(fs.readFileSync(path.join(tmpHome, ".maw", "installed.json"), "utf8"));
+    assert.equal(m.dirs.dshDir, dshHome);
+    // a non-maw dsh skill must survive uninstall
+    fs.mkdirSync(path.join(dshHome, "skills", "user-skill"), { recursive: true });
+    fs.writeFileSync(path.join(dshHome, "skills", "user-skill", "SKILL.md"), "# keep\n");
+    const u = uninstall();
+    assert.equal(u.ok, true);
+    assert.ok(!fs.existsSync(path.join(dshHome, "skills", "maw-orchestration")), "maw skill removed");
+    assert.ok(fs.existsSync(path.join(dshHome, "skills", "user-skill", "SKILL.md")), "non-maw dsh skill preserved");
+  } finally { delete process.env.MAW_HOST; }
+});
+
 test.after(() => {
   process.env.HOME = os.homedir();
   try { fs.rmSync(tmpHome, { recursive: true, force: true }); } catch {}

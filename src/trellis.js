@@ -101,14 +101,20 @@ export function applyConflictChoice(choice) {
 /**
  * Build the trellis `init` platform flags host-aware. Claude Code / Codex /
  * unknown hosts scope to `--claude --codex` (current behaviour). A pi host
- * scopes to `--pi` (plus `--claude` when ~/.claude is also installed, so a
- * dual-host machine keeps both surfaces). Trellis already supports `--pi`.
+ * scopes to `--pi` and a dsh host to `--dsh` (each plus `--claude` when
+ * ~/.claude is also installed, so a dual-host machine keeps both surfaces).
+ * Trellis already supports both `--pi` and `--dsh`.
  * @param {string} hostApp
  * @returns {string[]}
  */
 export function trellisPlatformFlags(hostApp) {
   if (hostApp === "pi") {
     const flags = ["--pi"];
+    try { if (exists(path.join(home(), ".claude"))) flags.push("--claude"); } catch {}
+    return flags;
+  }
+  if (hostApp === "dsh") {
+    const flags = ["--dsh"];
     try { if (exists(path.join(home(), ".claude"))) flags.push("--claude"); } catch {}
     return flags;
   }

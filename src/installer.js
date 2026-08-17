@@ -110,12 +110,28 @@ export function install(opts = {}) {
     copied.push(`${piDir} (pi home)`);
   }
 
+  // DeepSeek Harness (dsh). dsh is NOT cc-switch-managed; its home is
+  // $DSH_HOME (~/.dsh). Copy skills into the dsh user skills root (rank-400,
+  // never the .system child) ONLY when dsh is the detected host, so a
+  // claude/codex/pi host never touches a real ~/.dsh. dsh has no slash-command
+  // palette and no named agent-definition surface — role specs stay portable
+  // under .maw/agents/ (materialized by configgen) and spawn prompt-driven.
+  const dshDir = host.app === "dsh" && host.dshHome ? host.dshHome : "";
+  if (host.app === "dsh" && dshDir) {
+    const skillsSrcDsh = path.join(PKG_ROOT, "skills");
+    if (exists(skillsSrcDsh)) {
+      const dshSkillsDest = path.join(dshDir, "skills");
+      copyTree(skillsSrcDsh, dshSkillsDest); copied.push(`${dshSkillsDest} (dsh skills)`);
+    }
+    copied.push(`${dshDir} (dsh home)`);
+  }
+
   const pkg = readJson(path.join(PKG_ROOT, "package.json"), { version: "0.0.0" });
   writeManifest({
     version: pkg.version,
     installedAt: new Date().toISOString(),
     host: { app: host.app, codexPluginInstalled: host.codexPluginInstalled, codexBinary: host.codexBinary, capabilities: hostCapabilities(host) },
-    dirs: { claudeDir, codexDir, piDir: host.app === "pi" ? piDir : undefined },
+    dirs: { claudeDir, codexDir, piDir: host.app === "pi" ? piDir : undefined, dshDir: host.app === "dsh" ? dshDir : undefined },
   });
 
   return { ok: true, copied, host, warnings };
@@ -147,6 +163,13 @@ export function uninstall() {
       const p = path.join(piDir, sub);
       if (exists(p)) removeIfOurs(p);
     }
+  }
+  // dsh: remove only our maw-* skills, and only from a dshDir a prior dsh
+  // install recorded (never fall back to a real $DSH_HOME on another host).
+  const dshDir = m.dirs?.dshDir;
+  if (dshDir) {
+    const p = path.join(dshDir, "skills");
+    if (exists(p)) removeIfOurs(p);
   }
   const portable = path.join(manifestDir(), "skills");
   if (exists(portable)) { fs.rmSync(portable, { recursive: true, force: true }); removed.push(portable); }

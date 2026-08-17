@@ -118,6 +118,16 @@ test("createProjectProfile skips pi hosts (not cc-switch-managed) and writes not
   assert.ok(!profiles.some((p) => p.name === "MAW: pi-proj"), "no profile row must be written for pi");
 });
 
+test("createProjectProfile skips dsh hosts (not cc-switch-managed) and writes nothing", () => {
+  const r = createProjectProfile({ name: "MAW: dsh-proj", user: "x", hostApp: "dsh", dbPath });
+  assert.equal(r.ok, true);
+  assert.equal(r.skipped, true);
+  assert.match(r.reason, /not cc-switch-managed/);
+  assert.match(r.reason, /\$DSH_HOME/);
+  const { profiles } = readProfiles({ dbPath });
+  assert.ok(!profiles.some((p) => p.name === "MAW: dsh-proj"), "no profile row must be written for dsh");
+});
+
 test("routingPolicy reports pi as N/A (not cc-switch-managed)", () => {
   const pol = routingPolicy(readRouting({ dbPath }));
   assert.match(String(pol.pi), /N\/A/);
