@@ -10,7 +10,7 @@
 
 > A portable, **dynamic** multi-agent workflow system. For a new complex project, MAW reads your [cc-switch](https://github.com/farion1231/cc-switch) config, probes the codebase, and picks the right agent architecture — *loop*, *orchestrator-workers* (subagents), *multi-agent*, *graph*, *dynamic*, or *ultracode* — or a combination. It generates per-agent, independently-editable configs, enforces **real-spend cost-rate limits**, and integrates **Codex review via [`codex-plugin-cc`](https://github.com/openai/codex-plugin-cc)**.
 
-> **Supported hosts: Claude Code, Codex, and Pi Agent.** Other agent software (Gemini CLI, opencode, …) is intentionally **not** supported. Note: Pi Agent is NOT cc-switch-managed — its config lives in `~/.pi/agent/` and its cost control degrades to concurrency-only (spend is not measured).
+> **Supported hosts: Claude Code, Codex, Pi Agent, and DeepSeek Harness (dsh).** Other agent software (Gemini CLI, opencode, …) is intentionally **not** supported. Note: Pi Agent and dsh are NOT cc-switch-managed — pi's config lives in `~/.pi/agent/`; dsh's providers/models live in `~/.dsh/settings.yaml`. Their spend rate is not measured (no proxy), so rate limits degrade to concurrency-only; dsh model prices still come from cc-switch's auto-synced `~/.cc-switch/model-pricing.json` where model ids match.
 
 ---
 
@@ -97,7 +97,7 @@ Minimal agent prompt: *"Install and configure MAW by following `docs/AGENT_INSTA
 
 ## 1. Project Goals
 - **Dynamic, not fixed.** MAW scores six architectures against real project signals + host capabilities, and selects the best fit — or a combination. See [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md).
-- **Portable + agent-software-scoped.** Claude Code, Codex and Pi Agent (narrowed per policy). The plan + per-agent configs are plain JSON/YAML/Markdown the host reads.
+- **Portable + agent-software-scoped.** Claude Code, Codex, Pi Agent and DeepSeek Harness (narrowed per policy). The plan + per-agent configs are plain JSON/YAML/Markdown the host reads.
 - **Cost-bounded.** Real inference spend from cc-switch logs, not token estimates. Defaults: **$5/min per agent**, **$10/min total**, max concurrency 16 — all editable.
 - **Capability-aware model choice.** Models differ WITHIN a leaderboard (some agentic models are full-multimodal; some are reasoning/dialogue-only; some multimodal models aren't agentic at all), so each agent/subagent first filters the available provider models by capability fit, then picks provider(api key)+model by remaining quota/balance and cost rate.
 - **Codex review, risk-gated.** When [`codex-plugin-cc`](https://github.com/openai/codex-plugin-cc) is available, Codex acts as the independent reviewer at risk-based gates — not every step.
@@ -130,6 +130,7 @@ A **new complex project**: `maw init -u <user>` → `maw plan`. Use when one age
 | **[Claude Code](https://docs.claude.com/en/docs/claude-code)** | ✅ Full | Commands, agents, hooks, skills; native `Task`/delegate for subagents & multi-agent; **local routing + auto-failover always ON**. |
 | **[Codex](https://github.com/openai/codex)** | ✅ Supported | Agent definitions + reviewer via [`codex-plugin-cc`](https://github.com/openai/codex-plugin-cc); local routing ON unless OpenAI-OAuth login. |
 | **Pi Agent** | ✅ Supported | Config lives in `~/.pi/agent/` (NOT cc-switch); agents → `.pi/agents/maw-*.md`, prompts → pi prompts, skills → `.agents/skills`; spawn via native subagent tool; spend not measured (concurrency-only cost control). |
+| **DeepSeek Harness (dsh)** | ✅ Supported | Config lives in `~/.dsh/settings.yaml` (`llm-pi-ai.providers`; NOT cc-switch); no named agent files — portable `.maw/agents/<role>.md` IS the spawn payload via dsh's prompt-driven subagent tool; skills → `$DSH_HOME/skills` + `.agents/skills`; spend rate not measured (concurrency-only), prices from cc-switch's synced `model-pricing.json` where ids match; MCP via dsh patch layers. |
 | Gemini CLI / opencode / others | ❌ Not supported | (Their cc-switch pricing may still be READ for cost estimates.) |
 
 `maw doctor` reports the host + the routing-policy compliance.
@@ -191,7 +192,7 @@ Because trellis and MAW can both manage files, on conflict MAW **pauses** trelli
 **Trellis update tracker.** The repo's GitHub Actions workflow [`trellis-update-tracker`](./.github/workflows/trellis-tracker.yml) automatically tracks `@mindfoldhq/trellis` updates (weekly + manual dispatch): when a new npm version appears it opens an `[trellis-tracker]` issue with version + links and advances `.github/trellis-tracker/state.json`. The only exception: **if trellis deletes its repo** (upstream 404), the tracker opens ONE notice issue, pauses tracking, and the workflow still succeeds — it resumes automatically when the upstream comes back. MAW invokes trellis via `@latest`, so no upgrade action is required in MAW itself; the issue is a heads-up to review the changelog.
 
 ## 9. Cost Control Mechanism
-Real inference spend from cc-switch's `proxy_request_logs` → USD/min. **Per-agent** $5/min, **total** $10/min (independent), **max concurrency** 16 — editable in `.maw/config.yaml` or via flags. Pricing source chain: cc-switch `model_pricing` → provider `cost_multiplier` → vendored **estimate** (tagged `estimated:true`) → `null` (never faked).
+Real inference spend from cc-switch's `proxy_request_logs` → USD/min. **Per-agent** $5/min, **total** $10/min (independent), **max concurrency** 16 — editable in `.maw/config.yaml` or via flags. Pricing source chain: cc-switch `model_pricing` → provider `cost_multiplier` → vendored **estimate** (tagged `estimated:true`) → `null` (never faked). Hosts not routed via the cc-switch proxy (pi, dsh) have no measured spend rate → rate limits degrade to concurrency-only; the **price gate** still applies on dsh via cc-switch's auto-synced `~/.cc-switch/model-pricing.json` (matched ids get real prices, unmatched stay unknown).
 
 ```bash
 maw cost      # current rate + top sessions + used% vs limit

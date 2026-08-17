@@ -10,7 +10,7 @@
 
 > 一個可攜、**動態**的多智慧體工作流系統。面對全新的複雜專案，MAW 會讀取你的 [cc-switch](https://github.com/farion1231/cc-switch) 設定，探測程式碼庫，並挑選合適的智慧體架構 —— *迴圈工程*、*編排者-工人*（子智慧體）、*多智慧體*、*圖工作流*、*動態工作流* 或 *ultracode* —— 或其組合。它為每個智慧體產生可獨立編輯的設定，強制執行**真實消費的成本速率限制**，並透過 [`codex-plugin-cc`](https://github.com/openai/codex-plugin-cc) 整合 **Codex 審查**。
 
-> **支援的宿主：Claude Code、Codex 與 Pi Agent。** 其他智慧體軟體（Gemini CLI、opencode……）刻意**不予**支援。注意：Pi Agent **不**經 cc-switch 管理——其設定位於 `~/.pi/agent/`，其成本控制降級為僅並發（花費不可測）。
+> **支援的宿主：Claude Code、Codex、Pi Agent 與 DeepSeek Harness (dsh)。** 其他智慧體軟體（Gemini CLI、opencode……）刻意**不予**支援。注意：Pi Agent 與 dsh **不**經 cc-switch 管理——pi 的設定位於 `~/.pi/agent/`，dsh 的供應商/模型位於 `~/.dsh/settings.yaml`。二者的花費速率不可測（不經代理），速率限額降級為僅並發；dsh 的模型價格仍可從 cc-switch 自動同步的 `~/.cc-switch/model-pricing.json` 按模型 id 匹配。
 
 ---
 
@@ -97,7 +97,7 @@ curl -fsSL https://raw.githubusercontent.com/imBlanker/multi-agent-workflow-for-
 
 ## 1. 專案目標
 - **動態，而非固定。** MAW 依據真實專案訊號＋宿主能力對六種架構評分，挑選最適配者 —— 或其組合。見 [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md)。
-- **可攜＋限定智慧體軟體。** 僅 Claude Code、Codex 與 Pi Agent（依策略收窄）。規劃＋各智慧體設定為宿主可讀的純 JSON/YAML/Markdown。
+- **可攜＋限定智慧體軟體。** 僅 Claude Code、Codex、Pi Agent 與 DeepSeek Harness（依策略收窄）。規劃＋各智慧體設定為宿主可讀的純 JSON/YAML/Markdown。
 - **成本有界。** 來自 cc-switch 日誌的真實推理消費，而非權杖估計。預設：**每智慧體 $5/分鐘**、**總計 $10/分鐘**、最大並發 16 —— 皆可編輯。
 - **能力感知的模型選擇。** 模型在**同一榜單內**也有差異（有些 agentic 模型是全多模態；有些僅限推理／對話；有些多模態模型根本不具 agentic 能力），因此每個智慧體／子智慧體會先依能力適配過濾可用的供應商模型，再依剩餘額度／餘額與花銷速率挑選 provider（API key）＋模型。
 - **Codex 審查，依風險設關卡。** 當 [`codex-plugin-cc`](https://github.com/openai/codex-plugin-cc) 可用時，Codex 在基於風險的關卡擔任獨立審查者 —— 而非每一步。
@@ -130,6 +130,7 @@ curl -fsSL https://raw.githubusercontent.com/imBlanker/multi-agent-workflow-for-
 | **[Claude Code](https://docs.claude.com/en/docs/claude-code)** | ✅ 完整 | 指令、智慧體、hook、技能；原生 `Task`/delegate 支援子智慧體與多智慧體；**本地路由＋自動故障轉移恆為開啟**。 |
 | **[Codex](https://github.com/openai/codex)** | ✅ 支援 | 智慧體定義＋透過 [`codex-plugin-cc`](https://github.com/openai/codex-plugin-cc) 的審查者；除非 OpenAI OAuth 登入，否則本地路由為開啟。 |
 | **Pi Agent** | ✅ 支援 | 設定位於 `~/.pi/agent/`（不經 cc-switch）；智慧體 → `.pi/agents/maw-*.md`、prompts → pi prompts、技能 → `.agents/skills`；透過原生子智慧體工具呼叫；花費不可測（僅並發的成本控制）。 |
+| **DeepSeek Harness (dsh)** | ✅ 支援 | 設定位於 `~/.dsh/settings.yaml`（`llm-pi-ai.providers`；不經 cc-switch）；無命名智慧體檔案——可攜的 `.maw/agents/<role>.md` 即是透過 dsh 提示驅動的子智慧體工具 spawn 的載荷；技能 → `$DSH_HOME/skills` + `.agents/skills`；花費速率不可測（僅並發），價格從 cc-switch 同步的 `model-pricing.json` 按 id 匹配；MCP 由 dsh patch 層管理。 |
 | Gemini CLI / opencode / 其他 | ❌ 不支援 | （其 cc-switch 定價仍可能被讀取用於成本估計。） |
 
 `maw doctor` 回報宿主＋路由策略合規性。
@@ -191,7 +192,7 @@ MAW 預設將你的 cc-switch 視為**唯讀**。以下規則在程式碼中強�
 **Trellis 更新追蹤器。** 本倉庫的 GitHub Actions 工作流程 [`trellis-update-tracker`](./.github/workflows/trellis-tracker.yml) 會自動追蹤 `@mindfoldhq/trellis` 的更新（每週＋手動觸發）：出現新 npm 版本時，它會開啟一個 `[trellis-tracker]` issue（含版本與連結）並推進 `.github/trellis-tracker/state.json`。唯一例外：**如果 trellis 刪庫**（上游 404），追蹤器會開啟一條 notice issue、暫停追蹤，且工作流程仍然成功——上游恢復後自動恢復追蹤。MAW 透過 `@latest` 呼叫 trellis，因此 MAW 本身無需升級動作；issue 只是提醒人工審閱變更日誌。
 
 ## 9. 成本控制機制
-來自 cc-switch `proxy_request_logs` 的真實推理消費 → USD/分鐘。**每智慧體** $5/分鐘、**總計** $10/分鐘（獨立）、**最大並發** 16 —— 可在 `.maw/config.yaml` 或透過旗標編輯。定價來源鏈：cc-switch `model_pricing` → 供應商 `cost_multiplier` → 內建**估計值**（標記 `estimated:true`）→ `null`（絕不偽造）。
+來自 cc-switch `proxy_request_logs` 的真實推理消費 → USD/分鐘。**每智慧體** $5/分鐘、**總計** $10/分鐘（獨立）、**最大並發** 16 —— 可在 `.maw/config.yaml` 或透過旗標編輯。定價來源鏈：cc-switch `model_pricing` → 供應商 `cost_multiplier` → 內建**估計值**（標記 `estimated:true`）→ `null`（絕不偽造）。不經 cc-switch 代理路由的宿主（pi、dsh）沒有可測的消費速率 → 速率限額降級為僅並發；dsh 上的**價格門**仍透過 cc-switch 自動同步的 `~/.cc-switch/model-pricing.json` 生效（命中的模型 id 獲得真實價格，未命中保持未知）。
 
 ```bash
 maw cost      # current rate + top sessions + used% vs limit
