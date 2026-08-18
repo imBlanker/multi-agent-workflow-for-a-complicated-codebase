@@ -216,4 +216,10 @@ test("mawf help lists dsh in the routing policy line", () => {
   assert.match(out, /pi\/dsh N\/A/);
 });
 
+
+test("mawf --version flag prints the version (not help)", () => {
+  const out = run(["--version"]);
+  assert.match(out, /^mawf \d+/);
+});
+
 test.after(() => { try { fs.rmSync(tmp, { recursive: true, force: true }); } catch {} });
