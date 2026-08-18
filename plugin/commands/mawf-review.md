@@ -4,7 +4,7 @@ argument-hint: '[--after post-implementation|architecture/security|ultracode fix
 allowed-tools: Bash, Read
 ---
 
-Run `node ${CLAUDE_PLUGIN_ROOT}/../bin/maw.js review --project $PWD $ARGUMENTS`.
+Run `node ${CLAUDE_PLUGIN_ROOT}/../bin/mawf.js review --project $PWD $ARGUMENTS`.
 
 The command checks whether the plan has a review gate matching `--after`. If yes (or if `--force` is set) and codex-plugin-cc is available, it invokes the codex companion review and returns Codex's output verbatim. If codex is unavailable, it reports that and suggests using a second Claude Code agent as the reviewer (graceful degradation).
 

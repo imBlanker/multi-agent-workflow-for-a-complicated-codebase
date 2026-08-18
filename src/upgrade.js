@@ -1,7 +1,7 @@
 // @ts-check
 // `mawf upgrade` — self-upgrade (trellis-upgrade parity, fork-first aware).
 //
-// Two install modes, auto-detected from the package root the running `maw`
+// Two install modes, auto-detected from the package root the running `mawf`
 // resolves to (same PKG_ROOT logic as installer.js):
 //
 // - checkout mode (default): the repo is a git checkout (fork-first). Upgrade
@@ -37,7 +37,7 @@ function trySh(cmd, args, opts = {}) {
 }
 
 /**
- * Detect how this `maw` was installed.
+ * Detect how this `mawf` was installed.
  * @param {string} pkgRoot
  * @param {{ npmPrefix?: string }} [opts]
  * @returns {{ mode: "checkout"|"npm", pkgRoot: string, pkgName: string, version: string, gitRoot?: string, npmPrefix?: string, squatted?: boolean }}

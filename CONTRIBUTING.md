@@ -1,6 +1,6 @@
 # Contributing to MAW
 
-Thanks for your interest in improving **multi-agent-workflow (MAW)** — a portable, dynamic multi-agent workflow system for complex codebases. This guide covers the basics of getting a change merged.
+Thanks for your interest in improving **multi-agents-workflow (MAW)** — a portable, dynamic multi-agent workflow system for complex codebases. This guide covers the basics of getting a change merged.
 
 ## Prerequisites
 
@@ -39,7 +39,7 @@ npm run test:watch
 ### Check your environment
 
 ```bash
-node bin/maw.js doctor
+node bin/mawf.js doctor
 ```
 
 `doctor` verifies that cc-switch and the Codex CLI are reachable. If you don't have those tools installed locally, expect non-fatal warnings — CI runs this same step with `continue-on-error` for the same reason.
@@ -47,8 +47,8 @@ node bin/maw.js doctor
 ### Smoke test the CLI
 
 ```bash
-node bin/maw.js version
-node bin/maw.js doctor
+node bin/mawf.js version
+node bin/mawf.js doctor
 ```
 
 ## Code style

@@ -8,6 +8,8 @@
 
 # MAW — Multi-Agent Workflow for Complex Codebases
 
+[Changelog](./CHANGELOG.md)（[简](./CHANGELOG.zh-Hans.md)·[繁](./CHANGELOG.zh-Hant.md)）
+
 > A portable, **dynamic** multi-agent workflow system. For a new complex project, MAW reads your [cc-switch](https://github.com/farion1231/cc-switch) config, probes the codebase, and picks the right agent architecture — *loop*, *orchestrator-workers* (subagents), *multi-agent*, *graph*, *dynamic*, or *ultracode* — or a combination. It generates per-agent, independently-editable configs, enforces **real-spend cost-rate limits**, and integrates **Codex review via [`codex-plugin-cc`](https://github.com/openai/codex-plugin-cc)**.
 
 > **Note:** formerly `multi-agent-workflow` / repo `multi-agent-workflow-for-a-complicated-codebase`; renamed to an available npm name (the unscoped old name is an unrelated third-party package) and a collision-free command (`mawf`).
@@ -34,7 +36,7 @@ Full rules in [`CONTRIBUTING.md`](./CONTRIBUTING.md) and [`docs/GOVERNANCE.md`](
 
 > **Tip: you can hand this whole README to your agent and let it install + configure MAW for you — see [For Agents](#for-agents) below.**
 
-MAW is a CLI (`maw`) plus a Claude Code plugin. The fastest path:
+MAW is a CLI (`mawf`) plus a Claude Code plugin. The fastest path:
 
 ```bash
 # 1. Fork the repo (see 🍴 Fork first), then clone YOUR fork:
@@ -123,7 +125,7 @@ A **new complex project**: `mawf init -u <user>` → `mawf plan`. Use when one a
  request_logs   cost guard (pre-spawn): $/min per-agent + total, concurrency cap
 ```
 - **Engine** (`src/`): [`ccswitch.js`](./src/ccswitch.js) (read-only provider-config sync + routing; project-profile sync DECOUPLED by default), [`planner.js`](./src/planner.js), [`graph.js`](./src/graph.js), [`configgen.js`](./src/configgen.js), [`cost.js`](./src/cost.js), [`codex.js`](./src/codex.js), [`trellis.js`](./src/trellis.js), [`pricegate.js`](./src/pricegate.js), [`installer.js`](./src/installer.js), [`doctor.js`](./src/doctor.js), [`host.js`](./src/host.js), [`probe.js`](./src/probe.js).
-- **Plugin** (`plugin/`): Claude Code commands (`/maw:plan`, `/maw:run`, `/maw:cost`, `/maw:doctor`, `/maw:add-agent`, `/maw:review`), agent definitions, a `PreToolUse` cost-guard hook.
+- **Plugin** (`plugin/`): Claude Code commands (`/mawf:plan`, `/mawf:run`, `/mawf:cost`, `/mawf:doctor`, `/mawf:add-agent`, `/mawf:review`), agent definitions, a `PreToolUse` cost-guard hook.
 - **Skills** (`skills/`): portable skill files.
 
 ## 4. Supported Agent Software
@@ -204,7 +206,7 @@ mawf release --id <id>             # release a slot
 ```
 
 ## 10. Installation
-**From npm (once published):** `npx multi-agent-workflow install`.
+**From npm:** `npx multi-agents-workflow@latest install`.
 **From a fork/clone (now):**
 ```bash
 git clone https://github.com/<you>/multi-agents-workflow.git

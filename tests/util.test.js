@@ -8,7 +8,7 @@ test("round handles float epsilon", () => {
 });
 
 test("slug lowercases and dashes", () => {
-  assert.equal(slug("Multi Agent Workflow!"), "multi-agent-workflow");
+  assert.equal(slug("Multi Agents Workflow!"), "multi-agents-workflow");
   assert.equal(slug("a.b.c"), "a-b-c");
 });
 

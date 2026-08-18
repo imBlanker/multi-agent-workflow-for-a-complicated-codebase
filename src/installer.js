@@ -220,7 +220,7 @@ export function uninstall(opts = {}) {
     const piAgents = path.join(project, ".pi", "agents");
     if (exists(piAgents)) {
       for (const f of fs.readdirSync(piAgents)) {
-        if (/^maw-.*\.md$/.test(f)) { const p = path.join(piAgents, f); fs.unlinkSync(p); purged.push(p); }
+        if (/^mawf?-.*\.md$/.test(f)) { const p = path.join(piAgents, f); fs.unlinkSync(p); purged.push(p); }
       }
       try { if (fs.readdirSync(piAgents).length === 0) fs.rmdirSync(piAgents); } catch {}
     }
@@ -240,7 +240,7 @@ function removeIfOurs(dir, removed = []) {
   try {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
       const name = entry.name;
-      if (!/^(maw[-_]|codex-rescue)/.test(name)) continue; // be conservative
+      if (!/^(mawf?[-_]|codex-rescue)/.test(name)) continue; // be conservative
       const p = path.join(dir, name);
       fs.rmSync(p, { recursive: true, force: true });
       removed.push(p);

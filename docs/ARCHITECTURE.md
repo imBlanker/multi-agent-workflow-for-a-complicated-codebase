@@ -202,8 +202,8 @@ The plan and per-agent configs are plain **JSON / YAML / Markdown** under
 (nodes/edges). Nothing is hardcoded — agents/roles come from the plan, and the
 user can add, remove, or edit any file; the runner re-reads it at execute time.
 
-- **Claude Code** gets the full plugin: commands (`/maw:plan`, `/maw:run`,
-  `/maw:cost`, `/maw:doctor`, `/maw:add-agent`, `/maw:review`), agent
+- **Claude Code** gets the full plugin: commands (`/mawf:plan`, `/mawf:run`,
+  `/mawf:cost`, `/mawf:doctor`, `/mawf:add-agent`, `/mawf:review`), agent
   definitions, a `PreToolUse` hook that calls the cost guard before each `Task`,
   and portable skills.
 - **Codex** gets agent definitions copied to `~/.codex/agents` (best-effort) and
