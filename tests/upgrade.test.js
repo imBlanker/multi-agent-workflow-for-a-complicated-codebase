@@ -1,5 +1,5 @@
 // @ts-check
-// Tests for `maw upgrade` (self-upgrade: checkout ff-pull / npm / squat detection).
+// Tests for `mawf upgrade` (self-upgrade: checkout ff-pull / npm / squat detection).
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -20,8 +20,8 @@ function mkCheckout(version = "0.1.0") {
   execFileSync("git", ["init", "--bare", "-b", "main", remote], { encoding: "utf8" });
   const seed = path.join(dir, "seed");
   fs.mkdirSync(path.join(seed, "bin"), { recursive: true });
-  fs.writeFileSync(path.join(seed, "package.json"), JSON.stringify({ name: "multi-agent-workflow", version, bin: { maw: "bin/maw.js" } }, null, 2));
-  fs.writeFileSync(path.join(seed, "bin", "maw.js"), "#!/usr/bin/env node\n");
+  fs.writeFileSync(path.join(seed, "package.json"), JSON.stringify({ name: "multi-agents-workflow", version, bin: { mawf: "bin/mawf.js" } }, null, 2));
+  fs.writeFileSync(path.join(seed, "bin", "mawf.js"), "#!/usr/bin/env node\n");
   git(["init", "-b", "main"], seed);
   git(["add", "-A"], seed);
   git(["commit", "-m", "init"], seed);

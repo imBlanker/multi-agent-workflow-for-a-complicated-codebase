@@ -5,7 +5,7 @@
 MAW (multi-agent-workflow) dynamically picks an architecture per project and writes per-agent, independently-editable configs under `.maw/`.
 
 ## When to use
-- A new complex project: after `maw init`, run `maw plan`.
+- A new complex project: after `mawf init`, run `mawf plan`.
 - An existing project where a single agent is insufficient (many files, multiple languages, high risk, large context).
 - You want cost-bounded multi-agent runs with Codex review gates.
 
@@ -19,17 +19,17 @@ MAW also understands **dynamic** (prefer the host's native dynamic-workflow/mult
 
 ## Quickstart
 ```bash
-maw init -u <user>          # init workspace
-maw plan --project .        # probe + plan + write .maw/
-maw doctor                  # env + capability check
-maw cost                    # real cost rate from cc-switch
-maw run                     # execution guidance (batches + guards)
+mawf init -u <user>          # init workspace
+mawf plan --project .        # probe + plan + write .maw/
+mawf doctor                  # env + capability check
+mawf cost                    # real cost rate from cc-switch
+mawf run                     # execution guidance (batches + guards)
 ```
 
 ## Core invariants
 - Start simple; add complexity only when it demonstrably helps.
 - The cost guard is authoritative: $5/min per agent, $10/min total (defaults), measured from real cc-switch spend — not token estimates.
 - Codex review is risk-gated, not on every step.
-- Every file under `.maw/` is editable; `maw plan` regenerates from fresh signals.
+- Every file under `.maw/` is editable; `mawf plan` regenerates from fresh signals.
 
 See the architecture report at `docs/ARCHITECTURE.md` for the theoretical grounding.

@@ -2,7 +2,7 @@
 // Model price gate (HITL): whenever MAW is about to assign a model whose unit
 // price is HIGH (Input price > $2/1M Tokens OR Output price > $10/1M Tokens),
 // the work is PAUSED and reported to a human first. A human must either pick a
-// cheaper model or explicitly approve the assignment (`maw approve-model`)
+// cheaper model or explicitly approve the assignment (`mawf approve-model`)
 // before guard/acquire let the role run.
 //
 // Policy (user-mandated 2026-08-12): thresholds are hard constants below —
@@ -63,8 +63,8 @@ export function priceGateReport(blocks) {
     lines.push(`  - role "${b.role}" → ${b.provider ? `${b.provider} / ` : ""}\`${b.model}\``);
     lines.push(`      ${b.check.reason}${b.check.estimated ? " (estimated price)" : ""}${b.check.source ? ` [source: ${b.check.source}]` : ""}`);
   }
-  lines.push(`  to continue: (a) edit .maw/agents/<role>.json and set a cheaper model, then re-run \`maw plan\`;`);
-  lines.push(`                (b) explicitly approve: \`maw approve-model --role <role> --yes\`;`);
+  lines.push(`  to continue: (a) edit .maw/agents/<role>.json and set a cheaper model, then re-run \`mawf plan\`;`);
+  lines.push(`                (b) explicitly approve: \`mawf approve-model --role <role> --yes\`;`);
   lines.push(`                (c) override for one run: re-run with \`--allow-pricey\`.`);
   return lines.join("\n");
 }

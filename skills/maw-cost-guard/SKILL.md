@@ -11,10 +11,10 @@ MAW measures cost from **actual inference spend** in the cc-switch proxy logs (`
 
 ## Commands
 ```bash
-maw cost                         # current rate + top sessions + used% vs limit
-maw guard                        # ALLOW/DENY a new spawn right now
-maw acquire --id <id> --role <r>  # take a slot (refuses if over budget)
-maw release --id <id>             # release a slot
+mawf cost                         # current rate + top sessions + used% vs limit
+mawf guard                        # ALLOW/DENY a new spawn right now
+mawf acquire --id <id> --role <r>  # take a slot (refuses if over budget)
+mawf release --id <id>             # release a slot
 ```
 
 ## Pricing source chain (per spec)
@@ -23,7 +23,7 @@ maw release --id <id>             # release a slot
 3. vendored fallback estimate (clearly tagged `estimated: true`)
 4. unknown → `null` (never faked as exact)
 
-When the price is an estimate, configs and the `maw cost`/`doctor` output say so. Do not present estimates as exact.
+When the price is an estimate, configs and the `mawf cost`/`doctor` output say so. Do not present estimates as exact.
 
 ## Degradation
-If cc-switch is unavailable, the guard degrades to concurrency-only limiting (no spend tracking) and `maw doctor` reports the gap. Codex reviewer availability is independent: if codex is missing, the planner substitutes a second Claude Code agent reviewer for risk >= medium.
+If cc-switch is unavailable, the guard degrades to concurrency-only limiting (no spend tracking) and `mawf doctor` reports the gap. Codex reviewer availability is independent: if codex is missing, the planner substitutes a second Claude Code agent reviewer for risk >= medium.

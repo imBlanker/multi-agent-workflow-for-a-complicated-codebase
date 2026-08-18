@@ -147,7 +147,7 @@ function extractDefaultModel(dump) {
  * @returns {string}
  */
 export function dshCostRateNote() {
-  return "dsh is not cc-switch-managed: spend rate (USD/min) is not measured, so cost-rate limits degrade to concurrency-only (maw acquire/release). Prices come from ~/.cc-switch/model-pricing.json where model ids match.";
+  return "dsh is not cc-switch-managed: spend rate (USD/min) is not measured, so cost-rate limits degrade to concurrency-only (mawf acquire/release). Prices come from ~/.cc-switch/model-pricing.json where model ids match.";
 }
 
 /**

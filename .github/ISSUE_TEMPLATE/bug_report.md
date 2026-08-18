@@ -9,10 +9,10 @@ assignees: []
 ## Bug summary
 <!-- A clear and concise description of what the bug is. -->
 
-> **Search first:** check [open + closed issues](https://github.com/imBlanker/multi-agent-workflow-for-a-complicated-codebase/issues?q=is%3Aissue) to avoid a duplicate.
+> **Search first:** check [open + closed issues](https://github.com/imBlanker/multi-agents-workflow/issues?q=is%3Aissue) to avoid a duplicate.
 
 ## MAW version
-<!-- Run `node bin/maw.js version` and paste the output here. -->
+<!-- Run `node bin/mawf.js version` and paste the output here. -->
 ```
 ```
 
@@ -36,7 +36,7 @@ assignees: []
 
 ## Logs / output
 ```
-<!-- Paste relevant logs, error output, or `node bin/maw.js doctor` output here. -->
+<!-- Paste relevant logs, error output, or `node bin/mawf.js doctor` output here. -->
 ```
 
 ## Additional context

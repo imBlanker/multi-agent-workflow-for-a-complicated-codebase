@@ -1,14 +1,16 @@
 [English](./README.md) | [简体中文](./README.zh-Hans.md) | [繁體中文](./README.zh-Hant.md)
 
-[![CI](https://github.com/imBlanker/multi-agent-workflow-for-a-complicated-codebase/actions/workflows/ci.yml/badge.svg)](https://github.com/imBlanker/multi-agent-workflow-for-a-complicated-codebase/actions/workflows/ci.yml)
+[![CI](https://github.com/imBlanker/multi-agents-workflow/actions/workflows/ci.yml/badge.svg)](https://github.com/imBlanker/multi-agents-workflow/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D20.17-green.svg)](https://nodejs.org)
 [![Tests](https://img.shields.io/badge/tests-69%20passing-success.svg)](#testing)
-[![GitHub stars](https://img.shields.io/github/stars/imBlanker/multi-agent-workflow-for-a-complicated-codebase?style=social&label=Stars)](https://github.com/imBlanker/multi-agent-workflow-for-a-complicated-codebase/stargazers)
+[![GitHub stars](https://img.shields.io/github/stars/imBlanker/multi-agents-workflow?style=social&label=Stars)](https://github.com/imBlanker/multi-agents-workflow/stargazers)
 
 # MAW — Multi-Agent Workflow for Complex Codebases
 
 > A portable, **dynamic** multi-agent workflow system. For a new complex project, MAW reads your [cc-switch](https://github.com/farion1231/cc-switch) config, probes the codebase, and picks the right agent architecture — *loop*, *orchestrator-workers* (subagents), *multi-agent*, *graph*, *dynamic*, or *ultracode* — or a combination. It generates per-agent, independently-editable configs, enforces **real-spend cost-rate limits**, and integrates **Codex review via [`codex-plugin-cc`](https://github.com/openai/codex-plugin-cc)**.
+
+> **Note:** formerly `multi-agent-workflow` / repo `multi-agent-workflow-for-a-complicated-codebase`; renamed to an available npm name (the unscoped old name is an unrelated third-party package) and a collision-free command (`mawf`).
 
 > **Supported hosts: Claude Code, Codex, Pi Agent, and DeepSeek Harness (dsh).** Other agent software (Gemini CLI, opencode, …) is intentionally **not** supported. Note: Pi Agent and dsh are NOT cc-switch-managed — pi's config lives in `~/.pi/agent/`; dsh's providers/models live in `~/.dsh/settings.yaml`. Their spend rate is not measured (no proxy), so rate limits degrade to concurrency-only; dsh model prices still come from cc-switch's auto-synced `~/.cc-switch/model-pricing.json` where model ids match.
 
@@ -18,11 +20,11 @@
 
 **Strongly recommended: fork this repository before you use it.** Make any personal changes in *your* fork, keep it synced with this upstream, and send improvements/insights back here.
 
-- **Fork:** <https://github.com/imBlanker/multi-agent-workflow-for-a-complicated-codebase/fork>
+- **Fork:** <https://github.com/imBlanker/multi-agents-workflow/fork>
 - **Branch naming (Conventional Commits):** `feat/<topic>`, `fix/<issue>`, `docs/<topic>`, `chore/<topic>`, `refactor/<topic>`, `ci/<topic>`, `test/<topic>`.
 - **No direct pushes to `main`** — open a Pull Request from your feature branch.
 - **One PR per concern**, small and focused; link the issue with `Closes #N`; CI must pass before review.
-- **Issues:** search [existing issues](https://github.com/imBlanker/multi-agent-workflow-for-a-complicated-codebase/issues?q=is%3Aissue) first to avoid duplicates, then use the [bug](https://github.com/imBlanker/multi-agent-workflow-for-a-complicated-codebase/issues/new?template=bug_report.md) / [feature](https://github.com/imBlanker/multi-agent-workflow-for-a-complicated-codebase/issues/new?template=feature_request.md) templates.
+- **Issues:** search [existing issues](https://github.com/imBlanker/multi-agents-workflow/issues?q=is%3Aissue) first to avoid duplicates, then use the [bug](https://github.com/imBlanker/multi-agents-workflow/issues/new?template=bug_report.md) / [feature](https://github.com/imBlanker/multi-agents-workflow/issues/new?template=feature_request.md) templates.
 
 Full rules in [`CONTRIBUTING.md`](./CONTRIBUTING.md) and [`docs/GOVERNANCE.md`](./docs/GOVERNANCE.md). See [§Contributors](#15-contributors) and [§Contact](#16-contact).
 
@@ -36,30 +38,30 @@ MAW is a CLI (`maw`) plus a Claude Code plugin. The fastest path:
 
 ```bash
 # 1. Fork the repo (see 🍴 Fork first), then clone YOUR fork:
-git clone https://github.com/<you>/multi-agent-workflow-for-a-complicated-codebase.git
-cd multi-agent-workflow-for-a-complicated-codebase
+git clone https://github.com/<you>/multi-agents-workflow.git
+cd multi-agents-workflow
 
 # 2. Install the plugin + skills into Claude Code (and Codex, best-effort):
-npx . install          # or: node bin/maw.js install
+npx . install          # or: node bin/mawf.js install
 
 # 3. Initialize a project (cc-switch project-profile sync is DECOUPLED by default):
-maw init -u <your-name>
+mawf init -u <your-name>
 
 # 4. The next step is automatic: MAW runs `trellis init -u <your-name>` for you.
 #    (skip the trellis chain with --no-trellis)
 
 # 5. Plan + run:
-maw plan --project .
-maw run
+mawf plan --project .
+mawf run
 ```
 
 If Claude Code routing / auto-failover is off in cc-switch, fix it in one command (writes **only** the `proxy_config` rows for claude/codex — never your profiles/providers):
 
 ```bash
-maw routing --fix
+mawf routing --fix
 ```
 
-Check the environment any time: `maw doctor`.
+Check the environment any time: `mawf doctor`.
 
 ## For Agents
 
@@ -68,12 +70,12 @@ Check the environment any time: `maw doctor`.
 Fetch the full agent install/configure guide and follow it end to end — do not summarize it:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/imBlanker/multi-agent-workflow-for-a-complicated-codebase/main/docs/AGENT_INSTALL.md
+curl -fsSL https://raw.githubusercontent.com/imBlanker/multi-agents-workflow/main/docs/AGENT_INSTALL.md
 ```
 
-The guide covers: fork-and-clone, `npx . install`, `maw init -u <user>` (creates the cc-switch project profile + checks the routing policy + chains `trellis init`), `maw plan`, `maw run`, `maw cost`, `maw guard`, `maw review`, the [For Humans](#for-humans) workflow, the [cc-switch policy](#7-cc-switch-integration--routing-policy), the [trellis init rule](#8-trellis-init-as-the-mandatory-next-step), graceful degradation, and uninstall. Read it in full; do not guess.
+The guide covers: fork-and-clone, `npx . install`, `mawf init -u <user>` (creates the cc-switch project profile + checks the routing policy + chains `trellis init`), `mawf plan`, `mawf run`, `mawf cost`, `mawf guard`, `mawf review`, the [For Humans](#for-humans) workflow, the [cc-switch policy](#7-cc-switch-integration--routing-policy), the [trellis init rule](#8-trellis-init-as-the-mandatory-next-step), graceful degradation, and uninstall. Read it in full; do not guess.
 
-Minimal agent prompt: *"Install and configure MAW by following `docs/AGENT_INSTALL.md` in https://github.com/imBlanker/multi-agent-workflow-for-a-complicated-codebase , then run `maw plan` on this project and report the chosen architecture, agents, and cost limits."*
+Minimal agent prompt: *"Install and configure MAW by following `docs/AGENT_INSTALL.md` in https://github.com/imBlanker/multi-agents-workflow , then run `mawf plan` on this project and report the chosen architecture, agents, and cost limits."*
 
 ---
 
@@ -104,13 +106,13 @@ Minimal agent prompt: *"Install and configure MAW by following `docs/AGENT_INSTA
 - **cc-switch-safe + decoupled projects.** All existing cc-switch data is read-only; MAW's **project** feature is DECOUPLED from cc-switch's incomplete `profiles` functionality (code kept, disabled by default; `MAW_CC_PROJECT_SYNC=1` temporarily re-enables it). MAW keeps full authority over project-level agent/subagent model configs (`.maw/agents/*.json`) and only syncs **provider config info** from cc-switch — the high-value settings in each provider's `config.toml`/`config.json` (base_url, model, auth_mode, failover …). Plus the (opt-in) routing carve-out.
 
 ## 2. When to Use
-A **new complex project**: `maw init -u <user>` → `maw plan`. Use when one agent is insufficient (many files, multiple languages, high risk, context exceeds one window) and you need cost-bounded multi-agent runs with Codex review gates. **Don't** use it for tiny fixed tasks (a single loop agent is cheaper).
+A **new complex project**: `mawf init -u <user>` → `mawf plan`. Use when one agent is insufficient (many files, multiple languages, high risk, context exceeds one window) and you need cost-bounded multi-agent runs with Codex review gates. **Don't** use it for tiny fixed tasks (a single loop agent is cheaper).
 
-**Background reading — agent-system concepts.** New to the paradigms MAW scores and selects among? Read the live report — [Agent Architecture Paradigms](https://imblanker.github.io/multi-agent-workflow-for-a-complicated-codebase/agent-architecture-paradigms.html) (rendered on GitHub Pages; source: [`docs/agent-architecture-paradigms.html`](./docs/agent-architecture-paradigms.html)): a short illustrated study distinguishing **Augmented LLM**, **Workflow vs Agent**, **Multi-Agent**, **Subagents**, **Orchestrator-Worker**, **Loop Engineering**, and **Graph Engineering** — what each is, when to use it, and the prerequisites it demands.
+**Background reading — agent-system concepts.** New to the paradigms MAW scores and selects among? Read the live report — [Agent Architecture Paradigms](https://imblanker.github.io/multi-agents-workflow/agent-architecture-paradigms.html) (rendered on GitHub Pages; source: [`docs/agent-architecture-paradigms.html`](./docs/agent-architecture-paradigms.html)): a short illustrated study distinguishing **Augmented LLM**, **Workflow vs Agent**, **Multi-Agent**, **Subagents**, **Orchestrator-Worker**, **Loop Engineering**, and **Graph Engineering** — what each is, when to use it, and the prerequisites it demands.
 
 ## 3. System Architecture
 ```
-   user/project → maw plan: probe → score architectures → select → generate per-agent configs (.maw/)
+   user/project → mawf plan: probe → score architectures → select → generate per-agent configs (.maw/)
         │
    ┌────┴───────────────────────────────────────────────────────┐
    ▼              ▼                                            ▼
@@ -133,7 +135,7 @@ A **new complex project**: `maw init -u <user>` → `maw plan`. Use when one age
 | **DeepSeek Harness (dsh)** | ✅ Supported | Config lives in `~/.dsh/settings.yaml` (`llm-pi-ai.providers`; NOT cc-switch); no named agent files — portable `.maw/agents/<role>.md` IS the spawn payload via dsh's prompt-driven subagent tool; skills → `$DSH_HOME/skills` + `.agents/skills`; spend rate not measured (concurrency-only), prices from cc-switch's synced `model-pricing.json` where ids match; MCP via dsh patch layers. |
 | Gemini CLI / opencode / others | ❌ Not supported | (Their cc-switch pricing may still be READ for cost estimates.) |
 
-`maw doctor` reports the host + the routing-policy compliance.
+`mawf doctor` reports the host + the routing-policy compliance.
 
 ## 5. Workflow Selection Mechanism
 | Signal | Likely pick |
@@ -149,42 +151,42 @@ A **new complex project**: `maw init -u <user>` → `maw plan`. Use when one age
 Architectures **combine** (e.g. `ultracode` = `graph` + `loop` + a Codex review gate). Full rubric: [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md).
 
 ## 6. Agent & Subagent Configuration
-`maw plan` writes an **independently-editable** config per role under `.maw/` (`workflow.json`, `config.yaml`, `plan.md`, `graph.json`, `agents/<role>.md`+`.json`, `runtime/`). Add/remove dynamically: `maw add-agent --role <r> ...` / `maw remove-agent --role <r>`. Edit any file directly — the runner re-reads it at execute time.
+`mawf plan` writes an **independently-editable** config per role under `.maw/` (`workflow.json`, `config.yaml`, `plan.md`, `graph.json`, `agents/<role>.md`+`.json`, `runtime/`). Add/remove dynamically: `mawf add-agent --role <r> ...` / `mawf remove-agent --role <r>`. Edit any file directly — the runner re-reads it at execute time.
 
 **Capability-aware model selection** ([`src/modelcap.js`](./src/modelcap.js), inspired by [Artificial Analysis](https://artificialanalysis.ai)'s ~10 per-capability model leaderboards — intelligence / coding / math / agentic / multimodal-vision / image / image-edit / video / tts / stt). For each role MAW: ① classifies **every available provider model** from cc-switch by capability (a full-multimodal agentic model, a reasoning/dialogue-only agentic model, and a multimodal-but-non-agentic model are three different things), ② drops models unfit for the role (e.g. an image-generation model can never be an implementer), ③ ranks the rest by **capability fit → provider remaining quota/balance → cost rate** (quota = `limit_daily/monthly_usd` − spend in `usage_daily_rollups`; unknown when no limit is set). The curated catalog is always marked `estimated:true`. Inspect it live:
 
 ```bash
-maw models                # capability view of all provider models + per-role assignments
-maw models --app codex    # same for the codex app_type
+mawf models                # capability view of all provider models + per-role assignments
+mawf models --app codex    # same for the codex app_type
 ```
 
 Each agent's `.json`/`.md` carries the full `model_selection` record (chosen provider+model, capability fit, remaining quota, price, reasons, alternates) — see [`examples/.maw-sample/agents/orchestrator.json`](./examples/.maw-sample/agents/orchestrator.json).
 
 **Model price gate (HITL, mandatory).** Whenever MAW is about to assign a model whose unit price is high — **Input > $2/1M Tokens or Output > $10/1M Tokens** ([`src/pricegate.js`](./src/pricegate.js), single source of truth) — it **pauses the related work and reports to a human first**:
 
-- `maw plan` / `maw init` / `maw add-agent` print a ⚠ PRICE GATE report (role, provider, model, prices, thresholds) and **exit 3** instead of proceeding; the generated `.maw/` files stay on disk so you can inspect the assignments.
-- `maw guard` / `maw acquire` **deny** any role whose expensive model is not yet approved, so paused work stays paused.
-- A human resumes work in one of three ways: pick a cheaper model (edit `.maw/agents/<role>.json`, re-run `maw plan`), explicitly approve per role (`maw approve-model --role <role> --yes` — sticky across re-plans), or override for one run (`--allow-pricey`).
+- `mawf plan` / `mawf init` / `mawf add-agent` print a ⚠ PRICE GATE report (role, provider, model, prices, thresholds) and **exit 3** instead of proceeding; the generated `.maw/` files stay on disk so you can inspect the assignments.
+- `mawf guard` / `mawf acquire` **deny** any role whose expensive model is not yet approved, so paused work stays paused.
+- A human resumes work in one of three ways: pick a cheaper model (edit `.maw/agents/<role>.json`, re-run `mawf plan`), explicitly approve per role (`mawf approve-model --role <role> --yes` — sticky across re-plans), or override for one run (`--allow-pricey`).
 
 ## 7. cc-switch Integration & Routing Policy
 MAW treats your cc-switch as **read-only by default**. The rules below are enforced in code ([`src/ccswitch.js`](./src/ccswitch.js), `guardSql`):
 
-- **Snapshot before every init.** `maw init` FIRST packages **all** cc-switch config files into a timestamped archive at `~/.cc-switch/maw-backups/cc-switch-snapshot-<timestamp>.tar.gz` (falls back to a directory copy + sha256 manifest where `tar` is unavailable) — before MAW touches anything else. Only reads existing files; writes only NEW files under `maw-backups/`.
+- **Snapshot before every init.** `mawf init` FIRST packages **all** cc-switch config files into a timestamped archive at `~/.cc-switch/maw-backups/cc-switch-snapshot-<timestamp>.tar.gz` (falls back to a directory copy + sha256 manifest where `tar` is unavailable) — before MAW touches anything else. Only reads existing files; writes only NEW files under `maw-backups/`.
 - **All existing cc-switch data is read-only.** Reads use a read-only SQLite connection (`node:sqlite` `readOnly:true`).
 - **Project functionality DECOUPLED by default.** cc-switch's "project" feature (the `profiles` table) is incomplete, so MAW no longer reads/writes profiles: MAW manages project-level agent/subagent model configs itself in `.maw/agents/*.json` and syncs only **provider config info** read-only (the high-value settings in each provider's `config.toml`/`config.json` — base_url, model, auth_mode, failover queue …). The profile code modules stay in `src/ccswitch.js` (with tests) but are disabled; set `MAW_CC_PROJECT_SYNC=1` to temporarily re-enable the legacy create/reuse of a `MAW: <project> (<user>)` profile.
 - **Never touch "默认" profiles.** Any profile whose name contains `默认` (e.g. `Claude Code 默认`, `Codex 默认`) is **never** written, updated, or deleted — a hard guard refuses it (this guard stays even when the legacy sync is re-enabled).
-- **Routing rules** (`maw routing` / `maw doctor` checks; `maw routing --fix` applies the carve-out, writing **only** `proxy_config` for claude/codex):
+- **Routing rules** (`mawf routing` / `mawf doctor` checks; `mawf routing --fix` applies the carve-out, writing **only** `proxy_config` for claude/codex):
   - **Claude Code:** local routing **always ON** + auto-failover **always ON**.
   - **Codex:** when an **OpenAI OAuth (ChatGPT) login** is in use → local routing **OFF**; otherwise **ON**. (OAuth is detected from `codex_oauth_auth.json` + the provider's `auth.auth_mode === "chatgpt"`.)
 
 ## 8. trellis init as the Mandatory Next Step
-**Always run `trellis init -u <user-name>` as the step right after `maw init`.** MAW does this for you automatically (it invokes [`@mindfoldhq/trellis`](https://github.com/mindfoldhq/trellis) — a more powerful, more rigorous workflow framework). Use `maw init --no-trellis` to skip.
+**Always run `trellis init -u <user-name>` as the step right after `mawf init`.** MAW does this for you automatically (it invokes [`@mindfoldhq/trellis`](https://github.com/mindfoldhq/trellis) — a more powerful, more rigorous workflow framework). Use `mawf init --no-trellis` to skip.
 
 Because trellis and MAW can both manage files, on conflict MAW **pauses** trellis init:
 1. **Snapshot** MAW-managed files (`.maw/*`, excluding `runtime/`/`logs/`).
 2. **Run** `trellis init -u <user> -y --claude --codex`, streaming output to `.maw/logs/trellis-init-<timestamp>.log`.
 3. **Detect** any MAW-managed file trellis touched → **pause**, print the conflict details + overview + log path in the terminal.
-4. **You choose** per conflict: `[m]` keep MAW (regenerate via `maw plan`) · `[t]` keep trellis · `[r]` re-run trellis init to **resume progress**.
+4. **You choose** per conflict: `[m]` keep MAW (regenerate via `mawf plan`) · `[t]` keep trellis · `[r]` re-run trellis init to **resume progress**.
 5. MAW applies your choice and continues.
 
 (A black-box CLI can't be paused mid-write, so MAW detects conflicts immediately after the conflicting write, then resumes by re-running the idempotent `trellis init`.) See [`src/trellis.js`](./src/trellis.js).
@@ -195,33 +197,33 @@ Because trellis and MAW can both manage files, on conflict MAW **pauses** trelli
 Real inference spend from cc-switch's `proxy_request_logs` → USD/min. **Per-agent** $5/min, **total** $10/min (independent), **max concurrency** 16 — editable in `.maw/config.yaml` or via flags. Pricing source chain: cc-switch `model_pricing` → provider `cost_multiplier` → vendored **estimate** (tagged `estimated:true`) → `null` (never faked). Hosts not routed via the cc-switch proxy (pi, dsh) have no measured spend rate → rate limits degrade to concurrency-only; the **price gate** still applies on dsh via cc-switch's auto-synced `~/.cc-switch/model-pricing.json` (matched ids get real prices, unmatched stay unknown).
 
 ```bash
-maw cost      # current rate + top sessions + used% vs limit
-maw guard     # ALLOW/DENY a new spawn right now (pre-spawn check)
-maw acquire --id <id> --role <r>   # take a slot
-maw release --id <id>             # release a slot
+mawf cost      # current rate + top sessions + used% vs limit
+mawf guard     # ALLOW/DENY a new spawn right now (pre-spawn check)
+mawf acquire --id <id> --role <r>   # take a slot
+mawf release --id <id>             # release a slot
 ```
 
 ## 10. Installation
 **From npm (once published):** `npx multi-agent-workflow install`.
 **From a fork/clone (now):**
 ```bash
-git clone https://github.com/<you>/multi-agent-workflow-for-a-complicated-codebase.git
-cd multi-agent-workflow-for-a-complicated-codebase
-npx . install          # or node bin/maw.js install
+git clone https://github.com/<you>/multi-agents-workflow.git
+cd multi-agents-workflow
+npx . install          # or node bin/mawf.js install
 ```
 `install` copies commands/agents/hooks/skills into Claude Code (and Codex, best-effort), records **every written file** in the `~/.maw/installed.json` manifest, and is non-destructive (`uninstall` removes exactly those files across all hosts — including the non-`maw-*` plugin agents/hooks — then prunes dirs it emptied). Project configs in `.maw/` are **kept** unless you pass `--purge-config`; `--restore-routing` rolls cc-switch `proxy_config` back to the pre-init snapshot. `update` re-copies templates, preserving your edits. `upgrade` self-upgrades: `git fetch` + ff-only pull for checkout installs (`--dry-run`, `--remote`, `--apply-templates`; never stashes/rebases/forces) or `npm i -g` for npm installs.
 
 ## 11. Usage Examples
-**Minimal:** `maw init -u alice` (snapshots cc-switch first) → `maw plan --project .` → `maw run` → `maw cost`.
-**Model choice:** `maw models` — see which provider(api key)+model each role gets and why (capability fit → remaining quota → cost rate).
-**Full:** `maw plan --project . --task-type coding --risk high --parallel 6 --value high --context large` → `maw guard` before each spawn → `maw acquire/release` → `maw review --after post-implementation`.
+**Minimal:** `mawf init -u alice` (snapshots cc-switch first) → `mawf plan --project .` → `mawf run` → `mawf cost`.
+**Model choice:** `mawf models` — see which provider(api key)+model each role gets and why (capability fit → remaining quota → cost rate).
+**Full:** `mawf plan --project . --task-type coding --risk high --parallel 6 --value high --context large` → `mawf guard` before each spawn → `mawf acquire/release` → `mawf review --after post-implementation`.
 See [`examples/complex-project-workflow.md`](./examples/complex-project-workflow.md) and the generated [`examples/.maw-sample/`](./examples/.maw-sample/).
 
-**Common errors:** `cc-switch database not found` → `maw doctor`; `DENY spawn ... per-agent limit` → lower concurrency or raise `--per-agent`; `codex not ready` → install codex + codex-plugin-cc (MAW degrades to a second Claude reviewer for risk ≥ medium); `routing NOT compliant` → `maw routing --fix`.
+**Common errors:** `cc-switch database not found` → `mawf doctor`; `DENY spawn ... per-agent limit` → lower concurrency or raise `--per-agent`; `codex not ready` → install codex + codex-plugin-cc (MAW degrades to a second Claude reviewer for risk ≥ medium); `routing NOT compliant` → `mawf routing --fix`.
 
 ## 12. Directory Structure
 ```
-bin/maw.js  src/  plugin/  skills/  defaults/  examples/  tests/  docs/
+bin/mawf.js  src/  plugin/  skills/  defaults/  examples/  tests/  docs/
 .github/workflows/ci.yml  README.{md,zh-Hans,zh-Hant}  LICENSE(MIT)
 ```
 
@@ -240,7 +242,7 @@ cc-switch is read-only by default; the only writes are (a) the DECOUPLED project
 > Contributions welcome — see [`CONTRIBUTING.md`](./CONTRIBUTING.md) and [`docs/GOVERNANCE.md`](./docs/GOVERNANCE.md). *(No other contributors are fabricated.)*
 
 ## 16. Contact
-- Issues: <https://github.com/imBlanker/multi-agent-workflow-for-a-complicated-codebase/issues>
+- Issues: <https://github.com/imBlanker/multi-agents-workflow/issues>
 - Author: **imBlanker** (GitHub). *(Contact details to be added; none fabricated.)*
 
 ---
@@ -248,17 +250,17 @@ cc-switch is read-only by default; the only writes are (a) the DECOUPLED project
 ## Testing
 ```bash
 npm test        # 69 node:test cases
-node bin/maw.js doctor
+node bin/mawf.js doctor
 ```
 
 ## GitHub Stars Trend
 The badge at the top always shows the live star count (via [shields.io](https://shields.io)). The trend chart below is embedded via the official [star-history](https://www.star-history.com/blog/how-to-use-github-star-history#how-to-embed-the-chart-in-your-readme) **"Generate embed code"** flow with a sealed repo-read token (`sealed_token`) — it renders reliably regardless of star-history's shared token-pool state, is dark/light aware, and auto-updates on each view:
 
-<a href="https://www.star-history.com/?type=date&repos=imBlanker%2Fmulti-agent-workflow-for-a-complicated-codebase">
+<a href="https://www.star-history.com/?type=date&repos=imBlanker%2Fmulti-agents-workflow">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=imBlanker/multi-agent-workflow-for-a-complicated-codebase&type=date&theme=dark&legend=top-left&sealed_token=PYzm97OB-CHuFqRbxwItWNfcNPaj1VeB_w7lokYexF6G_txF6lQ5fkUsDSa2CA-OXsxYMZMRjbrqcsM4xF_3tlnZqyQRfDYzMvEEFRDiRV2FhIbBv3Ythw" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=imBlanker/multi-agent-workflow-for-a-complicated-codebase&type=date&legend=top-left&sealed_token=PYzm97OB-CHuFqRbxwItWNfcNPaj1VeB_w7lokYexF6G_txF6lQ5fkUsDSa2CA-OXsxYMZMRjbrqcsM4xF_3tlnZqyQRfDYzMvEEFRDiRV2FhIbBv3Ythw" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=imBlanker/multi-agent-workflow-for-a-complicated-codebase&type=date&legend=top-left&sealed_token=PYzm97OB-CHuFqRbxwItWNfcNPaj1VeB_w7lokYexF6G_txF6lQ5fkUsDSa2CA-OXsxYMZMRjbrqcsM4xF_3tlnZqyQRfDYzMvEEFRDiRV2FhIbBv3Ythw" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=imBlanker/multi-agents-workflow&type=date&theme=dark&legend=top-left&sealed_token=PYzm97OB-CHuFqRbxwItWNfcNPaj1VeB_w7lokYexF6G_txF6lQ5fkUsDSa2CA-OXsxYMZMRjbrqcsM4xF_3tlnZqyQRfDYzMvEEFRDiRV2FhIbBv3Ythw" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=imBlanker/multi-agents-workflow&type=date&legend=top-left&sealed_token=PYzm97OB-CHuFqRbxwItWNfcNPaj1VeB_w7lokYexF6G_txF6lQ5fkUsDSa2CA-OXsxYMZMRjbrqcsM4xF_3tlnZqyQRfDYzMvEEFRDiRV2FhIbBv3Ythw" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=imBlanker/multi-agents-workflow&type=date&legend=top-left&sealed_token=PYzm97OB-CHuFqRbxwItWNfcNPaj1VeB_w7lokYexF6G_txF6lQ5fkUsDSa2CA-OXsxYMZMRjbrqcsM4xF_3tlnZqyQRfDYzMvEEFRDiRV2FhIbBv3Ythw" />
  </picture>
 </a>
 

@@ -1,5 +1,5 @@
 // @ts-check
-// `maw doctor` — environment + capability + policy report.
+// `mawf doctor` — environment + capability + policy report.
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import { exists, readJson } from "./util.js";
@@ -71,7 +71,7 @@ export function doctor() {
       const routing = readRouting({ dbPath: db });
       const pol = routingPolicy(routing);
       const det = pol.violations.length ? `violations: ${pol.violations.map((v) => v.app + "." + v.field + "=" + v.expected).join("; ")}` : "claude local-routing+failover on; codex " + (pol.codexOAuthInUse ? "routing OFF (OAuth)" : "routing ON");
-      checks.push({ name: "cc-switch routing policy", status: pol.compliant ? "ok" : "warn", detail: det + (pol.compliant ? "" : " — run `maw routing --fix`") });
+      checks.push({ name: "cc-switch routing policy", status: pol.compliant ? "ok" : "warn", detail: det + (pol.compliant ? "" : " — run `mawf routing --fix`") });
     } catch (e) {
       checks.push({ name: "cc-switch routing policy", status: "warn", detail: "could not read proxy_config" });
     }
@@ -149,11 +149,11 @@ export function doctor() {
     const det = detectInstallMode();
     if (det.mode === "checkout" && det.gitRoot) {
       const desc = gitDescribe(det.gitRoot);
-      checks.push({ name: "MAW install mode", status: "ok", detail: `git checkout at ${det.gitRoot} (${desc}); self-upgrade: maw upgrade` });
+      checks.push({ name: "MAW install mode", status: "ok", detail: `git checkout at ${det.gitRoot} (${desc}); self-upgrade: mawf upgrade` });
     } else if (det.mode === "npm" && det.squatted) {
       checks.push({ name: "MAW install mode", status: "warn", detail: `npm global resolves to the squatted third-party name "${det.pkgName}" — upgrade from a git checkout instead` });
     } else {
-      checks.push({ name: "MAW install mode", status: "ok", detail: `npm global (${det.pkgName}); self-upgrade: maw upgrade` });
+      checks.push({ name: "MAW install mode", status: "ok", detail: `npm global (${det.pkgName}); self-upgrade: mawf upgrade` });
     }
   } catch {
     checks.push({ name: "MAW install mode", status: "warn", detail: "could not detect" });

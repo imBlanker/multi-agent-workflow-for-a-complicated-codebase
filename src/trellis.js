@@ -1,6 +1,6 @@
 // @ts-check
 // Orchestrates `trellis init -u <user-name>` as the mandatory next step after
-// `maw init`. Trellis (npm: @mindfoldhq/trellis — "AI-assisted development
+// `mawf init`. Trellis (npm: @mindfoldhq/trellis — "AI-assisted development
 // workflow framework for Cursor, Claude Code and more") is a more powerful,
 // more rigorous workflow system; MAW defers to it for the heavy workflow
 // scaffolding and only provides plan + cost gate + codex review.
@@ -90,12 +90,12 @@ export function detectConflicts(before, after) {
 /**
  * Restore MAW's version of a file from a snapshot hash (used when the user
  * picks "keep MAW"). Since snapshots only store hashes, MAW restores by
- * regenerating from the plan: in practice we re-run `maw plan`. Here we just
+ * regenerating from the plan: in practice we re-run `mawf plan`. Here we just
  * surface the choice; the caller drives regeneration. Returns the choice.
  * @param {"maw"|"trellis"|"keep"|"rerun"} choice
  */
 export function applyConflictChoice(choice) {
-  return { choice, applied: choice === "maw" ? "MAW files will be regenerated via `maw plan`" : choice === "trellis" ? "trellis version kept; MAW plan files left as-is" : choice === "rerun" ? "re-running trellis init to resume" : "no action" };
+  return { choice, applied: choice === "maw" ? "MAW files will be regenerated via `mawf plan`" : choice === "trellis" ? "trellis version kept; MAW plan files left as-is" : choice === "rerun" ? "re-running trellis init to resume" : "no action" };
 }
 
 /**
@@ -186,10 +186,10 @@ export function runTrellisInit(opts) {
     process.stdout.write(`\n⚠  MAW paused trellis init: ${conflicts.length} conflict(s) between MAW and trellis:\n`);
     for (const c of conflicts) process.stdout.write(`   - ${path.relative(project, c.file)} (${c.kind})\n`);
     process.stdout.write(`   log: ${path.relative(project, logPath)}\n`);
-    process.stdout.write(`   choose: [m] keep MAW (regenerate via maw plan)  [t] keep trellis  [r] re-run trellis init to resume\n> `);
+    process.stdout.write(`   choose: [m] keep MAW (regenerate via mawf plan)  [t] keep trellis  [r] re-run trellis init to resume\n> `);
     const ans = readLineSync().trim().toLowerCase() || "r";
     if (ans === "m") {
-      // regenerate MAW plan files (caller re-runs maw plan); here we just note it
+      // regenerate MAW plan files (caller re-runs mawf plan); here we just note it
       applyConflictChoice("maw");
     } else if (ans === "t") {
       applyConflictChoice("trellis");

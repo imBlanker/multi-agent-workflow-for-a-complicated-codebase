@@ -1,7 +1,7 @@
 name: trellis-update-tracker
 
 # Auto-track updates of @mindfoldhq/trellis (the workflow system MAW chains
-# after `maw init`, invoked via `npx --yes @mindfoldhq/trellis@latest`).
+# after `mawf init`, invoked via `npx --yes @mindfoldhq/trellis@latest`).
 #
 # Behavior (see .github/scripts/trellis-tracker.mjs + src/trellistracker.js):
 #   - schedule: weekly (Monday 02:00 UTC) + manual dispatch

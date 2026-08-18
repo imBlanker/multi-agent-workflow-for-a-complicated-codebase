@@ -1,5 +1,5 @@
 // @ts-check
-// `maw upgrade` — self-upgrade (trellis-upgrade parity, fork-first aware).
+// `mawf upgrade` — self-upgrade (trellis-upgrade parity, fork-first aware).
 //
 // Two install modes, auto-detected from the package root the running `maw`
 // resolves to (same PKG_ROOT logic as installer.js):
@@ -10,7 +10,7 @@
 //   dirty tree or a diverged branch aborts with the exact manual commands.
 //   Success reports old→new version and prints the follow-up
 //   `npx . update` (refresh host templates; keeps user edits) — run it
-//   automatically only with --apply-templates (spawning bin/maw.js so the
+//   automatically only with --apply-templates (spawning bin/mawf.js so the
 //   POST-merge code runs, not this already-loaded process).
 //
 // - npm mode: the package root sits under the global npm prefix with no .git
@@ -119,7 +119,7 @@ export function upgrade(opts = {}) {
   if (dirty.ok && dirty.out) {
     return {
       ok: false, mode: "checkout", output: [],
-      error: `working tree is dirty in ${gitRoot} — commit or stash first; maw upgrade never stashes/rebases/forces. Manual: git -C ${gitRoot} status`,
+      error: `working tree is dirty in ${gitRoot} — commit or stash first; mawf upgrade never stashes/rebases/forces. Manual: git -C ${gitRoot} status`,
     };
   }
 
@@ -127,7 +127,7 @@ export function upgrade(opts = {}) {
   if (!remotes.ok || !remotes.out.split(/\s+/).includes(remote)) {
     return {
       ok: false, mode: "checkout", output: [],
-      error: `git remote "${remote}" not found (have: ${remotes.out || "none"}). Fork users: pass --remote <name>, or add upstream: git -C ${gitRoot} remote add upstream https://github.com/imBlanker/multi-agent-workflow-for-a-complicated-codebase.git`,
+      error: `git remote "${remote}" not found (have: ${remotes.out || "none"}). Fork users: pass --remote <name>, or add upstream: git -C ${gitRoot} remote add upstream https://github.com/imBlanker/multi-agents-workflow.git`,
     };
   }
 
@@ -149,7 +149,7 @@ export function upgrade(opts = {}) {
   if (!merge.ok) {
     return {
       ok: false, mode: "checkout", output: [],
-      error: `ff-only merge to ${target} failed (diverged from remote?) — resolve manually; maw upgrade never rewrites history. Manual: git -C ${gitRoot} merge --ff-only ${target}   # or git pull --rebase ${remote} ${branch.out}`,
+      error: `ff-only merge to ${target} failed (diverged from remote?) — resolve manually; mawf upgrade never rewrites history. Manual: git -C ${gitRoot} merge --ff-only ${target}   # or git pull --rebase ${remote} ${branch.out}`,
     };
   }
 
@@ -157,7 +157,7 @@ export function upgrade(opts = {}) {
   const followUp = "npx . update";
   output.push(`pulled ${target}: ${det.version} -> ${newPkg.version}`);
   if (opts.applyTemplates) {
-    const r = spawnSync(process.execPath, [path.join(gitRoot, "bin", "maw.js"), "update"], {
+    const r = spawnSync(process.execPath, [path.join(gitRoot, "bin", "mawf.js"), "update"], {
       cwd: gitRoot, encoding: "utf8", timeout: 300000,
     });
     const tail = String(r.stdout || "").trim().split("\n").filter(Boolean).slice(-3);
