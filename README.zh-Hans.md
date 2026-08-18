@@ -209,7 +209,7 @@ git clone https://github.com/<you>/multi-agent-workflow-for-a-complicated-codeba
 cd multi-agent-workflow-for-a-complicated-codebase
 npx . install          # or node bin/maw.js install
 ```
-`install` 把 commands/agents/hooks/skills 拷贝到 Claude Code（以及 Codex，尽力而为），并在 `~/.maw/installed.json` 清单中记录**每一个写入的文件**，且是非破坏性的（卸载会跨全部宿主精确移除这些文件——包括不带 `maw-*` 前缀的插件 agents/hooks——并清理因此变空的目录）。项目 `.maw/` 配置默认**保留**，传 `--purge-config` 才删除；`--restore-routing` 可将 cc-switch `proxy_config` 回滚到 init 前的快照。`update` 重新拷贝模板，保留你的编辑。
+`install` 把 commands/agents/hooks/skills 拷贝到 Claude Code（以及 Codex，尽力而为），并在 `~/.maw/installed.json` 清单中记录**每一个写入的文件**，且是非破坏性的（卸载会跨全部宿主精确移除这些文件——包括不带 `maw-*` 前缀的插件 agents/hooks——并清理因此变空的目录）。项目 `.maw/` 配置默认**保留**，传 `--purge-config` 才删除；`--restore-routing` 可将 cc-switch `proxy_config` 回滚到 init 前的快照。`update` 重新拷贝模板，保留你的编辑。`upgrade` 自升级：checkout 安装走 `git fetch` + ff-only 拉取（`--dry-run`/`--remote`/`--apply-templates`；绝不 stash/rebase/force），npm 安装走 `npm i -g`。
 
 ## 11. 用法示例
 **最简：** `maw init -u alice`（先对 cc-switch 做快照）→ `maw plan --project .` → `maw run` → `maw cost`。
