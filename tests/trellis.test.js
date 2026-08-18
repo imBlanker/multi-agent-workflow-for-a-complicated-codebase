@@ -81,6 +81,17 @@ test("trellisPlatformFlags: pi host with ~/.claude present -> --pi --claude", ()
   } finally { process.env.HOME = oldHome; try { fs.rmSync(d, { recursive: true, force: true }); } catch {} }
 });
 
+test("trellisPlatformFlags: dsh host -> --dsh (+ --claude when ~/.claude present)", () => {
+  const oldHome = process.env.HOME;
+  const bare = fs.mkdtempSync(path.join(os.tmpdir(), "maw-tr-dsh-"));
+  try {
+    process.env.HOME = bare; // no .claude
+    assert.deepEqual(trellisPlatformFlags("dsh"), ["--dsh"]);
+    fs.mkdirSync(path.join(bare, ".claude"), { recursive: true });
+    assert.deepEqual(trellisPlatformFlags("dsh"), ["--dsh", "--claude"]);
+  } finally { process.env.HOME = oldHome; try { fs.rmSync(bare, { recursive: true, force: true }); } catch {} }
+});
+
 test("trellisPlatformFlags: claude/codex/unknown keep --claude --codex", () => {
   assert.deepEqual(trellisPlatformFlags("claude-code"), ["--claude", "--codex"]);
   assert.deepEqual(trellisPlatformFlags("codex"), ["--claude", "--codex"]);

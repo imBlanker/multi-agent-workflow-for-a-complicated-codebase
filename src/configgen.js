@@ -206,7 +206,10 @@ node "$CLAUDE_PLUGIN_ROOT/scripts/codex-companion.mjs" review --wait
 or use the slash command \`/codex:review\` (review-only). For adversarial review use \`/codex:adversarial-review\`.` : (plan.hostApp === "pi" || a.agent === "pi") ? `This agent runs via **pi-subagents**. Spawn it from the orchestrator with the native \`trellis_subagent\` tool (single/parallel/chain) or the \`/agents\` command, pointing at the pi agent file \`.pi/agents/maw-${slug(a.role)}.md\`:
 
 - Pass the task verbatim (see the Task section above) and require it to return a compressed summary + file diffs.
-- Cost control for pi is **concurrency-only**: pi is not routed via the cc-switch proxy, so real-spend is not measured. Wrap spawns with \`maw acquire --role ${a.role}\` / \`maw release --role ${a.role}\` to enforce concurrency.` : `Spawn this agent from the orchestrator as a subagent with the tool list above. Pass the task verbatim and require it to return a compressed summary + file diffs.`}
+- Cost control for pi is **concurrency-only**: pi is not routed via the cc-switch proxy, so real-spend is not measured. Wrap spawns with \`maw acquire --role ${a.role}\` / \`maw release --role ${a.role}\` to enforce concurrency.` : (plan.hostApp === "dsh" || a.agent === "dsh") ? `This agent runs via **dsh's prompt-driven subagent tool**. Spawn it from the orchestrator session (\`dsh web\`, or \`dsh --profile headless "<task>"\` for one-shot runs) — dsh has no named agent-definition files, so the portable spec IS the payload:
+
+- Point the spawn at \`.maw/agents/${slug(a.role)}.md\`: pass the Task section verbatim plus the tool list, and require it to return a compressed summary + file diffs.
+- Cost control for dsh is **concurrency-only** (rate): dsh is not routed via the cc-switch proxy, so real-spend rate is not measured. Wrap spawns with \`maw acquire --role ${a.role}\` / \`maw release --role ${a.role}\`. Model prices come from cc-switch's synced \`~/.cc-switch/model-pricing.json\` where model ids match; unmatched ids price as unknown.` : `Spawn this agent from the orchestrator as a subagent with the tool list above. Pass the task verbatim and require it to return a compressed summary + file diffs.`}
 `;
 }
 
@@ -282,6 +285,15 @@ function planMarkdown(plan, ccSwitch) {
   lines.push("## Rationale");
   for (const r of plan.rationale) lines.push(`- ${r}`);
   lines.push("");
+  if (plan.hostApp === "dsh") {
+    lines.push("## Host notes — DeepSeek Harness (dsh)");
+    lines.push("");
+    lines.push("- **Orchestration**: one orchestrator session (`dsh web` or `dsh --profile headless`); workers spawn via the prompt-driven `subagent` tool with `.maw/agents/<role>.md` as the payload — dsh has no named agent files.");
+    lines.push("- **Skills**: trellis skills live in the shared `.agents/skills/` and dsh-private `.dsh/skills/` roots (rank 100–600 discovery).");
+    lines.push("- **Context**: AGENTS.md is loaded by dsh from `$DSH_HOME/AGENTS.md` plus the project root down to the session cwd (64 KiB cap).");
+    lines.push("- **Cost**: rate limits degrade to concurrency-only (`maw acquire` / `maw release`); model prices come from cc-switch's synced `~/.cc-switch/model-pricing.json` where model ids match.");
+    lines.push("");
+  }
   lines.push("## Agents & roles");
   for (const a of plan.agents) {
     lines.push(`### ${a.role}  (\`${a.agent}\`, model \`${a.model}\`)`);

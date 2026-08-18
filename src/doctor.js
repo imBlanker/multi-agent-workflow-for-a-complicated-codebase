@@ -1,16 +1,29 @@
 // @ts-check
 // `maw doctor` — environment + capability + policy report.
 import { execFileSync } from "node:child_process";
+import fs from "node:fs";
 import { exists, readJson } from "./util.js";
 import { readCcSwitch, findDb, readRouting, routingPolicy } from "./ccswitch.js";
 import { detectHost, hostCapabilities } from "./host.js";
 import { status as codexStatus } from "./codex.js";
 import { detectTrellis } from "./trellis.js";
+import { readDshConfig, readDshAsCc, readCredentialKeys, dshDefaultModel, dshCostRateNote, readCcPricingJson } from "./dshprovider.js";
 import path from "node:path";
 import os from "node:os";
 
 const PKG_ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
-const SUPPORTED = ["claude-code", "codex", "pi"]; // supported host agents (pi per MAW support-surface policy)
+const SUPPORTED = ["claude-code", "codex", "pi", "dsh"]; // supported host agents (pi/dsh per MAW support-surface policy)
+
+/** cc-switch synced model-pricing.json + its lastSyncAt, or {error}. */
+function pricingSyncInfo() {
+  try {
+    const doc = readJson(path.join(os.homedir(), ".cc-switch", "model-pricing.json"), null);
+    if (!doc || !Array.isArray(doc.models)) return { map: {}, syncAt: null, error: "unparseable" };
+    return { map: readCcPricingJson(), syncAt: doc.modelsDevSync?.lastSyncAt ?? null, error: null };
+  } catch {
+    return { map: {}, syncAt: null, error: "unavailable" };
+  }
+}
 
 /** @returns {{ ok: boolean, checks: { name: string, status: "ok"|"warn"|"fail", detail: string }[], summary: string }} */
 export function doctor() {
@@ -31,7 +44,7 @@ export function doctor() {
   // host (claude-code + codex only are supported)
   const host = detectHost();
   const supported = SUPPORTED.includes(host.app);
-  checks.push({ name: "Host agent software", status: host.app === "unknown" ? "warn" : (supported ? "ok" : "warn"), detail: `${host.app} at ${host.homeDir || "(none)"}; caps: ${hostCapabilities(host).join(", ") || "none"}${supported ? "" : " — only Claude Code, Codex and Pi are supported"}` });
+  checks.push({ name: "Host agent software", status: host.app === "unknown" ? "warn" : (supported ? "ok" : "warn"), detail: `${host.app} at ${host.homeDir || "(none)"}; caps: ${hostCapabilities(host).join(", ") || "none"}${supported ? "" : " — only Claude Code, Codex, Pi and DeepSeek Harness (dsh) are supported"}` });
 
   // cc-switch (read-only)
   const db = findDb();
@@ -70,6 +83,43 @@ export function doctor() {
     checks.push({ name: "Pi spend tracking", status: "warn", detail: "pi is not routed via the cc-switch proxy — cost-rate is concurrency-only; real spend is not measured" });
   } else {
     checks.push({ name: "Pi Agent config", status: "warn", detail: "~/.pi/agent not found (not installed)" });
+  }
+
+  // DeepSeek Harness (dsh) — config lives in $DSH_HOME (~/.dsh), NOT
+  // cc-switch-managed. Providers come from settings.yaml
+  // (llm-pi-ai.providers); prices cross-ref cc-switch's auto-synced
+  // model-pricing.json; spend rate is not measurable (no proxy) → cost-rate
+  // degrades to concurrency-only.
+  if (host.dshHome) {
+    const dshHome = host.dshHome;
+    let version = "?";
+    try { version = execFileSync("dsh", ["--version"], { encoding: "utf8", timeout: 10000 }).trim(); } catch {}
+    const cfg = readDshConfig(dshHome);
+    const cc = readDshAsCc({ dshHome });
+    const provs = cc?.allProviders ?? [];
+    const modelIds = provs.flatMap((p) => p.settings_config?._dshModels ?? []);
+    checks.push({ name: "DeepSeek Harness (dsh) config", status: "ok", detail: `${dshHome}${version !== "?" ? `; dsh ${version}` : ""}; profiles: ${(fs.readdirSync(path.join(dshHome, "profiles")).join(", ") || "none")}` });
+    checks.push({
+      name: "dsh providers (settings.yaml)",
+      status: provs.length ? "ok" : "warn",
+      detail: provs.length
+        ? `${provs.length} provider(s): ${provs.map((p) => `${p.id} (${p.settings_config._dshModels.length} models)`).join(", ")}`
+        : "no llm-pi-ai.providers configured — open dsh web → Settings → Models",
+    });
+    const def = dshDefaultModel({ profile: "web" });
+    checks.push({ name: "dsh default model", status: "ok", detail: def ? `${def.provider} / ${def.model} (composed agent-default-model)` : (cc?.currentProviders?.dsh ? `${cc.currentProviders.dsh.id} / ${cc.currentProviders.dsh.settings_config.model} (first provider fallback)` : "unknown") });
+    const credKeys = readCredentialKeys(dshHome);
+    const envSatisfied = provs.filter((p) => p.apiKeyEnv && process.env[p.apiKeyEnv]).map((p) => p.id);
+    checks.push({ name: "dsh credentials", status: "ok", detail: `${credKeys.length} key(s) in .credentials.yaml (${credKeys.join(", ") || "none"}); apiKeyEnv satisfied for: ${envSatisfied.join(", ") || "none (keys resolve inside dsh per request)"}` });
+    const preset = cfg?.settings?.["agent-presets"]?.default;
+    checks.push({ name: "dsh agent preset", status: preset ? "ok" : "warn", detail: preset ? `default: ${preset}` : "no agent-presets.default in settings.yaml (dsh built-in default applies)" });
+    const pricing = pricingSyncInfo();
+    const matched = modelIds.filter((id) => pricing.map[id]);
+    checks.push({ name: "dsh model pricing (cc-switch sync)", status: "ok", detail: pricing.error ? "model-pricing.json unavailable — price gate reports unknown" : `${Object.keys(pricing.map).length} models synced (last sync ${pricing.syncAt ? new Date(pricing.syncAt).toISOString().slice(0, 16) : "?"}); ${matched.length}/${modelIds.length} dsh models priced` });
+    checks.push({ name: "dsh spend tracking", status: "warn", detail: dshCostRateNote() });
+    checks.push({ name: "dsh MCP servers", status: "ok", detail: "managed by dsh patch layers (dsh-mcp-client), not cc-switch — MAW reports only" });
+  } else {
+    checks.push({ name: "DeepSeek Harness (dsh) config", status: "warn", detail: "$DSH_HOME (~/.dsh) not found (not installed)" });
   }
 
   // trellis (the mandatory next-step init)

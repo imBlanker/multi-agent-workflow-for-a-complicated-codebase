@@ -210,28 +210,35 @@ export function planWorkflow(signals, ctx = {}) {
     }
     return selCache[key];
   }
-  const orchChoice = modelFor("orchestrator", "claude", "claude-opus-5");
-  const resChoice = modelFor("researcher", "claude", "claude-sonnet-5");
-  const implChoice = modelFor("implementer", "claude", "claude-sonnet-5");
-  const lightChoice = modelFor("researcher-2", "claude", "claude-haiku-4-5", true);
+  // Host adaptation: on a pi or dsh host the workers run under that host's
+  // runtime (not claude-code), and model selection should query that host's
+  // app_type (its providers are merged into cc by loadCtx). Codex keeps its
+  // reviewer-only role; claude/codex/unknown hosts stay claude-code.
+  const isAltHost = host.app === "pi" || host.app === "dsh";
+  const hostAgent = isAltHost ? host.app : "claude-code";
+  const hostAppType = isAltHost ? host.app : "claude";
+  const orchChoice = modelFor("orchestrator", hostAppType, "claude-opus-5");
+  const resChoice = modelFor("researcher", hostAppType, "claude-sonnet-5");
+  const implChoice = modelFor("implementer", hostAppType, "claude-sonnet-5");
+  const lightChoice = modelFor("researcher-2", hostAppType, "claude-haiku-4-5", true);
   const codexChoice = modelFor("reviewer", "codex", "gpt-5.2-codex");
-  const claudeRevChoice = modelFor("reviewer", "claude", "claude-opus-5");
+  const claudeRevChoice = modelFor("reviewer", hostAppType, "claude-opus-5");
 
   /** @type {AgentSpec[]} */
   const agents = [];
   const needsOrch = selected.some((a) => a === "orchestrator-workers" || a === "dynamic" || a === "multi-agent" || a === "ultracode");
   if (needsOrch) {
-    agents.push(mkAgent("orchestrator", "claude-code", orchChoice.model, "claude", perAgent, ["Task", "Read", "Edit", "Bash"], "Plan, decompose, delegate, synthesize.", true, orchChoice));
+    agents.push(mkAgent("orchestrator", hostAgent, orchChoice.model, hostAppType, perAgent, ["Task", "Read", "Edit", "Bash"], "Plan, decompose, delegate, synthesize.", true, orchChoice));
   }
   const workerCount = Math.min(Math.max(signals.parallelizableSubtasks ?? 2, selected.includes("multi-agent") ? 4 : 2), maxConcurrency);
   if (selected.includes("multi-agent") || selected.includes("orchestrator-workers") || selected.includes("dynamic")) {
-    agents.push(mkAgent("researcher", "claude-code", resChoice.model, "claude", perAgent, ["WebFetch", "Grep", "Read"], "Investigate independent facets and compress findings.", false, resChoice));
-    agents.push(mkAgent("implementer", "claude-code", implChoice.model, "claude", perAgent, ["Read", "Edit", "Write", "Bash"], "Implement a vertical slice end-to-end.", false, implChoice));
-    if (workerCount >= 3) agents.push(mkAgent("implementer-2", "claude-code", implChoice.model, "claude", perAgent, ["Read", "Edit", "Write", "Bash"], "Implement a second independent slice in parallel.", false, implChoice));
-    if (workerCount >= 4) agents.push(mkAgent("researcher-2", "claude-code", lightChoice.model, "claude", perAgent, ["WebFetch", "Grep"], "Secondary breadth-first exploration.", false, lightChoice));
+    agents.push(mkAgent("researcher", hostAgent, resChoice.model, hostAppType, perAgent, ["WebFetch", "Grep", "Read"], "Investigate independent facets and compress findings.", false, resChoice));
+    agents.push(mkAgent("implementer", hostAgent, implChoice.model, hostAppType, perAgent, ["Read", "Edit", "Write", "Bash"], "Implement a vertical slice end-to-end.", false, implChoice));
+    if (workerCount >= 3) agents.push(mkAgent("implementer-2", hostAgent, implChoice.model, hostAppType, perAgent, ["Read", "Edit", "Write", "Bash"], "Implement a second independent slice in parallel.", false, implChoice));
+    if (workerCount >= 4) agents.push(mkAgent("researcher-2", hostAgent, lightChoice.model, hostAppType, perAgent, ["WebFetch", "Grep"], "Secondary breadth-first exploration.", false, lightChoice));
   }
   if (selected.includes("loop") || selected.includes("ultracode")) {
-    agents.push(mkAgent("implementer", "claude-code", implChoice.model, "claude", perAgent, ["Read", "Edit", "Write", "Bash", "Task"], "Iterate implement→test→fix in a loop until criteria met.", false, implChoice));
+    agents.push(mkAgent("implementer", hostAgent, implChoice.model, hostAppType, perAgent, ["Read", "Edit", "Write", "Bash", "Task"], "Iterate implement→test→fix in a loop until criteria met.", false, implChoice));
   }
   // codex reviewer only if codex available
   const codexOn = !!host.codexPluginInstalled;
@@ -245,23 +252,23 @@ export function planWorkflow(signals, ctx = {}) {
   // --- groups (parallel/serial) ---
   /** @type {Plan["groups"]} */
   const groups = [];
-  groups.push({ label: "plan", parallel: false, agents: ["orchestrator"], steps: [{ role: "orchestrator", agent: "claude-code", task: "Decompose the task; write .maw/plan.md." }] });
+  groups.push({ label: "plan", parallel: false, agents: ["orchestrator"], steps: [{ role: "orchestrator", agent: hostAgent, task: "Decompose the task; write .maw/plan.md." }] });
   if (selected.includes("multi-agent") || selected.includes("orchestrator-workers") || selected.includes("dynamic")) {
     groups.push({
       label: "execute-parallel",
       parallel: true,
       agents: agents.filter((a) => a.role.startsWith("implementer") || a.role.startsWith("researcher")).map((a) => a.role),
       steps: [
-        { role: "researcher", agent: "claude-code", task: "Explore landscape; return compressed findings." },
-        { role: "implementer", agent: "claude-code", task: "Implement vertical slice A." },
-        ...(workerCount >= 3 ? [{ role: "implementer-2", agent: "claude-code", task: "Implement vertical slice B in parallel." }] : []),
-        ...(workerCount >= 4 ? [{ role: "researcher-2", agent: "claude-code", task: "Secondary parallel exploration." }] : []),
+        { role: "researcher", agent: hostAgent, task: "Explore landscape; return compressed findings." },
+        { role: "implementer", agent: hostAgent, task: "Implement vertical slice A." },
+        ...(workerCount >= 3 ? [{ role: "implementer-2", agent: hostAgent, task: "Implement vertical slice B in parallel." }] : []),
+        ...(workerCount >= 4 ? [{ role: "researcher-2", agent: hostAgent, task: "Secondary parallel exploration." }] : []),
       ],
     });
   } else {
-    groups.push({ label: "execute", parallel: false, agents: ["implementer"], steps: [{ role: "implementer", agent: "claude-code", task: "Implement the task step by step." }] });
+    groups.push({ label: "execute", parallel: false, agents: ["implementer"], steps: [{ role: "implementer", agent: hostAgent, task: "Implement the task step by step." }] });
   }
-  groups.push({ label: "synthesize", parallel: false, agents: ["orchestrator"], steps: [{ role: "orchestrator", agent: "claude-code", task: "Merge subagent results; resolve conflicts." }] });
+  groups.push({ label: "synthesize", parallel: false, agents: ["orchestrator"], steps: [{ role: "orchestrator", agent: hostAgent, task: "Merge subagent results; resolve conflicts." }] });
 
   // --- review points (risk-gated, not every step) ---
   /** @type {Plan["reviewPoints"]} */

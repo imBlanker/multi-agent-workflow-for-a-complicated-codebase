@@ -23,7 +23,7 @@ MAW never hardcodes one topology. It scores each architecture against real
 project signals (file count, languages, parallelizable subtasks, risk, context
 need, value/cost tolerance, HITL/persistence needs) plus the host's native
 capabilities, picks the best fit, and combines others as appropriate. The host
-agent software (Claude Code, Codex, Pi Agent, …) drives execution; MAW provides the
+agent software (Claude Code, Codex, Pi Agent, DeepSeek Harness, …) drives execution; MAW provides the
 **plan**, the **cost gate**, and the **review gates**. When the host already
 offers a native dynamic-workflow or multi-agent mechanism, MAW layers `dynamic`
 on top and lets the host drive — instead of re-implementing coordination.
@@ -104,7 +104,7 @@ Each module is a single responsibility; all are plain ESM with `node:` built-ins
 
 | Module | Responsibility (one line) |
 |---|---|
-| `ccswitch.js` | Read-only access to the cc-switch SQLite DB via `node:sqlite` (`readOnly: true`), falling back to the `sqlite3` CLI; returns providers, `model_pricing`, `settings`, and the real-spend cost rate from `proxy_request_logs`. **Project functionality is DECOUPLED by default**: profile read/write (`readProfiles`/`createProjectProfile`/`guardSql`) is kept but disabled unless `MAW_CC_PROJECT_SYNC=1`; only provider-config sync (each provider's `config.toml`/`config.json` high-value settings) + the routing carve-out remain active. Pi is NOT cc-switch-managed (no pi app_type / traffic) → routing is skipped for pi hosts, and cost degrades to concurrency-only. |
+| `ccswitch.js` | Read-only access to the cc-switch SQLite DB via `node:sqlite` (`readOnly: true`), falling back to the `sqlite3` CLI; returns providers, `model_pricing`, `settings`, and the real-spend cost rate from `proxy_request_logs`. **Project functionality is DECOUPLED by default**: profile read/write (`readProfiles`/`createProjectProfile`/`guardSql`) is kept but disabled unless `MAW_CC_PROJECT_SYNC=1`; only provider-config sync (each provider's `config.toml`/`config.json` high-value settings) + the routing carve-out remain active. Pi is NOT cc-switch-managed (no pi app_type / traffic) → routing is skipped for pi hosts, and cost degrades to concurrency-only. dsh is likewise NOT cc-switch-managed: `dshprovider.js` reads `$DSH_HOME/settings.yaml` (`llm-pi-ai.providers`) into the same provider shape (app_type "dsh"), and `readCcPricingJson()` imports cc-switch's auto-synced `~/.cc-switch/model-pricing.json` so matched model ids keep real prices for the price gate. |
 | `pricegate.js` | The HITL model price gate: assigning a model with Input > $2/1M or Output > $10/1M tokens pauses the work (`checkPriceGate` / `priceGateReport`); enforced by planner, configgen, plan/init/add-agent (exit 3), guard/acquire (deny), and `maw approve-model`. |
 | `pricing.js` | Model price resolution with a documented fallback chain (cc-switch → multiplier → vendored estimate → `null`); `projectRate` is a planning projection only. |
 | `planner.js` | The deterministic `scoreArchitectures` + `planWorkflow`: scores six architectures, picks `primary`, builds the `selected[]` set, the agent roster, parallel/serial groups, risk-gated review points, loops, cost config, and the `priceGate` block list (roles whose model assignment exceeds the HITL price gate). |
@@ -159,11 +159,12 @@ explicitly via the `estimated: true` flag.
 
 ## 6. Codex Integration
 
-**Pi Agent cost degradation.** Pi is not routed via the cc-switch proxy, so
-`proxy_request_logs` contains no pi traffic → `costRate()` reports 0 for pi and
-`maw cost` marks pi spend as estimated/unknown; the guard falls back to
-concurrency-only limiting (the same graceful degradation as a missing cc-switch
-DB).
+**Pi/dsh cost degradation.** Pi and dsh are not routed via the cc-switch
+proxy, so `proxy_request_logs` contains no pi/dsh traffic → `costRate()`
+reports 0 for them and `maw cost` marks their spend as estimated/unknown; the
+guard falls back to concurrency-only limiting (the same graceful degradation
+as a missing cc-switch DB). dsh additionally sources prices from the synced
+`model-pricing.json`, so its **price gate** stays live for matched ids.
 
 Codex is invoked through the **`codex-plugin-cc` companion script**, discovered
 by `findCodexCompanion` under `~/.claude/plugins/marketplaces/openai-codex` (and
@@ -208,6 +209,7 @@ user can add, remove, or edit any file; the runner re-reads it at execute time.
 - **Codex** gets agent definitions copied to `~/.codex/agents` (best-effort) and
   is invoked as the reviewer via `codex-plugin-cc`.
 - **Pi Agent** reads `.maw/` and gets native pi agent files (`.pi/agents/maw-*.md`) + pi prompts + skills during `maw plan` / `maw install`; spawn via the native subagent tool. Pi is NOT cc-switch-managed: its providers/MCP/skills live in `~/.pi/agent/`, and cost control is concurrency-only (spend not measured).
+- **DeepSeek Harness (dsh)** reads `.maw/` and gets skills copied into `$DSH_HOME/skills` during `maw install`. dsh has no named agent-definition surface: the portable `.maw/agents/<role>.md` IS the spawn payload, passed through dsh's prompt-driven subagent tool from one orchestrator session (`dsh web` / `--profile headless`). Providers/models come from `$DSH_HOME/settings.yaml` via `dshprovider.js`; MCP servers are managed by dsh patch layers (MAW reports only); AGENTS.md context is loaded by dsh's agent-instructions (user-global + project root down to cwd, 64 KiB cap).
 - **Gemini CLI / opencode / others** read `.maw/` directly; no native glue yet.
 
 Crucially, when the host has a **native** dynamic-workflow or multi-agent

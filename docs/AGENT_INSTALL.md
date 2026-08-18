@@ -6,7 +6,7 @@
 
 ## 0. Identity & scope
 - MAW = `multi-agent-workflow`, CLI `maw`, MIT, zero runtime deps (Node ≥ 20.17).
-- **Supported hosts: Claude Code, Codex, and Pi Agent.** If the user runs Gemini CLI / opencode / others, tell them MAW does not support their host.
+- **Supported hosts: Claude Code, Codex, Pi Agent, and DeepSeek Harness (dsh).** If the user runs Gemini CLI / opencode / others, tell them MAW does not support their host.
 - Repo: <https://github.com/imBlanker/multi-agent-workflow-for-a-complicated-codebase>
 
 ## 1. Fork-first (ask the user)
@@ -18,15 +18,39 @@ git clone https://github.com/<user-or-you>/multi-agent-workflow-for-a-complicate
 cd multi-agent-workflow-for-a-complicated-codebase
 npx . install          # or: node bin/maw.js install
 ```
-- Copies commands/agents/hooks/skills into Claude Code (and Codex agents, best-effort; and Pi skills/prompts into `~/.pi/agent/` when pi is the host).
+- Copies commands/agents/hooks/skills into Claude Code (and Codex agents, best-effort; Pi skills/prompts into `~/.pi/agent/` when pi is the host; dsh skills into `$DSH_HOME/skills` when dsh is the host).
 - Non-destructive: `uninstall` removes only `maw-*` files.
 - If `npx .` is unavailable, run `node bin/maw.js install`.
+
+### 2b. DeepSeek Harness (dsh) host setup (only when the user runs dsh)
+
+Prerequisites: Node ≥ 20.17, `npm i -g @deepseek-ai/dsh` (verify `dsh --version`).
+
+1. **Providers/models** — dsh is NOT cc-switch-managed. Configure via `dsh web` → Settings → Models, or edit `$DSH_HOME/settings.yaml` (`~/.dsh/settings.yaml`) directly. Custom OpenAI-compatible provider example:
+
+   ```yaml
+   llm-pi-ai:
+     providers:
+       my-gateway:
+         baseURL: https://gateway.example/v1
+         api: openai-completions
+         apiKeyEnv: GATEWAY_API_KEY
+         models:
+           - id: vision-preview
+             input: [text, image]
+   ```
+
+   Keys live in `~/.dsh/.credentials.yaml` (write-only; referenced by `apiKeyEnv`). Renaming a provider id is not supported — add a new one and delete the old.
+2. **Install MAW assets**: `npx . install` on a dsh host copies MAW skills into `$DSH_HOME/skills` (rank-400 user root). No prompts/commands surface exists on dsh — role specs stay portable under `.maw/agents/`.
+3. **Init**: `MAW_HOST=dsh maw init -u <user>` (or set the env before any maw command) — writes `.maw/`, skips cc-switch profile creation for dsh, and chains `trellis init --dsh` (shared `.agents/skills/` + dsh-private `.dsh/skills/` entry skills + `.dsh/DSH.md`).
+4. **Plan/run**: `maw plan --project .` then run one orchestrator session via `dsh web` (choose the project workspace) or `dsh --profile headless "<task>"`; spawn workers with dsh's subagent tool using `.maw/agents/<role>.md` as the payload.
+5. **Troubleshooting**: `MISSING_CREDENTIAL` → store the key via the Models page or export the `apiKeyEnv` variable; `UNKNOWN_MODEL` → select a configured model or add it to the custom provider's `models` list.
 
 ## 3. Doctor (environment + policy check)
 ```bash
 node bin/maw.js doctor
 ```
-Verify: Node ≥ 20, git, **host = claude-code | codex | pi**, cc-switch DB found (read-only), model pricing loaded, **routing policy compliant** (N/A for pi — pi is not cc-switch-managed), codex+codex-plugin-cc available (pi host uses native subagents instead), trellis detectable. Warnings are non-fatal; fix what you can.
+Verify: Node ≥ 20, git, **host = claude-code | codex | pi | dsh**, cc-switch DB found (read-only), model pricing loaded, **routing policy compliant** (N/A for pi/dsh — they are not cc-switch-managed), codex+codex-plugin-cc available (pi/dsh hosts use native subagents instead), trellis detectable. On dsh also check: providers parsed from `~/.dsh/settings.yaml`, default model, credential key names, agent preset, pricing-sync match rate. Warnings are non-fatal; fix what you can.
 
 ## 4. cc-switch policy (HARD RULES — do not violate)
 - All existing cc-switch data is **read-only**.
@@ -37,6 +61,7 @@ Verify: Node ≥ 20, git, **host = claude-code | codex | pi**, cc-switch DB foun
   - **Claude Code:** local routing **always ON** + auto-failover **always ON**.
   - **Codex:** OpenAI-OAuth (ChatGPT) login in use → local routing **OFF**; otherwise **ON**.
   - **Pi Agent:** N/A — pi is **not** cc-switch-managed; providers/MCP/skills live in `~/.pi/agent/`.
+  - **DeepSeek Harness (dsh):** N/A — dsh is **not** cc-switch-managed; providers/models live in `$DSH_HOME/settings.yaml` (`llm-pi-ai.providers`), MCP via dsh patch layers. Never write routing or profile rows for dsh.
 - **Model price gate (HITL, mandatory):** assigning a model with **Input > $2/1M Tokens or Output > $10/1M Tokens** pauses the work and reports to the human first — `maw plan`/`maw init`/`maw add-agent` exit 3 with a ⚠ PRICE GATE report; `maw guard`/`maw acquire` deny gated roles until `maw approve-model --role <role> --yes` (or a cheaper model, or `--allow-pricey`).
 
 If `maw routing` reports violations, run `maw routing --fix` (after the user consents — it writes to their cc-switch). For Claude Code, routing+failover should be ON; if off, fix it.
@@ -82,6 +107,7 @@ Defaults: $5/min per agent, $10/min total, max concurrency 16. Edit `.maw/config
 - No codex/codex-plugin-cc → MAW uses a **second Claude Code agent** as reviewer for risk ≥ medium.
 - No cc-switch DB → pricing unavailable, cost guard uses concurrency-only limiting.
 - trellis not installed → MAW prints the exact command to install/run it.
+- **dsh host specifics** → providers/models from `~/.dsh/settings.yaml` (never cc-switch); spend rate not measured (no proxy) → cost guard is concurrency-only, but the price gate uses cc-switch's auto-synced `~/.cc-switch/model-pricing.json` where model ids match (unmatched ids price as unknown → human approval). No named agent files: spawn workers via dsh's subagent tool with `.maw/agents/<role>.md` as the payload. `MISSING_CREDENTIAL`/`UNKNOWN_MODEL` errors come from dsh itself — fix the provider in `dsh web` → Settings → Models (or edit settings.yaml), not in cc-switch.
 
 ## 10. Uninstall / update
 ```bash

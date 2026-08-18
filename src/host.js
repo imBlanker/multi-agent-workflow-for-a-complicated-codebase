@@ -3,9 +3,10 @@
 // planner can prefer native dynamic-workflow / multi-agent mechanisms when the
 // host provides them instead of re-implementing them.
 //
-// Supported hosts are Claude Code, Codex, and Pi Agent (project policy).
-// Other agent software (Gemini CLI, opencode, …) is NOT supported; their
-// cc-switch pricing data may still be READ for cost estimates.
+// Supported hosts are Claude Code, Codex, Pi Agent, and DeepSeek Harness
+// (dsh) (project policy). Other agent software (Gemini CLI, opencode, …) is
+// NOT supported; their cc-switch pricing data may still be READ for cost
+// estimates.
 import { execSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -13,8 +14,8 @@ import os from "node:os";
 import { exists, readJson } from "./util.js";
 
 /**
- * @typedef {"claude-code"|"codex"|"pi"|"unknown"} HostApp
- * Note: claude-code, codex, and pi are supported. Everything else is "unknown".
+ * @typedef {"claude-code"|"codex"|"pi"|"dsh"|"unknown"} HostApp
+ * Note: claude-code, codex, pi, and dsh are supported. Everything else is "unknown".
  * @typedef {{
  *   app: HostApp,
  *   homeDir: string,
@@ -24,6 +25,8 @@ import { exists, readJson } from "./util.js";
  *   hasGraphWorkflow: boolean,
  *   codexPluginInstalled: boolean,
  *   codexBinary: string|null,
+ *   dshHome: string,
+ *   dshBinary: string|null,
  *   skillsDirs: string[],
  *   commandsDirs: string[],
  *   agentsDirs: string[],
@@ -55,6 +58,7 @@ function sh(cmd) {
  * @param {string} [opts.claudeDir]   override ~/.claude
  * @param {string} [opts.codexDir]    override ~/.codex
  * @param {string} [opts.piDir]       override ~/.pi/agent
+ * @param {string} [opts.dshHome]     override $DSH_HOME (~/.dsh)
  * @param {string} [opts.projectDir]  override process.cwd() (for project-level .pi/ dirs)
  * @returns {HostInfo}
  */
@@ -63,6 +67,7 @@ export function detectHost(opts = {}) {
   const claudeDir = opts.claudeDir ?? path.join(home(), ".claude");
   const codexDir = opts.codexDir ?? path.join(home(), ".codex");
   const piDir = opts.piDir ?? (process.env.PI_AGENT_DIR || path.join(home(), ".pi", "agent"));
+  const dshHome = opts.dshHome ?? (process.env.DSH_HOME || path.join(home(), ".dsh"));
   const projectDir = opts.projectDir ?? process.cwd();
   const envHost = (process.env.MAW_HOST || "").toLowerCase();
 
@@ -109,6 +114,26 @@ export function detectHost(opts = {}) {
     else if (app === "unknown") { app = "pi"; homeDir = piDir; }
   }
 
+  // DeepSeek Harness (dsh) manages providers/models/MCP/skills/memory in its
+  // own files under $DSH_HOME (~/.dsh) — NOT via cc-switch. Strong detection
+  // marker: settings.yaml (the provider truth); weak fallback: profiles/.
+  // A bare ~/.dsh (e.g. created by an npx boot) must NOT count. dsh has no
+  // named project-level agent-definition surface (subagents spawn
+  // prompt-driven via the subagent tool), so no agentsDirs entry here; MAW
+  // role specs stay portable under .maw/agents/. MAW_HOST=dsh forces app=dsh
+  // even when Claude Code/Codex/Pi are also installed (otherwise dsh joins
+  // last in precedence — it only claims the host when nothing else did).
+  const dshBinary = sh("command -v dsh 2>/dev/null || which dsh 2>/dev/null") || null;
+  const dshPresent = exists(path.join(dshHome, "settings.yaml")) || exists(path.join(dshHome, "profiles"));
+  let dshDetected = "";
+  if (dshPresent) {
+    dshDetected = dshHome;
+    detected.push(`DeepSeek Harness (dsh) home at ${dshHome}`);
+    skillsDirs.push(path.join(dshHome, "skills")); // user rank-400 root; never .system
+    if (envHost === "dsh") { app = "dsh"; homeDir = dshHome; }
+    else if (app === "unknown") { app = "dsh"; homeDir = dshHome; }
+  }
+
   let codexPluginInstalled = false;
   const installedPlugins = path.join(claudeDir, "plugins", "installed_plugins.json");
   if (exists(installedPlugins)) {
@@ -123,9 +148,9 @@ export function detectHost(opts = {}) {
     detected.push("openai-codex marketplace present");
   }
 
-  const hasSubagents = app === "claude-code" || app === "codex" || app === "pi";
-  const hasMultiAgent = app === "claude-code" || app === "pi";
-  const hasDynamicWorkflow = app === "claude-code" || app === "pi";
+  const hasSubagents = app === "claude-code" || app === "codex" || app === "pi" || app === "dsh";
+  const hasMultiAgent = app === "claude-code" || app === "pi" || app === "dsh";
+  const hasDynamicWorkflow = app === "claude-code" || app === "pi" || app === "dsh";
   const hasGraphWorkflow = false;
 
   return {
@@ -137,6 +162,8 @@ export function detectHost(opts = {}) {
     hasGraphWorkflow,
     codexPluginInstalled,
     codexBinary,
+    dshHome: dshDetected,
+    dshBinary,
     skillsDirs: [...new Set(skillsDirs)],
     commandsDirs: [...new Set(commandsDirs)],
     agentsDirs: [...new Set(agentsDirs)],

@@ -213,6 +213,13 @@ export function providerModels(settingsConfig, appType) {
     if (Array.isArray(sc._piModels)) for (const m of sc._piModels) push(m);
     push(sc.model);
   }
+  if (appType === "dsh") {
+    // dsh providers carry their model id list in settings_config._dshModels
+    // (populated by readDshAsCc from $DSH_HOME/settings.yaml). The default
+    // model is also in settings_config.model.
+    if (Array.isArray(sc._dshModels)) for (const m of sc._dshModels) push(m);
+    push(sc.model);
+  }
   if (!out.length) push(sc.model);
   return out.filter((m) => typeof m === "string" && m.length > 0);
 }
