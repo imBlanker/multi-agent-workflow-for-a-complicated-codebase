@@ -144,8 +144,9 @@ Commands:
                 codex on-except-OAuth; pi/dsh N/A). Use --fix to apply.
   install       Install the MAW plugin + skills into the host agent software
   uninstall     Remove exactly what install wrote (manifest-driven, all
-                hosts); configs are KEPT unless --purge-config; --restore-routing
-                rolls cc-switch proxy_config back to the pre-init snapshot
+                hosts); configs are KEPT unless --purge-config (--keep-config
+                wins if both); --restore-routing rolls cc-switch proxy_config
+                back to the pre-init snapshot
   update        Reinstall (overwrites templates, keeps user edits)
   doctor        Environment + capability check
   version       Print version
