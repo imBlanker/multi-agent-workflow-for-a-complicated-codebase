@@ -2,6 +2,14 @@
 
 Thanks for your interest in improving **multi-agents-workflow (MAW)** — a portable, dynamic multi-agent workflow system for complex codebases. This guide covers the basics of getting a change merged.
 
+## Branch & PR workflow (project convention, since 2026-08-12)
+
+- All functional changes land on `main` **only via a pull request**: `feat/<slug>` branch → PR → merge. Never push feature commits directly to `main`.
+- Keep `main` in sync with `origin/main` before branching; the PR base is `main`.
+- CI runs on every PR — all tests must stay green (`node --test --test-reporter=spec "tests/**/*.test.js"`).
+- **GitHub Actions caveat**: scheduled workflows only run from the default branch (`main`), so workflow-file changes take effect only after the PR is merged. Smoke-test them with `workflow_dispatch` after merging.
+- The `trellis-update-tracker` workflow pushes its own 1-line state commit to `main` (github-actions[bot]). If you enable branch protection, allow the bot to bypass it or the tracker's state commits will fail.
+
 ## Prerequisites
 
 - **Node.js >= 20.17** (20.x LTS or 22.x recommended)
