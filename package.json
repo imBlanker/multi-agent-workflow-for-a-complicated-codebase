@@ -1,6 +1,6 @@
 {
   "name": "multi-agents-workflow",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "A portable, dynamic multi-agents workflow system for complex codebases. Reads cc-switch config, selects the right agent architecture (loop / orchestrator-workers / multi-agent / graph / dynamic / ultracode), generates per-agent configs, enforces cost-rate limits, and integrates Codex review.",
   "type": "module",
   "main": "src/index.js",
@@ -44,7 +44,7 @@
   "homepage": "https://github.com/imBlanker/multi-agents-workflow",
   "repository": {
     "type": "git",
-    "url": "https://github.com/imBlanker/multi-agents-workflow.git"
+    "url": "git+https://github.com/imBlanker/multi-agents-workflow.git"
   },
   "bugs": {
     "url": "https://github.com/imBlanker/multi-agents-workflow/issues"

@@ -6,6 +6,21 @@ coding agents operating this repo). Human narrative: [`../CHANGELOG.md`](../CHAN
 
 Package: `multi-agents-workflow` · CLI: `mawf` · Node ≥ 20.17 · zero runtime deps.
 
+## 0.4.2 (2026-08-18)
+
+```yaml
+version: 0.4.2
+semver_impact: patch
+fixed:
+  - "upgrade refresh inherits the installed host: spawned update runs with MAW_HOST from ~/.maw/installed.json (bare upgrade no longer flips a dsh/pi install to claude-code and purges its assets)"
+  - "install is now ADDITIVE across special hosts: MAW_HOST=pi install on a dsh install ships both; manifest records both dirs; bare update keeps every recorded host; explicit removal = uninstall"
+  - "npm pkg fix: repository.url normalized"
+upgrade:
+  npm: "npm i -g multi-agents-workflow@latest"
+  checkout: "mawf upgrade"
+smoke: "mawf doctor && mawf --version"
+```
+
 ## 0.4.1 (2026-08-18)
 
 ```yaml
