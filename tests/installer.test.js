@@ -207,6 +207,61 @@ test("install skips stale-cleanup for a legacy manifest without files[]", () => 
   assert.ok(fs.existsSync(stale), "legacy manifest → no cleanup (uninstall prefix fallback covers it)");
 });
 
+test("install ADDS a second special host without purging the first (0.4.2 union)", () => {
+  const dshHome = path.join(tmpHome, ".dsh");
+  fs.mkdirSync(path.join(dshHome, "skills"), { recursive: true });
+  const dshSkill = path.join(dshHome, "skills", "mawf-planner", "SKILL.md");
+  fs.writeFileSync(path.join(tmpHome, ".maw", "installed.json"), JSON.stringify({
+    version: "0.4.1", host: { app: "dsh" },
+    dirs: { claudeDir, dshDir: dshHome },
+    files: [dshSkill],
+  }));
+  const piHome = path.join(tmpHome, ".pi", "agent");
+  fs.mkdirSync(piHome, { recursive: true });
+  process.env.MAW_HOST = "pi";
+  try {
+    const r = install({ claudeDir, piDir: piHome, dshHome });
+    assert.equal(r.ok, true);
+    assert.ok(fs.existsSync(path.join(piHome, "skills", "mawf-planner", "SKILL.md")), "pi skills shipped");
+    assert.ok(fs.existsSync(path.join(piHome, "prompts", "mawf-plan.md")), "pi prompts shipped");
+    assert.ok(fs.existsSync(dshSkill), "dsh assets of the FIRST host survive the second host's install");
+    assert.deepEqual(r.removedStale, [], "union install must not treat the other host's files as stale");
+    const m = JSON.parse(fs.readFileSync(path.join(tmpHome, ".maw", "installed.json"), "utf8"));
+    assert.equal(m.dirs.piDir, piHome, "manifest records the added pi dir");
+    assert.equal(m.dirs.dshDir, dshHome, "manifest keeps the dsh dir");
+    assert.equal(m.host.app, "pi", "primary host = the explicitly requested one");
+  } finally { delete process.env.MAW_HOST; }
+});
+
+test("bare install (claude detected) on a dsh-install machine keeps dsh assets (0.4.1 regression)", () => {
+  const dshHome = path.join(tmpHome, ".dsh");
+  fs.mkdirSync(path.join(dshHome, "skills"), { recursive: true });
+  fs.writeFileSync(path.join(dshHome, "settings.yaml"), "llm-pi-ai:\n  providers: {}\n");
+  fs.writeFileSync(path.join(tmpHome, ".maw", "installed.json"), JSON.stringify({
+    version: "0.4.1", host: { app: "dsh" }, dirs: { claudeDir, dshDir: dshHome }, files: [],
+  }));
+  delete process.env.MAW_HOST; // bare — detection must not drop the recorded dsh host
+  const r = install({ claudeDir, dshHome });
+  assert.equal(r.ok, true);
+  assert.ok(fs.existsSync(path.join(dshHome, "skills", "mawf-planner", "SKILL.md")), "dsh skills kept on a bare claude-detected install");
+  assert.deepEqual(r.removedStale, []);
+  const m = JSON.parse(fs.readFileSync(path.join(tmpHome, ".maw", "installed.json"), "utf8"));
+  assert.equal(m.dirs.dshDir, dshHome, "dsh dir still recorded");
+});
+
+test("union targets the OLD manifest's recorded dir, not a fresh detection path", () => {
+  const piAlt = path.join(tmpHome, ".pi-alt");
+  fs.writeFileSync(path.join(tmpHome, ".maw", "installed.json"), JSON.stringify({
+    version: "0.4.1", host: { app: "dsh" }, dirs: { claudeDir, piDir: piAlt }, files: [],
+  }));
+  delete process.env.MAW_HOST;
+  const r = install({ claudeDir });
+  assert.equal(r.ok, true);
+  assert.ok(fs.existsSync(path.join(piAlt, "skills", "mawf-planner", "SKILL.md")), "union shipped to the recorded pi dir");
+  const m = JSON.parse(fs.readFileSync(path.join(tmpHome, ".maw", "installed.json"), "utf8"));
+  assert.equal(m.dirs.piDir, piAlt);
+});
+
 test.after(() => {
   process.env.HOME = os.homedir();
   try { fs.rmSync(tmpHome, { recursive: true, force: true }); } catch {}
