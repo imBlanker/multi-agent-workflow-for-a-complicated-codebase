@@ -120,10 +120,16 @@ npx . uninstall --purge-config [--project <dir>]
 npx . uninstall --restore-routing
                     # rolls cc-switch proxy_config (claude/codex) back to the
                     # latest pre-MAW snapshot (~/.cc-switch/maw-backups/)
-npx . update        # re-copies templates, keeps user edits
-npx . upgrade       # self-upgrade: git fetch + ff-only pull (checkout installs;
-                    # never stashes/rebases/forces; --dry-run to preview;
-                    # --apply-templates refreshes installed templates after)
+npx . update        # re-copies templates, keeps user edits; ALSO removes
+                    # stale assets an older install left behind (exact v2
+                    # manifest diff — user files are never touched)
+npx . upgrade       # self-upgrade + template refresh BY DEFAULT (0.4.1):
+                    # git fetch + ff-only pull (checkout installs; never
+                    # stashes/rebases/forces) or npm i -g (npm installs),
+                    # then spawns the NEW bin/mawf.js update; --dry-run to
+                    # preview; --no-apply-templates to skip the refresh (a
+                    # refresh failure degrades to a warning, never a failed
+                    # upgrade)
 ```
 Uninstall never removes trellis-owned files (`.trellis/`, trellis entries in `.agents/skills` / `.dsh/skills`) — mention them for manual removal. Snapshots under `~/.cc-switch/maw-backups/` are the user's audit trail and are kept.
 

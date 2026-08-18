@@ -6,6 +6,21 @@ coding agents operating this repo). Human narrative: [`../CHANGELOG.md`](../CHAN
 
 Package: `multi-agents-workflow` · CLI: `mawf` · Node ≥ 20.17 · zero runtime deps.
 
+## 0.4.1 (2026-08-18)
+
+```yaml
+version: 0.4.1
+semver_impact: patch
+changed:
+  - "upgrade refreshes installed templates by DEFAULT after a successful self-upgrade (npm AND checkout modes); spawns the NEW bin/mawf.js update; opt out with --no-apply-templates; refresh failure degrades to a warning (upgrade still ok)"
+fixed:
+  - "install/update now remove stale assets from an older install via exact v2-manifest diff + empty-dir pruning (no prefix scan; user files never touched); legacy manifests without files[] are skipped"
+upgrade:
+  npm: "npm i -g multi-agents-workflow@latest"
+  checkout: "mawf upgrade"
+smoke: "mawf doctor && mawf --version"
+```
+
 ## 0.4.0 (2026-08-18)
 
 ```yaml
