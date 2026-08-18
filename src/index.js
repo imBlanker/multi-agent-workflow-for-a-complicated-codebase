@@ -14,7 +14,7 @@ import { doctor } from "./doctor.js";
 import { runReview, shouldReview, status as codexStatus } from "./codex.js";
 import { probeProject } from "./probe.js";
 import { WorkflowGraph, graphFromPlan } from "./graph.js";
-import { createProjectProfile, readRouting, routingPolicy, applyRouting, readProviderQuota, projectSyncEnabled } from "./ccswitch.js";
+import { createProjectProfile, readRouting, routingPolicy, applyRouting, readProviderQuota, projectSyncEnabled, restoreRoutingFromSnapshot } from "./ccswitch.js";
 import { runTrellisInit } from "./trellis.js";
 import { snapshotCcSwitch } from "./backup.js";
 import { classifyModel, selectModelForRole, candidatesForAppType, baseRole } from "./modelcap.js";
@@ -143,7 +143,10 @@ Commands:
   routing       Show the cc-switch local-routing policy (claude on+failover;
                 codex on-except-OAuth; pi/dsh N/A). Use --fix to apply.
   install       Install the MAW plugin + skills into the host agent software
-  uninstall     Remove the MAW plugin + skills
+  uninstall     Remove exactly what install wrote (manifest-driven, all
+                hosts); configs are KEPT unless --purge-config (--keep-config
+                wins if both); --restore-routing rolls cc-switch proxy_config
+                back to the pre-init snapshot
   update        Reinstall (overwrites templates, keeps user edits)
   doctor        Environment + capability check
   version       Print version
@@ -635,10 +638,33 @@ function cmdInstall(f, flags) {
   out(`  host: ${r.host.app} (codex plugin: ${r.host.codexPluginInstalled ? "yes" : "no"})`);
   if (r.warnings.length) for (const w of r.warnings) out(`  ! ${w}`);
 }
-function cmdUninstall() {
-  const r = uninstall();
-  out(`uninstalled maw`);
+function cmdUninstall(f, flags) {
+  const project = flags.project ? path.resolve(flags.project) : process.cwd();
+  // --keep-config (explicit) and --purge-config both given -> keep (safe default)
+  const purge = flags["purge-config"] === true && flags["keep-config"] !== true;
+  const r = uninstall({ project, purgeConfig: purge });
+  out(`uninstalled maw — ${r.removed.length} file(s)/dir(s) removed`);
   for (const c of r.removed) out(`  removed: ${c}`);
+  if (r.purged.length) {
+    out(`  purged configs (--purge-config):`);
+    for (const p of r.purged) out(`    - ${p}`);
+  }
+  if (r.kept.length) {
+    out(`  kept configs (default; pass --purge-config to delete):`);
+    for (const p of r.kept) out(`    - ${p}`);
+  }
+  out(`  trellis-owned files (.trellis/, .agents/skills, .dsh/skills trellis entries) are NOT removed — remove them manually if desired`);
+  if (flags["restore-routing"]) {
+    const rr = restoreRoutingFromSnapshot({});
+    if (rr.ok) {
+      out(`  routing restored from snapshot (${rr.snapshot}):`);
+      for (const a of rr.applied) out(`    - ${a}`);
+    } else {
+      out(`  routing restore failed: ${rr.error}`, false);
+    }
+  } else {
+    out(`  routing: pass --restore-routing to roll cc-switch proxy_config (claude/codex) back to the latest pre-MAW snapshot`);
+  }
 }
 function cmdUpdate(f, flags) {
   const r = update({ force: flags.force });

@@ -209,7 +209,7 @@ git clone https://github.com/<you>/multi-agent-workflow-for-a-complicated-codeba
 cd multi-agent-workflow-for-a-complicated-codebase
 npx . install          # or node bin/maw.js install
 ```
-`install` copies commands/agents/hooks/skills into Claude Code (and Codex, best-effort), writes a manifest to `~/.maw/installed.json`, and is non-destructive (uninstall removes only `maw-*` files). `update` re-copies templates, preserving your edits.
+`install` copies commands/agents/hooks/skills into Claude Code (and Codex, best-effort), records **every written file** in the `~/.maw/installed.json` manifest, and is non-destructive (`uninstall` removes exactly those files across all hosts — including the non-`maw-*` plugin agents/hooks — then prunes dirs it emptied). Project configs in `.maw/` are **kept** unless you pass `--purge-config`; `--restore-routing` rolls cc-switch `proxy_config` back to the pre-init snapshot. `update` re-copies templates, preserving your edits.
 
 ## 11. Usage Examples
 **Minimal:** `maw init -u alice` (snapshots cc-switch first) → `maw plan --project .` → `maw run` → `maw cost`.
