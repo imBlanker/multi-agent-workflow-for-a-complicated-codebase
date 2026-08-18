@@ -4,6 +4,14 @@ All notable changes to **multi-agents-workflow (MAW)** are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com/); versions follow
 [SemVer](https://semver.org/). Agent-oriented summary: [`docs/AGENT_CHANGELOG.md`](docs/AGENT_CHANGELOG.md).
 
+## [0.4.1] — 2026-08-18
+
+### Changed
+- **`mawf upgrade` now refreshes installed templates by default** (npm and checkout modes): after a successful self-upgrade it spawns the NEW `bin/mawf.js update`, so host assets (commands/agents/skills/hooks) match the upgraded CLI without a manual follow-up. Opt out with `--no-apply-templates`; a refresh failure degrades to a warning — the upgrade itself stays successful.
+
+### Fixed
+- **Stale assets from older installs are now cleaned up.** `install`/`update` diff the previous v2 manifest against the files the current version writes and remove exactly the leftovers (no prefix scanning — user-added files are never touched), then prune emptied dirs. Fixes the 2026-08-18 incident where a 0.1.0-era install left `maw-*` skills/commands on disk next to the new `mawf-*` set, with a `hooks.json` pointing at a dead `bin/maw.js`, after the CLI itself had upgraded to 0.4.0. Legacy manifests without `files[]` are skipped (uninstall's prefix fallback still covers those).
+
 ## [0.4.0] — 2026-08-18
 
 ### Breaking

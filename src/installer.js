@@ -12,6 +12,59 @@ import { detectHost, hostCapabilities } from "./host.js";
 const PKG_ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
 
 /**
+ * Prune directories that became empty — ONLY ancestors of removed paths,
+ * and only strict descendants of a recorded host dir (never the host home
+ * itself, never unrelated user dirs). Shared by uninstall (post-removal)
+ * and install's stale-asset cleanup (0.4.1).
+ * @param {string[]} removedPaths absolute file paths that were removed
+ * @param {Iterable<string>} hostRoots recorded host dirs (boundaries; never pruned themselves)
+ * @param {string[]} [log] collector that receives `(dir) <path>` entries
+ */
+function pruneEmptyAncestors(removedPaths, hostRoots, log = []) {
+  const roots = new Set([...hostRoots].map((d) => path.resolve(d)));
+  const candidates = [...new Set(removedPaths.map((p) => path.dirname(path.resolve(p))))];
+  for (const start of candidates) {
+    let cur = start;
+    while (!roots.has(cur)) {
+      try {
+        if (exists(cur) && fs.readdirSync(cur).length === 0) { fs.rmdirSync(cur); log.push(`(dir) ${cur}`); }
+      } catch {}
+      const parent = path.dirname(cur);
+      if (parent === cur) break;
+      cur = parent;
+    }
+  }
+}
+
+/**
+ * Stale-asset cleanup (0.4.1). When a previous v2 manifest exists, files it
+ * recorded that the CURRENT install no longer writes are leftovers from an
+ * older MAW version (e.g. the maw-* → mawf-* rename left both on disk and a
+ * hook pointing at a dead bin/maw.js). Remove exactly those leftovers and
+ * prune directories that became empty. EXACT manifest diff only — user files
+ * are never in the manifest, so they are never touched; no prefix scanning
+ * here (uninstall keeps its own conservative fallback).
+ * @param {{ files?: string[] }} [oldManifest] manifest captured BEFORE this install overwrites it
+ * @param {string[]} keptPaths every file the current install wrote
+ * @param {Iterable<string>} hostRoots recorded host dirs of BOTH the old manifest and this install
+ * @returns {string[]} removed entries (file paths + `(dir)` markers)
+ */
+function cleanupStale(oldManifest, keptPaths, hostRoots) {
+  /** @type {string[]} */
+  const removed = [];
+  // legacy (pre-v2) manifests have no files[] — safe skip; uninstall's prefix
+  // fallback still covers an explicit uninstall.
+  if (!oldManifest || !Array.isArray(oldManifest.files)) return removed;
+  const kept = new Set(keptPaths.map((p) => path.resolve(p)));
+  const stale = [...new Set(oldManifest.files)].filter((f) => !kept.has(path.resolve(f)));
+  for (const f of stale) {
+    if (isFile(f)) { try { fs.unlinkSync(f); removed.push(f); } catch {} }
+  }
+  if (removed.length) pruneEmptyAncestors(removed, hostRoots, removed);
+  return removed;
+}
+
+/**
  * Copy a directory tree recursively.
  * @param {string} src
  * @param {string} dest
@@ -55,6 +108,8 @@ function writeManifest(m) {
 export function install(opts = {}) {
   const host = detectHost(opts);
   const warnings = [];
+  // captured BEFORE anything is written — drives the stale-asset cleanup below
+  const oldManifest = readManifest();
   if (host.app === "unknown") {
     warnings.push("No host agent software detected; files copied to ~/.maw only. Install Claude Code or Codex for full integration.");
   }
@@ -133,6 +188,19 @@ export function install(opts = {}) {
   }
 
   const pkg = readJson(path.join(PKG_ROOT, "package.json"), { version: "0.0.0" });
+
+  // Stale-asset cleanup (0.4.1): an older manifest may record files this
+  // version no longer ships (e.g. maw-* assets after the mawf rename). Remove
+  // exactly those leftovers + prune emptied dirs — never user files, never
+  // anything outside the recorded host dirs.
+  const oldDirs = oldManifest?.dirs ?? {};
+  const hostRoots = [
+    oldDirs.claudeDir, oldDirs.codexDir, oldDirs.piDir, oldDirs.dshDir,
+    claudeDir, path.join(os.homedir(), ".codex"), piDir, dshDir,
+    manifestDir(), // boundary for portable-skill paths (~/.maw/skills/...)
+  ].filter(Boolean);
+  const removedStale = cleanupStale(oldManifest, written, hostRoots);
+
   writeManifest({
     version: pkg.version,
     installedAt: new Date().toISOString(),
@@ -141,7 +209,7 @@ export function install(opts = {}) {
     files: written,
   });
 
-  return { ok: true, copied, host, warnings };
+  return { ok: true, copied, host, warnings, removedStale };
 }
 
 /**
@@ -191,19 +259,7 @@ export function uninstall(opts = {}) {
   // 3) prune directories that became empty — ONLY ancestors of removed
   //    paths, and only strict descendants of a recorded host dir (never the
   //    host home itself, never unrelated user dirs).
-  const hostRoots = new Set(hostDirs.map((d) => path.resolve(d)));
-  const candidates = [...new Set(removed.filter((p) => !p.startsWith("(dir)")).map((p) => path.dirname(path.resolve(p))))];
-  for (const start of candidates) {
-    let cur = start;
-    while (!hostRoots.has(cur)) {
-      try {
-        if (exists(cur) && fs.readdirSync(cur).length === 0) { fs.rmdirSync(cur); removed.push(`(dir) ${cur}`); }
-      } catch {}
-      const parent = path.dirname(cur);
-      if (parent === cur) break;
-      cur = parent;
-    }
-  }
+  pruneEmptyAncestors(removed.filter((p) => !p.startsWith("(dir)")), hostDirs, removed);
 
   // 4) portable skills + the manifest itself; prune ~/.maw when empty
   const portable = path.join(manifestDir(), "skills");

@@ -150,6 +150,63 @@ test("uninstall removes maw-* leftovers from an OLDER install even when the curr
   assert.ok(!fs.existsSync(path.join(claudeDir, "skills", "maw-retired-skill")), "stale maw-* leftover must be removed by the prefix safety net");
 });
 
+test("install cleans stale assets recorded by an older v2 manifest (maw-* → mawf-* incident)", () => {
+  // recreate the 2026-08-18 incident shape: a 0.1.0-era manifest recording
+  // maw-* assets that still exist on disk while the package ships mawf-*
+  fs.mkdirSync(path.join(claudeDir, "skills", "maw-planner"), { recursive: true });
+  fs.writeFileSync(path.join(claudeDir, "skills", "maw-planner", "SKILL.md"), "# old\n");
+  fs.writeFileSync(path.join(claudeDir, "commands", "maw-plan.md"), "# old\n");
+  fs.mkdirSync(path.join(claudeDir, "hooks"), { recursive: true });
+  fs.writeFileSync(path.join(claudeDir, "hooks", "hooks.json"), JSON.stringify({ hooks: { bad: "bin/maw.js" } }));
+  const staleSkill = path.join(claudeDir, "skills", "maw-planner", "SKILL.md");
+  const staleCmd = path.join(claudeDir, "commands", "maw-plan.md");
+  const hookPath = path.join(claudeDir, "hooks", "hooks.json");
+  fs.mkdirSync(path.join(tmpHome, ".maw"), { recursive: true });
+  fs.writeFileSync(path.join(tmpHome, ".maw", "installed.json"), JSON.stringify({
+    version: "0.1.0", installedAt: "2026-08-18T02:27:47.187Z",
+    host: { app: "dsh" }, dirs: { claudeDir, codexDir: path.join(tmpHome, ".codex") },
+    files: [staleSkill, staleCmd, hookPath],
+  }));
+  const r = install({ claudeDir });
+  assert.equal(r.ok, true);
+  assert.ok(!fs.existsSync(staleSkill), "stale maw-* skill removed");
+  assert.ok(!fs.existsSync(staleCmd), "stale maw-* command removed");
+  assert.ok(!fs.existsSync(path.dirname(staleSkill)), "emptied stale skill dir pruned");
+  assert.ok(fs.existsSync(path.join(claudeDir, "skills", "mawf-planner", "SKILL.md")), "current mawf-* asset in place");
+  // hooks.json is recorded by the OLD manifest AND written by the CURRENT
+  // install → not stale: kept and overwritten with the fixed (mawf.js) hook
+  assert.ok(fs.existsSync(hookPath), "hooks.json re-written by current install");
+  assert.ok(!JSON.parse(fs.readFileSync(hookPath, "utf8")).hooks.bad, "stale hook content replaced");
+  assert.ok(r.removedStale.includes(staleSkill) && r.removedStale.includes(staleCmd), "removedStale reports exact paths");
+  assert.ok(!r.removedStale.includes(hookPath), "path also written by current install is NOT stale");
+});
+
+test("install stale-cleanup never touches files absent from the old manifest (no prefix scan)", () => {
+  fs.mkdirSync(path.join(claudeDir, "skills", "my-own-skill"), { recursive: true });
+  fs.writeFileSync(path.join(claudeDir, "skills", "my-own-skill", "SKILL.md"), "# mine\n");
+  fs.writeFileSync(path.join(claudeDir, "commands", "maw-user-custom.md"), "# user-made with maw- prefix\n");
+  fs.writeFileSync(path.join(claudeDir, "commands", "maw-gone.md"), "# stale (recorded)\n");
+  fs.writeFileSync(path.join(tmpHome, ".maw", "installed.json"), JSON.stringify({
+    version: "0.4.0", dirs: { claudeDir },
+    files: [path.join(claudeDir, "commands", "maw-gone.md")],
+  }));
+  const r = install({ claudeDir });
+  assert.equal(r.ok, true);
+  assert.ok(!fs.existsSync(path.join(claudeDir, "commands", "maw-gone.md")), "recorded stale file removed");
+  assert.ok(fs.existsSync(path.join(claudeDir, "skills", "my-own-skill", "SKILL.md")), "unrecorded user file kept");
+  assert.ok(fs.existsSync(path.join(claudeDir, "commands", "maw-user-custom.md")), "user file with maw- prefix kept (exact-diff only, no prefix scan)");
+});
+
+test("install skips stale-cleanup for a legacy manifest without files[]", () => {
+  const stale = path.join(claudeDir, "commands", "maw-legacy.md");
+  fs.writeFileSync(stale, "# old\n");
+  fs.writeFileSync(path.join(tmpHome, ".maw", "installed.json"), JSON.stringify({ version: "0.1.0", dirs: { claudeDir } }));
+  const r = install({ claudeDir });
+  assert.equal(r.ok, true);
+  assert.deepEqual(r.removedStale, []);
+  assert.ok(fs.existsSync(stale), "legacy manifest → no cleanup (uninstall prefix fallback covers it)");
+});
+
 test.after(() => {
   process.env.HOME = os.homedir();
   try { fs.rmSync(tmpHome, { recursive: true, force: true }); } catch {}

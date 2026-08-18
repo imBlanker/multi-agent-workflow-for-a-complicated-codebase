@@ -211,7 +211,7 @@ git clone https://github.com/<you>/multi-agents-workflow.git
 cd multi-agents-workflow
 npx . install          # or node bin/mawf.js install
 ```
-`install` 把 commands/agents/hooks/skills 拷贝到 Claude Code（以及 Codex，尽力而为），并在 `~/.maw/installed.json` 清单中记录**每一个写入的文件**，且是非破坏性的（卸载会跨全部宿主精确移除这些文件——包括不带 `maw-*` 前缀的插件 agents/hooks——并清理因此变空的目录）。项目 `.maw/` 配置默认**保留**，传 `--purge-config` 才删除；`--restore-routing` 可将 cc-switch `proxy_config` 回滚到 init 前的快照。`update` 重新拷贝模板，保留你的编辑。`upgrade` 自升级：checkout 安装走 `git fetch` + ff-only 拉取（`--dry-run`/`--remote`/`--apply-templates`；绝不 stash/rebase/force），npm 安装走 `npm i -g`。
+`install` 把 commands/agents/hooks/skills 拷贝到 Claude Code（以及 Codex，尽力而为），并在 `~/.maw/installed.json` 清单中记录**每一个写入的文件**，且是非破坏性的（卸载会跨全部宿主精确移除这些文件——包括不带 `maw-*` 前缀的插件 agents/hooks——并清理因此变空的目录）。项目 `.maw/` 配置默认**保留**，传 `--purge-config` 才删除；`--restore-routing` 可将 cc-switch `proxy_config` 回滚到 init 前的快照。`update` 重新拷贝模板、保留你的编辑，并**清理旧版安装残留的资产**（按 v2 清单精确差异——绝不触碰用户自建文件）。`upgrade` 自升级**且默认自动刷新已装模板**：checkout 安装走 `git fetch` + ff-only 拉取，npm 安装走 `npm i -g`（`--dry-run`/`--remote`；绝不 stash/rebase/force），随后 spawn 新版 `bin/mawf.js update`（用 `--no-apply-templates` 跳过；刷新失败仅降级为警告）。
 
 ## 11. 用法示例
 **最简：** `mawf init -u alice`（先对 cc-switch 做快照）→ `mawf plan --project .` → `mawf run` → `mawf cost`。

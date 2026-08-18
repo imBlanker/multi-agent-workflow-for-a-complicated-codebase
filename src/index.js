@@ -643,6 +643,10 @@ function cmdInstall(f, flags) {
   const r = install({ force: flags.force });
   out(`installed mawf ${pkgVersion()}`);
   for (const c of r.copied) out(`  copied -> ${c}`);
+  if (r.removedStale?.length) {
+    out(`  removed ${r.removedStale.length} stale asset(s) from an older install:`);
+    for (const s of r.removedStale) out(`    - ${s}`);
+  }
   out(`  host: ${r.host.app} (codex plugin: ${r.host.codexPluginInstalled ? "yes" : "no"})`);
   if (r.warnings.length) for (const w of r.warnings) out(`  ! ${w}`);
 }
@@ -678,18 +682,24 @@ function cmdUpdate(f, flags) {
   const r = update({ force: flags.force });
   out(`updated mawf ${pkgVersion()}`);
   for (const c of r.copied) out(`  copied -> ${c}`);
+  if (r.removedStale?.length) {
+    out(`  removed ${r.removedStale.length} stale asset(s) from an older install:`);
+    for (const s of r.removedStale) out(`    - ${s}`);
+  }
 }
 function cmdUpgrade(f, flags) {
   const r = upgrade({
     dryRun: flags["dry-run"] === true,
     remote: typeof flags.remote === "string" ? flags.remote : undefined,
-    applyTemplates: flags["apply-templates"] === true,
+    // 0.4.1: templates refresh by default; --no-apply-templates opts out
+    // (explicit opt-out wins over --apply-templates regardless of order).
+    applyTemplates: flags["no-apply-templates"] === true ? false : undefined,
     tag: typeof flags.tag === "string" ? flags.tag : undefined,
   });
   for (const line of r.output) out(`  ${line}`);
   if (!r.ok) { out(`upgrade failed: ${r.error}`, false); process.exitCode = 1; return; }
   if (flags["dry-run"] === true) { out(`upgrade dry-run ok (mode: ${r.mode}; nothing changed)`); return; }
-  out(`upgraded mawf${r.from && r.to ? ` ${r.from} -> ${r.to}` : ""} (mode: ${r.mode})`);
+  out(`upgraded mawf${r.from && r.to ? ` ${r.from} -> ${r.to}` : ""} (mode: ${r.mode}; templates: ${r.appliedTemplates === true ? "refreshed" : r.appliedTemplates === false ? "not refreshed" : "n/a"})`);
 }
 
 // --- doctor ---

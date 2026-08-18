@@ -54,16 +54,45 @@ test("checkout mode: --dry-run prints the exact steps and changes nothing", () =
   assert.equal(git(["rev-parse", "HEAD"], clone), before, "dry-run must not move HEAD");
 });
 
-test("checkout mode: clean ff-pull advances HEAD and reports old→new version", () => {
+test("checkout mode: clean ff-pull advances HEAD, reports old→new version, refreshes templates by default", () => {
   const { clone, remote } = mkCheckout("0.1.0");
   pushVersion(remote, "0.2.0");
   const r = upgrade({ pkgRoot: clone });
   assert.equal(r.ok, true, r.error || "");
   assert.equal(r.from, "0.1.0");
   assert.equal(r.to, "0.2.0");
-  assert.match(r.output.join("\n"), /npx \. update/);
+  // 0.4.1: template refresh is the DEFAULT — the spawned stub bin/mawf.js
+  // exits 0 with empty stdout, so we get the refreshed marker + no tail.
+  assert.equal(r.appliedTemplates, true);
+  assert.match(r.output.join("\n"), /templates refreshed \(post-upgrade code\)/);
   const pkg = JSON.parse(fs.readFileSync(path.join(clone, "package.json"), "utf8"));
   assert.equal(pkg.version, "0.2.0");
+});
+
+test("checkout mode: --no-apply-templates skips the refresh and prints the manual follow-up", () => {
+  const { clone, remote } = mkCheckout("0.1.0");
+  pushVersion(remote, "0.2.0");
+  let spawned = 0;
+  const r = upgrade({ pkgRoot: clone, applyTemplates: false, spawnFn: () => { spawned++; return { status: 0, stdout: "" }; } });
+  assert.equal(r.ok, true, r.error || "");
+  assert.equal(spawned, 0, "--no-apply-templates must not spawn the updater");
+  assert.equal(r.appliedTemplates, false);
+  assert.match(r.output.join("\n"), /npx \. update/);
+  assert.match(r.output.join("\n"), /--no-apply-templates/);
+});
+
+test("checkout mode: dry-run previews the automatic template refresh", () => {
+  const { clone } = mkCheckout();
+  const r = upgrade({ pkgRoot: clone, dryRun: true });
+  assert.equal(r.ok, true);
+  assert.match(r.output.join("\n"), /would refresh templates via bin\/mawf\.js update/);
+});
+
+test("checkout mode: dry-run with --no-apply-templates says templates are NOT refreshed", () => {
+  const { clone } = mkCheckout();
+  const r = upgrade({ pkgRoot: clone, dryRun: true, applyTemplates: false });
+  assert.equal(r.ok, true);
+  assert.match(r.output.join("\n"), /templates NOT refreshed \(--no-apply-templates\)/);
 });
 
 test("checkout mode: dirty tree aborts before any fetch, with manual guidance", () => {
@@ -117,4 +146,61 @@ test("npm mode: dry-run prints the install command without running it", () => {
   const r = upgrade({ pkgRoot, npmPrefix: path.join(dir, "lib"), dryRun: true, tag: "beta" });
   assert.equal(r.ok, true);
   assert.match(r.output.join("\n"), /dry-run: would run `npm i -g @scope\/maw@beta`/);
+  assert.match(r.output.join("\n"), /would refresh templates via bin\/mawf\.js update/);
+});
+
+/** npm-mode fixture: a package under a fake npm prefix (NOT squatted). */
+function mkNpmPkg(version = "0.4.0") {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "maw-upg-npm3-"));
+  const pkgRoot = path.join(dir, "lib", "node_modules", "multi-agents-workflow");
+  fs.mkdirSync(path.join(pkgRoot, "bin"), { recursive: true });
+  fs.writeFileSync(path.join(pkgRoot, "package.json"), JSON.stringify({ name: "multi-agents-workflow", version }));
+  fs.writeFileSync(path.join(pkgRoot, "bin", "mawf.js"), "#!/usr/bin/env node\n");
+  return { dir, pkgRoot, npmPrefix: path.join(dir, "lib") };
+}
+
+test("npm mode: successful install spawns the NEW code's update and reports appliedTemplates", () => {
+  const { pkgRoot, npmPrefix } = mkNpmPkg();
+  /** @type {any[]} */
+  const spawns = [];
+  const r = upgrade({
+    pkgRoot, npmPrefix,
+    runSh: () => "added 1 package",
+    spawnFn: (cmd, args, opts) => { spawns.push({ cmd, args, opts }); return { status: 0, stdout: "updated mawf 0.4.1\n  copied -> /x" }; },
+  });
+  assert.equal(r.ok, true, r.error || "");
+  assert.equal(spawns.length, 1);
+  assert.equal(spawns[0].cmd, process.execPath);
+  assert.deepEqual(spawns[0].args, [path.join(pkgRoot, "bin", "mawf.js"), "update"]);
+  assert.equal(spawns[0].opts.cwd, pkgRoot);
+  assert.equal(r.appliedTemplates, true);
+  assert.match(r.output.join("\n"), /templates refreshed \(post-upgrade code\)/);
+  assert.match(r.output.join("\n"), /updated mawf 0\.4\.1/);
+});
+
+test("npm mode: template-refresh failure degrades to a warning, upgrade still ok", () => {
+  const { pkgRoot, npmPrefix } = mkNpmPkg();
+  const r = upgrade({
+    pkgRoot, npmPrefix,
+    runSh: () => "added 1 package",
+    spawnFn: () => ({ status: 1, stdout: "boom" }),
+  });
+  assert.equal(r.ok, true, "refresh failure must NOT fail the upgrade");
+  assert.equal(r.appliedTemplates, false);
+  assert.match(r.output.join("\n"), /template refresh FAILED/);
+  assert.match(r.output.join("\n"), /mawf update` manually/);
+});
+
+test("npm mode: --no-apply-templates skips the spawn entirely", () => {
+  const { pkgRoot, npmPrefix } = mkNpmPkg();
+  let spawned = 0;
+  const r = upgrade({
+    pkgRoot, npmPrefix, applyTemplates: false,
+    runSh: () => "added 1 package",
+    spawnFn: () => { spawned++; return { status: 0, stdout: "" }; },
+  });
+  assert.equal(r.ok, true, r.error || "");
+  assert.equal(spawned, 0);
+  assert.equal(r.appliedTemplates, false);
+  assert.match(r.output.join("\n"), /mawf update` manually/);
 });

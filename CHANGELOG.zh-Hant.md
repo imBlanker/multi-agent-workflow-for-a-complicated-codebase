@@ -4,6 +4,14 @@
 格式：[Keep a Changelog](https://keepachangelog.com/)；版本遵循
 [SemVer](https://semver.org/)。面向 AI 智慧體的摘要：[`docs/AGENT_CHANGELOG.md`](docs/AGENT_CHANGELOG.md)。
 
+## [0.4.1] — 2026-08-18
+
+### 變更
+- **`mawf upgrade` 預設自動重新整理已安裝範本**（npm 與 checkout 兩種模式）：自我升級成功後自動 spawn 新版的 `bin/mawf.js update`，宿主資產（commands/agents/skills/hooks）隨 CLI 同步更新，無需手動跟進。用 `--no-apply-templates` 退出；重新整理失敗僅降級為警告——升級本身仍算成功。
+
+### 修復
+- **清理舊版安裝的殘留資產。**`install`/`update` 會將舊 v2 清單與目前版本寫入的檔案做精確差異比對，刪除恰好屬於殘留的檔案（不做前綴掃描——絕不碰使用者自建檔案），並修剪變空的目錄。修復 2026-08-18 事故：0.1.0 時代的安裝在新版 `mawf-*` 落盤後仍遺留 `maw-*` skills/commands，且 `hooks.json` 指向已不存在的 `bin/maw.js`，而 CLI 本體早已升到 0.4.0。無 `files[]` 的 legacy 清單會跳過清理（明確 uninstall 的前綴兜底仍涵蓋該情境）。
+
 ## [0.4.0] — 2026-08-18
 
 ### 破壞性變更
