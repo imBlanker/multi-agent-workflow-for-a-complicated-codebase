@@ -8,13 +8,15 @@
 //   = `git fetch <remote>` + `git merge --ff-only <remote>/<branch>` on the
 //   current branch. HARD RULES: never stash, never rebase, never force. A
 //   dirty tree or a diverged branch aborts with the exact manual commands.
-//   Success reports old→new version and prints the follow-up
-//   `npx . update` (refresh host templates; keeps user edits) — run it
-//   automatically only with --apply-templates (spawning bin/mawf.js so the
-//   POST-merge code runs, not this already-loaded process).
+//   Success reports old→new version and refreshes installed host templates
+//   automatically (0.4.1 default; --no-apply-templates skips) by spawning
+//   bin/mawf.js update — spawning so the POST-merge code runs, not this
+//   already-loaded process.
 //
 // - npm mode: the package root sits under the global npm prefix with no .git
-//   → `npm i -g <name>@latest`. CAVEAT (verified 2026-08-18): the unscoped
+//   → `npm i -g <name>@latest`, then the same automatic template refresh via
+//   <pkgRoot>/bin/mawf.js update (npm installs in place, so the spawned
+//   binary is already the NEW code). CAVEAT (verified 2026-08-18): the unscoped
 //   name `multi-agent-workflow` on npm is an unrelated third-party package
 //   (squatted), so legacy installs under that name are REPORTED, not
 //   upgraded. Publishes must use a different (scoped or new) name.
@@ -22,7 +24,6 @@ import { execFileSync, spawnSync } from "node:child_process";
 import path from "node:path";
 import fs from "node:fs";
 import { readJson, exists } from "./util.js";
-
 const PKG_ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
 
 /** @returns {string} */
@@ -73,15 +74,48 @@ function npmGlobalPrefix() {
 }
 
 /**
+ * Refresh installed host templates by spawning the NEW code — the running
+ * process may still be the pre-upgrade binary, so an in-process install()
+ * call would execute stale logic. Shared by npm and checkout modes (0.4.1:
+ * runs by default after a successful upgrade; --no-apply-templates skips).
+ * A refresh failure NEVER fails the upgrade itself (the new code is already
+ * on disk): it degrades to a warning + manual `mawf update` hint.
+ * @param {string} pkgRoot package root holding the POST-upgrade bin/mawf.js
+ * @param {string[]} output
+ * @param {(cmd: string, args: string[], opts?: object) => { status?: number|null, error?: any, stdout?: string }} spawnFn
+ * @returns {{ appliedTemplates: boolean }}
+ */
+function refreshTemplates(pkgRoot, output, spawnFn) {
+  const r = spawnFn(process.execPath, [path.join(pkgRoot, "bin", "mawf.js"), "update"], {
+    cwd: pkgRoot, encoding: "utf8", timeout: 300000,
+  });
+  const ok = !r.error && r.status === 0;
+  const tail = String(r.stdout || "").trim().split("\n").filter(Boolean).slice(-3);
+  if (ok) {
+    output.push("templates refreshed (post-upgrade code):", ...tail);
+    return { appliedTemplates: true };
+  }
+  const why = r.error ? String(r.error.message || r.error) : `exit ${r.status ?? "?"}`;
+  output.push(
+    `template refresh FAILED (${why}) — the upgrade itself succeeded; run \`mawf update\` manually`,
+    ...tail,
+  );
+  return { appliedTemplates: false };
+}
+
+/**
  * Self-upgrade.
- * @param {{ dryRun?: boolean, remote?: string, applyTemplates?: boolean, tag?: string, pkgRoot?: string, npmPrefix?: string }} [opts]
- * @returns {{ ok: boolean, mode: string, from?: string, to?: string, followUp?: string, output: string[], error?: string }}
+ * @param {{ dryRun?: boolean, remote?: string, applyTemplates?: boolean, tag?: string, pkgRoot?: string, npmPrefix?: string, spawnFn?: Function, runSh?: Function }} [opts]
+ * @returns {{ ok: boolean, mode: string, from?: string, to?: string, followUp?: string, appliedTemplates?: boolean, output: string[], error?: string }}
  */
 export function upgrade(opts = {}) {
   /** @type {string[]} */
   const output = [];
   const det = detectInstallMode(opts.pkgRoot || PKG_ROOT, { npmPrefix: opts.npmPrefix });
   const dry = !!opts.dryRun;
+  const applyTpl = opts.applyTemplates !== false; // default ON since 0.4.1 (was opt-in)
+  const spawnFn = opts.spawnFn ?? spawnSync;
+  const runSh = opts.runSh ?? sh;
 
   if (opts.tag && det.mode === "checkout") {
     return { ok: false, mode: det.mode, output: [], error: "--tag is reserved for npm-mode installs; this is a git checkout — pull a branch/tag with git instead" };
@@ -91,17 +125,33 @@ export function upgrade(opts = {}) {
     if (det.squatted) {
       // The unscoped name on npm is NOT this project. Report; never install it.
       return {
-        ok: true, mode: "npm", output: [
+        ok: true, mode: "npm", appliedTemplates: false, output: [
           `this install resolves to package name "${det.pkgName}", which on npm is an unrelated third-party package (name squatted)`,
           `refusing to run npm i -g; upgrade from your git checkout instead (clone the repo, \`npx . install\`)`,
         ],
       };
     }
     const installCmd = `npm i -g ${det.pkgName}@${opts.tag || "latest"}`;
-    if (dry) return { ok: true, mode: "npm", from: det.version, output: [`dry-run: would run \`${installCmd}\``] };
+    if (dry) {
+      return {
+        ok: true, mode: "npm", from: det.version, output: [
+          `dry-run: would run \`${installCmd}\``,
+          applyTpl
+            ? "dry-run: would refresh templates via bin/mawf.js update (post-install code)"
+            : "dry-run: templates NOT refreshed (--no-apply-templates)",
+        ],
+      };
+    }
     try {
-      const out = sh("npm", ["i", "-g", `${det.pkgName}@${opts.tag || "latest"}`], { timeout: 300000 });
-      return { ok: true, mode: "npm", from: det.version, output: [installCmd, ...(out || "").split("\n").filter(Boolean).slice(-5)] };
+      const out = runSh("npm", ["i", "-g", `${det.pkgName}@${opts.tag || "latest"}`], { timeout: 300000 });
+      output.push(installCmd, ...(out || "").split("\n").filter(Boolean).slice(-5));
+      // npm i -g overwrites the package in place — <pkgRoot>/bin/mawf.js is
+      // already the NEW code, so spawning it refreshes templates with 0.4.1+.
+      const tpl = applyTpl
+        ? refreshTemplates(det.pkgRoot, output, spawnFn)
+        : { appliedTemplates: false };
+      if (!applyTpl) output.push("follow-up: run `mawf update` manually to refresh installed host templates");
+      return { ok: true, mode: "npm", from: det.version, appliedTemplates: tpl.appliedTemplates, output };
     } catch (e) {
       return { ok: false, mode: "npm", from: det.version, output: [installCmd], error: String(e?.message || e) };
     }
@@ -137,7 +187,9 @@ export function upgrade(opts = {}) {
       ok: true, mode: "checkout", from: det.version, output: [
         `dry-run: git -C ${gitRoot} fetch ${remote}`,
         `dry-run: git -C ${gitRoot} merge --ff-only ${target} (branch ${branch.out})`,
-        `dry-run: follow-up ${opts.applyTemplates ? "would run" : "hint"}: npx . update${opts.applyTemplates ? "" : " (--apply-templates to chain automatically)"}`,
+        applyTpl
+          ? "dry-run: would refresh templates via bin/mawf.js update (post-merge code)"
+          : "dry-run: templates NOT refreshed (--no-apply-templates)",
       ],
     };
   }
@@ -156,14 +208,11 @@ export function upgrade(opts = {}) {
   const newPkg = readJson(path.join(gitRoot, "package.json"), { version: det.version });
   const followUp = "npx . update";
   output.push(`pulled ${target}: ${det.version} -> ${newPkg.version}`);
-  if (opts.applyTemplates) {
-    const r = spawnSync(process.execPath, [path.join(gitRoot, "bin", "mawf.js"), "update"], {
-      cwd: gitRoot, encoding: "utf8", timeout: 300000,
-    });
-    const tail = String(r.stdout || "").trim().split("\n").filter(Boolean).slice(-3);
-    output.push("templates refreshed (post-merge code):", ...tail);
-  } else {
-    output.push(`follow-up: run \`${followUp}\` to refresh installed host templates (--apply-templates chains it automatically)`);
-  }
-  return { ok: true, mode: "checkout", from: det.version, to: newPkg.version, followUp, output };
+  // 0.4.1: template refresh is the DEFAULT (opt out with --no-apply-templates);
+  // spawn the post-merge code so the refresh runs with the NEW templates.
+  const tpl = applyTpl
+    ? refreshTemplates(gitRoot, output, spawnFn)
+    : { appliedTemplates: false };
+  if (!applyTpl) output.push(`follow-up: run \`${followUp}\` to refresh installed host templates (automatic unless --no-apply-templates)`);
+  return { ok: true, mode: "checkout", from: det.version, to: newPkg.version, followUp, appliedTemplates: tpl.appliedTemplates, output };
 }
