@@ -80,6 +80,9 @@ export function main(argv = process.argv.slice(2)) {
   const cmd = a._[0];
   const f = a._.slice(1);
   const flags = a.flags;
+  // --version / -v prints the version regardless of position (standard CLI
+  // convention); without this the flag fell through to help.
+  if (flags.version === true) return cmdVersion();
   switch (cmd) {
     case "init": return cmdInit(f, flags);
     case "plan": return cmdPlan(f, flags);
@@ -685,6 +688,7 @@ function cmdUpgrade(f, flags) {
   });
   for (const line of r.output) out(`  ${line}`);
   if (!r.ok) { out(`upgrade failed: ${r.error}`, false); process.exitCode = 1; return; }
+  if (flags["dry-run"] === true) { out(`upgrade dry-run ok (mode: ${r.mode}; nothing changed)`); return; }
   out(`upgraded mawf${r.from && r.to ? ` ${r.from} -> ${r.to}` : ""} (mode: ${r.mode})`);
 }
 
