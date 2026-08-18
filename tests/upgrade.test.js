@@ -204,3 +204,44 @@ test("npm mode: --no-apply-templates skips the spawn entirely", () => {
   assert.equal(r.appliedTemplates, false);
   assert.match(r.output.join("\n"), /mawf update` manually/);
 });
+
+test("npm mode: refresh spawns update with MAW_HOST inherited from the installed manifest (0.4.2)", () => {
+  const { pkgRoot, npmPrefix } = mkNpmPkg();
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "maw-host-hint-"));
+  fs.mkdirSync(path.join(home, ".maw"), { recursive: true });
+  fs.writeFileSync(path.join(home, ".maw", "installed.json"), JSON.stringify({ version: "0.4.1", host: { app: "dsh" }, dirs: {}, files: [] }));
+  const prevHome = process.env.HOME;
+  process.env.HOME = home;
+  try {
+    /** @type {any} */
+    let captured;
+    const r = upgrade({
+      pkgRoot, npmPrefix,
+      runSh: () => "added 1 package",
+      spawnFn: (_cmd, _args, opts) => { captured = opts; return { status: 0, stdout: "updated mawf 0.4.2" }; },
+    });
+    assert.equal(r.ok, true, r.error || "");
+    assert.equal(r.appliedTemplates, true);
+    assert.equal(captured.env?.MAW_HOST, "dsh", "spawned update must run with the recorded install host");
+    assert.equal(captured.env?.PATH, process.env.PATH, "rest of the environment is inherited");
+  } finally { process.env.HOME = prevHome; }
+});
+
+test("npm mode: no manifest → no MAW_HOST injection into the spawned update", () => {
+  const { pkgRoot, npmPrefix } = mkNpmPkg();
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "maw-no-hint-"));
+  const prevHome = process.env.HOME;
+  process.env.HOME = home; // no ~/.maw here
+  try {
+    /** @type {any} */
+    let captured;
+    const r = upgrade({
+      pkgRoot, npmPrefix,
+      runSh: () => "added 1 package",
+      spawnFn: (_cmd, _args, opts) => { captured = opts; return { status: 0, stdout: "" }; },
+    });
+    assert.equal(r.ok, true, r.error || "");
+    assert.equal(r.appliedTemplates, true);
+    assert.ok(!captured.env?.MAW_HOST, "no manifest → pure detection, no env injection");
+  } finally { process.env.HOME = prevHome; }
+});

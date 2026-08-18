@@ -211,7 +211,7 @@ git clone https://github.com/<you>/multi-agents-workflow.git
 cd multi-agents-workflow
 npx . install          # or node bin/mawf.js install
 ```
-`install` 把 commands/agents/hooks/skills 拷贝到 Claude Code（以及 Codex，尽力而为），并在 `~/.maw/installed.json` 清单中记录**每一个写入的文件**，且是非破坏性的（卸载会跨全部宿主精确移除这些文件——包括不带 `maw-*` 前缀的插件 agents/hooks——并清理因此变空的目录）。项目 `.maw/` 配置默认**保留**，传 `--purge-config` 才删除；`--restore-routing` 可将 cc-switch `proxy_config` 回滚到 init 前的快照。`update` 重新拷贝模板、保留你的编辑，并**清理旧版安装残留的资产**（按 v2 清单精确差异——绝不触碰用户自建文件）。`upgrade` 自升级**且默认自动刷新已装模板**：checkout 安装走 `git fetch` + ff-only 拉取，npm 安装走 `npm i -g`（`--dry-run`/`--remote`；绝不 stash/rebase/force），随后 spawn 新版 `bin/mawf.js update`（用 `--no-apply-templates` 跳过；刷新失败仅降级为警告）。
+`install` 把 commands/agents/hooks/skills 拷贝到 Claude Code（以及 Codex，尽力而为），并在 `~/.maw/installed.json` 清单中记录**每一个写入的文件**，且是非破坏性的（卸载会跨全部宿主精确移除这些文件——包括不带 `maw-*` 前缀的插件 agents/hooks——并清理因此变空的目录）。**install 在特殊宿主间是叠加式的**（0.4.2）：在 dsh 安装上 `MAW_HOST=pi install` 会同时分发两个宿主的资产并记录两个目录——install 绝不静默丢弃另一宿主的资产；显式移除用 `uninstall`。项目 `.maw/` 配置默认**保留**，传 `--purge-config` 才删除；`--restore-routing` 可将 cc-switch `proxy_config` 回滚到 init 前的快照。`update` 重新拷贝模板、保留你的编辑，并**清理旧版安装残留的资产**（按 v2 清单精确差异——绝不触碰用户自建文件）。`upgrade` 自升级**且默认自动刷新已装模板**：checkout 安装走 `git fetch` + ff-only 拉取，npm 安装走 `npm i -g`（`--dry-run`/`--remote`；绝不 stash/rebase/force），随后 spawn 新版 `bin/mawf.js update`，并**继承已安装宿主**（用 `--no-apply-templates` 跳过；刷新失败仅降级为警告）。
 
 ## 11. 用法示例
 **最简：** `mawf init -u alice`（先对 cc-switch 做快照）→ `mawf plan --project .` → `mawf run` → `mawf cost`。

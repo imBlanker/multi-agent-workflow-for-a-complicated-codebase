@@ -4,6 +4,13 @@
 格式：[Keep a Changelog](https://keepachangelog.com/)；版本遵循
 [SemVer](https://semver.org/)。面向 AI 智慧體的摘要：[`docs/AGENT_CHANGELOG.md`](docs/AGENT_CHANGELOG.md)。
 
+## [0.4.2] — 2026-08-18
+
+### 修復
+- **升級重新整理繼承已安裝宿主**（0.4.2）：spawn 的 `bin/mawf.js update` 會帶上從 `~/.maw/installed.json` 讀取的 `MAW_HOST`，因此在一台 dsh 安裝且同時存在 `~/.claude` 的機器上裸跑 `mawf upgrade`，不會再被重檢測為 claude-code、進而讓殘留清理誤刪 dsh 技能。
+- **安裝第二特殊宿主不再清除第一宿主**（聯集語義）：在 dsh 安裝上執行 `MAW_HOST=pi mawf install`（或反向）現在會同時分發兩個宿主的資產，並在清單同時記錄兩個目錄——install 絕不靜默移除另一宿主的資產；明確移除仍走 `uninstall`。多宿主機器上的裸 `mawf update` 同樣保留全部已記錄宿主。
+- `npm pkg fix`：規範化 `repository.url`（不再有發布警告）。
+
 ## [0.4.1] — 2026-08-18
 
 ### 變更

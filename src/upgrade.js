@@ -23,6 +23,7 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import path from "node:path";
 import fs from "node:fs";
+import os from "node:os";
 import { readJson, exists } from "./util.js";
 const PKG_ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
 
@@ -74,6 +75,23 @@ function npmGlobalPrefix() {
 }
 
 /**
+ * Host inheritance hint (0.4.2): the previously-installed manifest's host.app.
+ * Injected as MAW_HOST into the spawned `update` so a bare `mawf upgrade` on
+ * e.g. a dsh-install machine (that also has ~/.claude) does NOT re-detect as
+ * claude-code, rewrite the manifest without the dsh files, and let the
+ * stale-asset cleanup purge the dsh skills. Whitelist-guarded; undefined when
+ * there is no manifest or the recorded host is unknown.
+ * @returns {string|undefined}
+ */
+function manifestHostHint() {
+  try {
+    const m = readJson(path.join(os.homedir(), ".maw", "installed.json"), null);
+    const app = m?.host?.app;
+    return ["pi", "dsh", "claude-code", "codex"].includes(app) ? app : undefined;
+  } catch { return undefined; }
+}
+
+/**
  * Refresh installed host templates by spawning the NEW code — the running
  * process may still be the pre-upgrade binary, so an in-process install()
  * call would execute stale logic. Shared by npm and checkout modes (0.4.1:
@@ -83,12 +101,13 @@ function npmGlobalPrefix() {
  * @param {string} pkgRoot package root holding the POST-upgrade bin/mawf.js
  * @param {string[]} output
  * @param {(cmd: string, args: string[], opts?: object) => { status?: number|null, error?: any, stdout?: string }} spawnFn
+ * @param {string} [hostHint] recorded install host to inject as MAW_HOST (0.4.2)
  * @returns {{ appliedTemplates: boolean }}
  */
-function refreshTemplates(pkgRoot, output, spawnFn) {
-  const r = spawnFn(process.execPath, [path.join(pkgRoot, "bin", "mawf.js"), "update"], {
-    cwd: pkgRoot, encoding: "utf8", timeout: 300000,
-  });
+function refreshTemplates(pkgRoot, output, spawnFn, hostHint) {
+  const spawnOpts = { cwd: pkgRoot, encoding: "utf8", timeout: 300000 };
+  if (hostHint) spawnOpts.env = { ...process.env, MAW_HOST: hostHint };
+  const r = spawnFn(process.execPath, [path.join(pkgRoot, "bin", "mawf.js"), "update"], spawnOpts);
   const ok = !r.error && r.status === 0;
   const tail = String(r.stdout || "").trim().split("\n").filter(Boolean).slice(-3);
   if (ok) {
@@ -116,6 +135,7 @@ export function upgrade(opts = {}) {
   const applyTpl = opts.applyTemplates !== false; // default ON since 0.4.1 (was opt-in)
   const spawnFn = opts.spawnFn ?? spawnSync;
   const runSh = opts.runSh ?? sh;
+  const hostHint = opts.hostHint !== undefined ? opts.hostHint : manifestHostHint(); // test seam: explicit override
 
   if (opts.tag && det.mode === "checkout") {
     return { ok: false, mode: det.mode, output: [], error: "--tag is reserved for npm-mode installs; this is a git checkout — pull a branch/tag with git instead" };
@@ -148,7 +168,7 @@ export function upgrade(opts = {}) {
       // npm i -g overwrites the package in place — <pkgRoot>/bin/mawf.js is
       // already the NEW code, so spawning it refreshes templates with 0.4.1+.
       const tpl = applyTpl
-        ? refreshTemplates(det.pkgRoot, output, spawnFn)
+        ? refreshTemplates(det.pkgRoot, output, spawnFn, hostHint)
         : { appliedTemplates: false };
       if (!applyTpl) output.push("follow-up: run `mawf update` manually to refresh installed host templates");
       return { ok: true, mode: "npm", from: det.version, appliedTemplates: tpl.appliedTemplates, output };
@@ -211,7 +231,7 @@ export function upgrade(opts = {}) {
   // 0.4.1: template refresh is the DEFAULT (opt out with --no-apply-templates);
   // spawn the post-merge code so the refresh runs with the NEW templates.
   const tpl = applyTpl
-    ? refreshTemplates(gitRoot, output, spawnFn)
+    ? refreshTemplates(gitRoot, output, spawnFn, hostHint)
     : { appliedTemplates: false };
   if (!applyTpl) output.push(`follow-up: run \`${followUp}\` to refresh installed host templates (automatic unless --no-apply-templates)`);
   return { ok: true, mode: "checkout", from: det.version, to: newPkg.version, followUp, appliedTemplates: tpl.appliedTemplates, output };

@@ -152,12 +152,17 @@ export function install(opts = {}) {
   }
 
   // Pi Agent. Pi is NOT cc-switch-managed; its config lives in ~/.pi/agent/.
-  // Copy skills + prompts into pi's dirs ONLY when pi is the detected host, so
-  // a claude/codex host never touches a real ~/.pi/agent. Pi agent files need
-  // pi frontmatter, so per-agent .pi/agents/maw-*.md are materialized by
-  // configgen (project-level) rather than copied here as claude-format files.
-  const piDir = host.app === "pi" && host.homeDir ? host.homeDir : "";
-  if (host.app === "pi" && piDir) {
+  // 0.4.2 UNION semantics: pi assets ship when pi is the detected host OR
+  // when a previous manifest recorded a pi install (host.app / dirs.piDir) —
+  // installing a second host never drops the first host's assets (explicit
+  // removal = uninstall). Pi agent files need pi frontmatter, so per-agent
+  // .pi/agents/maw-*.md are materialized by configgen (project-level) rather
+  // than copied here as claude-format files.
+  const prevPi = oldManifest?.dirs?.piDir || oldManifest?.host?.app === "pi";
+  const piDir = host.app === "pi" && host.homeDir
+    ? host.homeDir
+    : (host.app === "pi" || prevPi) ? (oldManifest?.dirs?.piDir ?? "") : "";
+  if (piDir) {
     const skillsSrcPi = path.join(PKG_ROOT, "skills");
     if (exists(skillsSrcPi)) {
       const piSkillsDest = path.join(piDir, "skills");
@@ -173,12 +178,16 @@ export function install(opts = {}) {
 
   // DeepSeek Harness (dsh). dsh is NOT cc-switch-managed; its home is
   // $DSH_HOME (~/.dsh). Copy skills into the dsh user skills root (rank-400,
-  // never the .system child) ONLY when dsh is the detected host, so a
-  // claude/codex/pi host never touches a real ~/.dsh. dsh has no slash-command
-  // palette and no named agent-definition surface — role specs stay portable
-  // under .maw/agents/ (materialized by configgen) and spawn prompt-driven.
-  const dshDir = host.app === "dsh" && host.dshHome ? host.dshHome : "";
-  if (host.app === "dsh" && dshDir) {
+  // never the .system child) when dsh is the detected host OR a previous
+  // manifest recorded a dsh install (0.4.2 union — see the pi block above).
+  // dsh has no slash-command palette and no named agent-definition surface —
+  // role specs stay portable under .maw/agents/ (materialized by configgen)
+  // and spawn prompt-driven.
+  const prevDsh = oldManifest?.dirs?.dshDir || oldManifest?.host?.app === "dsh";
+  const dshDir = host.app === "dsh" && host.dshHome
+    ? host.dshHome
+    : (host.app === "dsh" || prevDsh) ? (oldManifest?.dirs?.dshDir ?? "") : "";
+  if (dshDir) {
     const skillsSrcDsh = path.join(PKG_ROOT, "skills");
     if (exists(skillsSrcDsh)) {
       const dshSkillsDest = path.join(dshDir, "skills");
@@ -205,7 +214,9 @@ export function install(opts = {}) {
     version: pkg.version,
     installedAt: new Date().toISOString(),
     host: { app: host.app, codexPluginInstalled: host.codexPluginInstalled, codexBinary: host.codexBinary, capabilities: hostCapabilities(host) },
-    dirs: { claudeDir, codexDir, piDir: host.app === "pi" ? piDir : undefined, dshDir: host.app === "dsh" ? dshDir : undefined },
+    // union dirs (0.4.2): record EVERY host dir this install actually wrote
+    // (pi/dsh blocks ship for detected ∪ previously-recorded hosts).
+    dirs: { claudeDir, codexDir, piDir: piDir || undefined, dshDir: dshDir || undefined },
     files: written,
   });
 

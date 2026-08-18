@@ -18,7 +18,7 @@ git clone https://github.com/<user-or-you>/multi-agents-workflow.git
 cd multi-agents-workflow
 npx . install          # or: node bin/mawf.js install
 ```
-- Copies commands/agents/hooks/skills into Claude Code (and Codex agents, best-effort; Pi skills/prompts into `~/.pi/agent/` when pi is the host; dsh skills into `$DSH_HOME/skills` when dsh is the host).
+- Copies commands/agents/hooks/skills into Claude Code (and Codex agents, best-effort; Pi skills/prompts into `~/.pi/agent/` when pi is the host; dsh skills into `$DSH_HOME/skills` when dsh is the host). Install is ADDITIVE across special hosts (0.4.2): a later `MAW_HOST=<pi|dsh> install` adds that host's assets without removing another host's; explicit removal is `uninstall`.
 - Non-destructive: `uninstall` removes only `maw-*` files.
 - If `npx .` is unavailable, run `node bin/mawf.js install`.
 

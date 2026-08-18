@@ -4,6 +4,13 @@ All notable changes to **multi-agents-workflow (MAW)** are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com/); versions follow
 [SemVer](https://semver.org/). Agent-oriented summary: [`docs/AGENT_CHANGELOG.md`](docs/AGENT_CHANGELOG.md).
 
+## [0.4.2] — 2026-08-18
+
+### Fixed
+- **Upgrade refresh now inherits the installed host** (0.4.2): the spawned `bin/mawf.js update` runs with `MAW_HOST` taken from `~/.maw/installed.json`, so a bare `mawf upgrade` on e.g. a dsh-install machine that also has `~/.claude` no longer re-detects as claude-code and lets the stale-asset cleanup purge the dsh skills.
+- **Installing a second special host no longer drops the first** (union semantics): `MAW_HOST=pi mawf install` on a dsh install (or vice versa) now ships BOTH hosts' assets and records both dirs in the manifest — install never silently removes another host's assets; explicit removal stays `uninstall`. A bare `mawf update` on a multi-host machine likewise keeps every recorded host.
+- `npm pkg fix`: `repository.url` normalized (no more publish warning).
+
 ## [0.4.1] — 2026-08-18
 
 ### Changed
