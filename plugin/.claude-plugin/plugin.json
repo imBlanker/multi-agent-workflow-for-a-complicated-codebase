@@ -1,7 +1,9 @@
 {
-  "name": "maw",
+  "name": "mawf",
   "version": "0.1.0",
   "description": "Portable, dynamic multi-agent workflow system for complex codebases. Selects the right architecture (loop / orchestrator-workers / multi-agent / graph / dynamic / ultracode), generates per-agent configs, enforces cost-rate limits, and integrates Codex review via codex-plugin-cc.",
-  "author": { "name": "imBlanker" },
-  "homepage": "https://github.com/imBlanker/multi-agent-workflow-for-a-complicated-codebase"
+  "author": {
+    "name": "imBlanker"
+  },
+  "homepage": "https://github.com/imBlanker/multi-agents-workflow"
 }

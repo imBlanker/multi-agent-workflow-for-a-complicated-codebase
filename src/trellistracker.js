@@ -2,7 +2,7 @@
 // Trellis upstream tracker — used by the GitHub Actions workflow
 // `.github/workflows/trellis-tracker.yml` (via `.github/scripts/trellis-tracker.mjs`)
 // to automatically track updates of `@mindfoldhq/trellis`, the workflow system
-// MAW chains after `maw init` (`src/trellis.js`).
+// MAW chains after `mawf init` (`src/trellis.js`).
 //
 // Policy (user-mandated 2026-08-12):
 //   - run on a schedule (weekly) + manual dispatch;
@@ -118,7 +118,7 @@ function updateBody(state, version, repoInfo, recovered) {
   if (repoInfo?.archived) lines.push(`- **⚠ The upstream repo is ARCHIVED** — consider pinning or migrating.`);
   if (recovered) lines.push(`- **Recovered**: the upstream was previously unavailable (404) and is reachable again.`);
   lines.push("");
-  lines.push(`MAW invokes trellis via \`npx --yes @mindfoldhq/trellis@latest\` (src/trellis.js) — nothing to change for MAW to pick it up, but review the changelog for breaking changes before the next \`maw init\`.`);
+  lines.push(`MAW invokes trellis via \`npx --yes @mindfoldhq/trellis@latest\` (src/trellis.js) — nothing to change for MAW to pick it up, but review the changelog for breaking changes before the next \`mawf init\`.`);
   lines.push("");
   lines.push(`_Opened automatically by the \`trellis-update-tracker\` workflow (.github/workflows/trellis-tracker.yml). Tracked state: .github/trellis-tracker/state.json._`);
   return lines.join("\n");

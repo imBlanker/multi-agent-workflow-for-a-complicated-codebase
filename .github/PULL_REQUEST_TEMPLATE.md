@@ -13,7 +13,7 @@
 ## Tests run
 <!-- Which tests did you run? Check all that apply. -->
 - [ ] `npm test` — all 69 tests pass
-- [ ] `node bin/maw.js doctor`
+- [ ] `node bin/mawf.js doctor`
 - [ ] Manual smoke test (describe below)
 
 ### Manual test notes
@@ -21,7 +21,7 @@
 
 ## Checklist
 - [ ] Tests pass locally (`npm test`)
-- [ ] `node bin/maw.js doctor` is healthy (or expected CI limitations are noted)
+- [ ] `node bin/mawf.js doctor` is healthy (or expected CI limitations are noted)
 - [ ] Docs updated (README, CONTRIBUTING, examples) where applicable
 - [ ] New and changed modules kept under 500 lines
 - [ ] No secrets or credentials committed

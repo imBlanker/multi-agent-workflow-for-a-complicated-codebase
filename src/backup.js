@@ -1,6 +1,6 @@
 // @ts-check
 // Packaged snapshot of the entire cc-switch config directory, taken BEFORE
-// every `maw init` (before MAW creates its project profile or touches routing).
+// every `mawf init` (before MAW creates its project profile or touches routing).
 //
 // Policy fit: this only READS existing files and creates NEW files under
 // `<cc-switch dir>/maw-backups/` — it never modifies any existing cc-switch

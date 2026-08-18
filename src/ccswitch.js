@@ -531,7 +531,7 @@ export function applyRouting(opts = {}) {
 /**
  * Restore cc-switch `proxy_config` (claude/codex rows) to the values captured
  * in a MAW pre-init snapshot (`~/.cc-switch/maw-backups/cc-switch-snapshot-*`,
- * written by `maw init` BEFORE anything touches cc-switch). Opt-in uninstall
+ * written by `mawf init` BEFORE anything touches cc-switch). Opt-in uninstall
  * aid: ONLY proxy_config is touched (the same guardSql carve-out as
  * applyRouting); the rest of the snapshot stays available for manual restore.
  * Accepts a .tar.gz archive (extracted to a temp dir via the system tar) or a

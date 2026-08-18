@@ -74,7 +74,7 @@ export function status() {
 export function runReview(opts = {}) {
   const companion = opts.companion ?? findCodexCompanion();
   if (!companion) {
-    return { ok: false, stdout: "", stderr: "codex-plugin-cc companion script not found; install codex-plugin-cc or run `maw doctor`", code: null };
+    return { ok: false, stdout: "", stderr: "codex-plugin-cc companion script not found; install codex-plugin-cc or run `mawf doctor`", code: null };
   }
   const cmd = opts.command ?? "review";
   const args = [cmd];

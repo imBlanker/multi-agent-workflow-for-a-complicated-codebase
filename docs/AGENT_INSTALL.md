@@ -7,20 +7,20 @@
 ## 0. Identity & scope
 - MAW = `multi-agent-workflow`, CLI `maw`, MIT, zero runtime deps (Node ≥ 20.17).
 - **Supported hosts: Claude Code, Codex, Pi Agent, and DeepSeek Harness (dsh).** If the user runs Gemini CLI / opencode / others, tell them MAW does not support their host.
-- Repo: <https://github.com/imBlanker/multi-agent-workflow-for-a-complicated-codebase>
+- Repo: <https://github.com/imBlanker/multi-agents-workflow>
 
 ## 1. Fork-first (ask the user)
-Recommend the user **fork** the repo first and clone their fork. Make personal changes in their fork; send insights/bugs as issues to upstream. If the user just wants to try it, you may clone upstream directly, but still flag the fork recommendation. Fork: <https://github.com/imBlanker/multi-agent-workflow-for-a-complicated-codebase/fork>.
+Recommend the user **fork** the repo first and clone their fork. Make personal changes in their fork; send insights/bugs as issues to upstream. If the user just wants to try it, you may clone upstream directly, but still flag the fork recommendation. Fork: <https://github.com/imBlanker/multi-agents-workflow/fork>.
 
 ## 2. Install
 ```bash
-git clone https://github.com/<user-or-you>/multi-agent-workflow-for-a-complicated-codebase.git
-cd multi-agent-workflow-for-a-complicated-codebase
-npx . install          # or: node bin/maw.js install
+git clone https://github.com/<user-or-you>/multi-agents-workflow.git
+cd multi-agents-workflow
+npx . install          # or: node bin/mawf.js install
 ```
 - Copies commands/agents/hooks/skills into Claude Code (and Codex agents, best-effort; Pi skills/prompts into `~/.pi/agent/` when pi is the host; dsh skills into `$DSH_HOME/skills` when dsh is the host).
 - Non-destructive: `uninstall` removes only `maw-*` files.
-- If `npx .` is unavailable, run `node bin/maw.js install`.
+- If `npx .` is unavailable, run `node bin/mawf.js install`.
 
 ### 2b. DeepSeek Harness (dsh) host setup (only when the user runs dsh)
 
@@ -42,64 +42,64 @@ Prerequisites: Node ≥ 20.17, `npm i -g @deepseek-ai/dsh` (verify `dsh --versio
 
    Keys live in `~/.dsh/.credentials.yaml` (write-only; referenced by `apiKeyEnv`). Renaming a provider id is not supported — add a new one and delete the old.
 2. **Install MAW assets**: `npx . install` on a dsh host copies MAW skills into `$DSH_HOME/skills` (rank-400 user root). No prompts/commands surface exists on dsh — role specs stay portable under `.maw/agents/`.
-3. **Init**: `MAW_HOST=dsh maw init -u <user>` (or set the env before any maw command) — writes `.maw/`, skips cc-switch profile creation for dsh, and chains `trellis init --dsh` (shared `.agents/skills/` + dsh-private `.dsh/skills/` entry skills + `.dsh/DSH.md`).
-4. **Plan/run**: `maw plan --project .` then run one orchestrator session via `dsh web` (choose the project workspace) or `dsh --profile headless "<task>"`; spawn workers with dsh's subagent tool using `.maw/agents/<role>.md` as the payload.
+3. **Init**: `MAW_HOST=dsh mawf init -u <user>` (or set the env before any maw command) — writes `.maw/`, skips cc-switch profile creation for dsh, and chains `trellis init --dsh` (shared `.agents/skills/` + dsh-private `.dsh/skills/` entry skills + `.dsh/DSH.md`).
+4. **Plan/run**: `mawf plan --project .` then run one orchestrator session via `dsh web` (choose the project workspace) or `dsh --profile headless "<task>"`; spawn workers with dsh's subagent tool using `.maw/agents/<role>.md` as the payload.
 5. **Troubleshooting**: `MISSING_CREDENTIAL` → store the key via the Models page or export the `apiKeyEnv` variable; `UNKNOWN_MODEL` → select a configured model or add it to the custom provider's `models` list.
 
 ## 3. Doctor (environment + policy check)
 ```bash
-node bin/maw.js doctor
+node bin/mawf.js doctor
 ```
 Verify: Node ≥ 20, git, **host = claude-code | codex | pi | dsh**, cc-switch DB found (read-only), model pricing loaded, **routing policy compliant** (N/A for pi/dsh — they are not cc-switch-managed), codex+codex-plugin-cc available (pi/dsh hosts use native subagents instead), trellis detectable. On dsh also check: providers parsed from `~/.dsh/settings.yaml`, default model, credential key names, agent preset, pricing-sync match rate. Warnings are non-fatal; fix what you can.
 
 ## 4. cc-switch policy (HARD RULES — do not violate)
 - All existing cc-switch data is **read-only**.
-- **Before every `maw init`, a packaged snapshot of ALL cc-switch config files is taken** → `~/.cc-switch/maw-backups/cc-switch-snapshot-<timestamp>.tar.gz` (directory copy + sha256 manifest if `tar` is unavailable). Mention the snapshot path to the user.
+- **Before every `mawf init`, a packaged snapshot of ALL cc-switch config files is taken** → `~/.cc-switch/maw-backups/cc-switch-snapshot-<timestamp>.tar.gz` (directory copy + sha256 manifest if `tar` is unavailable). Mention the snapshot path to the user.
 - **Project functionality is DECOUPLED by default** (2026-08-12): cc-switch's "project" feature (`profiles`) is incomplete, so MAW no longer reads/writes profiles. MAW manages project-level agent/subagent model configs itself in `.maw/agents/*.json` and only **syncs provider config info read-only** (the high-value settings in each provider's `config.toml`/`config.json`: base_url, model, auth_mode, failover …). The legacy `MAW: <project> (<user>)` profile create/reuse is disabled unless `MAW_CC_PROJECT_SYNC=1` is set — then it creates a **NEW** profile only (never modifies existing ones).
 - **NEVER** touch any profile whose name contains `默认` (e.g. `Claude Code 默认`, `Codex 默认`). The engine hard-refuses this; you must not bypass it.
-- Routing (checked by `maw doctor` / `maw routing`; applied by `maw routing --fix`, writing ONLY `proxy_config` for claude/codex):
+- Routing (checked by `mawf doctor` / `mawf routing`; applied by `mawf routing --fix`, writing ONLY `proxy_config` for claude/codex):
   - **Claude Code:** local routing **always ON** + auto-failover **always ON**.
   - **Codex:** OpenAI-OAuth (ChatGPT) login in use → local routing **OFF**; otherwise **ON**.
   - **Pi Agent:** N/A — pi is **not** cc-switch-managed; providers/MCP/skills live in `~/.pi/agent/`.
   - **DeepSeek Harness (dsh):** N/A — dsh is **not** cc-switch-managed; providers/models live in `$DSH_HOME/settings.yaml` (`llm-pi-ai.providers`), MCP via dsh patch layers. Never write routing or profile rows for dsh.
-- **Model price gate (HITL, mandatory):** assigning a model with **Input > $2/1M Tokens or Output > $10/1M Tokens** pauses the work and reports to the human first — `maw plan`/`maw init`/`maw add-agent` exit 3 with a ⚠ PRICE GATE report; `maw guard`/`maw acquire` deny gated roles until `maw approve-model --role <role> --yes` (or a cheaper model, or `--allow-pricey`).
+- **Model price gate (HITL, mandatory):** assigning a model with **Input > $2/1M Tokens or Output > $10/1M Tokens** pauses the work and reports to the human first — `mawf plan`/`mawf init`/`mawf add-agent` exit 3 with a ⚠ PRICE GATE report; `mawf guard`/`mawf acquire` deny gated roles until `mawf approve-model --role <role> --yes` (or a cheaper model, or `--allow-pricey`).
 
-If `maw routing` reports violations, run `maw routing --fix` (after the user consents — it writes to their cc-switch). For Claude Code, routing+failover should be ON; if off, fix it.
+If `mawf routing` reports violations, run `mawf routing --fix` (after the user consents — it writes to their cc-switch). For Claude Code, routing+failover should be ON; if off, fix it.
 
 ## 5. Initialize the project (chains trellis)
 ```bash
-maw init -u <user-name>
+mawf init -u <user-name>
 ```
-This: (a) **snapshots all cc-switch config** to `~/.cc-switch/maw-backups/`, (b) writes `.maw/` configs (paused with a ⚠ PRICE GATE report + exit 3 if any model assignment is expensive — resolve via `maw approve-model --role <role> --yes` or a cheaper model, then re-run), (c) notes that cc-switch project-profile sync is DECOUPLED by default (`MAW_CC_PROJECT_SYNC=1` re-enables), (d) checks the routing policy, (e) **automatically runs `trellis init -u <user-name>`** as the mandatory next step.
+This: (a) **snapshots all cc-switch config** to `~/.cc-switch/maw-backups/`, (b) writes `.maw/` configs (paused with a ⚠ PRICE GATE report + exit 3 if any model assignment is expensive — resolve via `mawf approve-model --role <role> --yes` or a cheaper model, then re-run), (c) notes that cc-switch project-profile sync is DECOUPLED by default (`MAW_CC_PROJECT_SYNC=1` re-enables), (d) checks the routing policy, (e) **automatically runs `trellis init -u <user-name>`** as the mandatory next step.
 
 **trellis conflict handling** (see README §8): if trellis touches a MAW-managed file, MAW pauses, prints the conflict + overview + log path (`.maw/logs/trellis-init-*.log`), and asks the user to choose `[m]` keep MAW / `[t]` keep trellis / `[r]` re-run trellis. Apply the user's choice and resume. In a non-interactive context, surface the conflicts + log and let the user decide.
 
-Use `maw init -u <user> --no-trellis` only when you must skip the trellis chain (e.g. CI/automated).
+Use `mawf init -u <user> --no-trellis` only when you must skip the trellis chain (e.g. CI/automated).
 
 ## 6. Plan
 ```bash
-maw plan --project .
+mawf plan --project .
 # with explicit signals:
-maw plan --project . --task-type coding --risk high --parallel 6 --value high --context large
+mawf plan --project . --task-type coding --risk high --parallel 6 --value high --context large
 ```
 Reads `.maw/workflow.json` + `plan.md` + `agents/*.json`. Report the chosen **primary architecture**, the **agents** (role→model), **cost limits**, and **review gates** back to the user.
 
 ### 5b. Explain the model choices (capability-aware)
 ```bash
-maw models            # capability view of all provider models + per-role assignments
+mawf models            # capability view of all provider models + per-role assignments
 ```
 Models differ WITHIN a leaderboard (some agentic models are full-multimodal; some are reasoning/dialogue-only; some multimodal models are not agentic). MAW classifies every available provider model (curated catalog, `estimated:true`), drops models unfit for each role, then ranks by **capability fit → provider remaining quota/balance → cost rate** (quota = cc-switch daily/monthly limits − `usage_daily_rollups` spend; unknown when no limit). Each `agents/*.json` embeds the full `model_selection` record (chosen provider+model, fit, quota, price, reasons, alternates) — walk the user through it.
 
 ## 7. Run (host-driven)
 ```bash
-maw run
+mawf run
 ```
-The host (Claude Code) reads the batches, and **before each spawn** checks `maw guard`, then `maw acquire --id <id> --role <role>` / `maw release --id <id>` around each subagent run. At review gates, `maw review --after post-implementation` (invokes Codex via codex-plugin-cc; risk-gated).
+The host (Claude Code) reads the batches, and **before each spawn** checks `mawf guard`, then `mawf acquire --id <id> --role <role>` / `mawf release --id <id>` around each subagent run. At review gates, `mawf review --after post-implementation` (invokes Codex via codex-plugin-cc; risk-gated).
 
 ## 8. Cost
 ```bash
-maw cost        # real USD/min from cc-switch logs
-maw guard       # ALLOW/DENY a new spawn
+mawf cost        # real USD/min from cc-switch logs
+mawf guard       # ALLOW/DENY a new spawn
 ```
 Defaults: $5/min per agent, $10/min total, max concurrency 16. Edit `.maw/config.yaml` to change.
 

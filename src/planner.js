@@ -394,7 +394,7 @@ function pickModel(cc, appType, fallbackId) {
 }
 
 /**
- * Heuristic project analysis from a directory tree (used by `maw plan` when no
+ * Heuristic project analysis from a directory tree (used by `mawf plan` when no
  * explicit signals are given).
  * @param {{ files?: number, loc?: number, languages?: string[] }} probe
  * @returns {ProjectSignals}

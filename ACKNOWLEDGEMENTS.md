@@ -70,5 +70,5 @@ authors:
 ---
 
 If we have overlooked a source or miscredited something, please open an issue
-at <https://github.com/imBlanker/multi-agent-workflow-for-a-complicated-codebase/issues>
+at <https://github.com/imBlanker/multi-agents-workflow/issues>
 and we will correct it.

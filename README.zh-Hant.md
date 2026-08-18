@@ -1,10 +1,10 @@
 [English](./README.md) | [简体中文](./README.zh-Hans.md) | [繁體中文](./README.zh-Hant.md)
 
-[![CI](https://github.com/imBlanker/multi-agent-workflow-for-a-complicated-codebase/actions/workflows/ci.yml/badge.svg)](https://github.com/imBlanker/multi-agent-workflow-for-a-complicated-codebase/actions/workflows/ci.yml)
+[![CI](https://github.com/imBlanker/multi-agents-workflow/actions/workflows/ci.yml/badge.svg)](https://github.com/imBlanker/multi-agents-workflow/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D20.17-green.svg)](https://nodejs.org)
 [![Tests](https://img.shields.io/badge/tests-69%20passing-success.svg)](#testing)
-[![GitHub stars](https://img.shields.io/github/stars/imBlanker/multi-agent-workflow-for-a-complicated-codebase?style=social&label=Stars)](https://github.com/imBlanker/multi-agent-workflow-for-a-complicated-codebase/stargazers)
+[![GitHub stars](https://img.shields.io/github/stars/imBlanker/multi-agents-workflow?style=social&label=Stars)](https://github.com/imBlanker/multi-agents-workflow/stargazers)
 
 # MAW — 面向複雜程式碼庫的多智慧體工作流系統
 
@@ -18,11 +18,11 @@
 
 **強烈建議：在使用前先 fork 本儲存庫。** 在*你的* fork 中進行任何個人修改，使其與此上游保持同步，並將改進與心得回饋至此。
 
-- **Fork：** <https://github.com/imBlanker/multi-agent-workflow-for-a-complicated-codebase/fork>
+- **Fork：** <https://github.com/imBlanker/multi-agents-workflow/fork>
 - **分支命名（Conventional Commits）：** `feat/<topic>`、`fix/<issue>`、`docs/<topic>`、`chore/<topic>`、`refactor/<topic>`、`ci/<topic>`、`test/<topic>`。
 - **禁止直接推送至 `main`** —— 從你的功能分支發起 Pull Request。
 - **一個 PR 對應一個關注點**，小而聚焦；用 `Closes #N` 連結 issue；CI 必須通過後才能審查。
-- **issue：** 先搜尋[現有 issue](https://github.com/imBlanker/multi-agent-workflow-for-a-complicated-codebase/issues?q=is%3Aissue) 以避免重複，再使用 [bug](https://github.com/imBlanker/multi-agent-workflow-for-a-complicated-codebase/issues/new?template=bug_report.md) / [feature](https://github.com/imBlanker/multi-agent-workflow-for-a-complicated-codebase/issues/new?template=feature_request.md) 模板。
+- **issue：** 先搜尋[現有 issue](https://github.com/imBlanker/multi-agents-workflow/issues?q=is%3Aissue) 以避免重複，再使用 [bug](https://github.com/imBlanker/multi-agents-workflow/issues/new?template=bug_report.md) / [feature](https://github.com/imBlanker/multi-agents-workflow/issues/new?template=feature_request.md) 模板。
 
 完整規則見 [`CONTRIBUTING.md`](./CONTRIBUTING.md) 與 [`docs/GOVERNANCE.md`](./docs/GOVERNANCE.md)。參見 [§貢獻者](#15-貢獻者) 與 [§聯絡方式](#16-聯絡方式)。
 
@@ -36,30 +36,30 @@ MAW 是一個 CLI（`maw`）加上一個 Claude Code 外掛。最快路徑：
 
 ```bash
 # 1. Fork the repo (see 🍴 Fork first), then clone YOUR fork:
-git clone https://github.com/<you>/multi-agent-workflow-for-a-complicated-codebase.git
-cd multi-agent-workflow-for-a-complicated-codebase
+git clone https://github.com/<you>/multi-agents-workflow.git
+cd multi-agents-workflow
 
 # 2. Install the plugin + skills into Claude Code (and Codex, best-effort):
-npx . install          # or: node bin/maw.js install
+npx . install          # or: node bin/mawf.js install
 
 # 3. Initialize a project (cc-switch 專案設定檔同步預設脫鉤):
-maw init -u <your-name>
+mawf init -u <your-name>
 
 # 4. The next step is automatic: MAW runs `trellis init -u <your-name>` for you.
 #    (skip the trellis chain with --no-trellis)
 
 # 5. Plan + run:
-maw plan --project .
-maw run
+mawf plan --project .
+mawf run
 ```
 
 若 Claude Code 的路由／自動故障轉移在 cc-switch 中為關閉，一條指令即可修復（只寫入 claude/codex 的 `proxy_config` 列 —— 絕不動你的設定檔／供應商）：
 
 ```bash
-maw routing --fix
+mawf routing --fix
 ```
 
-隨時檢查環境：`maw doctor`。
+隨時檢查環境：`mawf doctor`。
 
 ## Agent 指南
 
@@ -68,12 +68,12 @@ maw routing --fix
 取得完整的智慧體安裝／設定指南並從頭到尾遵循 —— 不要摘要：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/imBlanker/multi-agent-workflow-for-a-complicated-codebase/main/docs/AGENT_INSTALL.md
+curl -fsSL https://raw.githubusercontent.com/imBlanker/multi-agents-workflow/main/docs/AGENT_INSTALL.md
 ```
 
-該指南涵蓋：fork 與 clone、`npx . install`、`maw init -u <user>`（建立 cc-switch 專案設定檔＋檢查路由策略＋鏈接 `trellis init`）、`maw plan`、`maw run`、`maw cost`、`maw guard`、`maw review`、[人類指南](#人類指南) 工作流、[cc-switch 策略](#7-cc-switch-整合與路由策略)、[trellis init 規則](#8-trellis-init-作為強制的下一步)、優雅降級與解除安裝。完整閱讀；不要猜測。
+該指南涵蓋：fork 與 clone、`npx . install`、`mawf init -u <user>`（建立 cc-switch 專案設定檔＋檢查路由策略＋鏈接 `trellis init`）、`mawf plan`、`mawf run`、`mawf cost`、`mawf guard`、`mawf review`、[人類指南](#人類指南) 工作流、[cc-switch 策略](#7-cc-switch-整合與路由策略)、[trellis init 規則](#8-trellis-init-作為強制的下一步)、優雅降級與解除安裝。完整閱讀；不要猜測。
 
-最小智慧體提示：*"依循 https://github.com/imBlanker/multi-agent-workflow-for-a-complicated-codebase 中的 `docs/AGENT_INSTALL.md` 安裝並設定 MAW，然後對此專案執行 `maw plan`，並回報所選架構、智慧體與成本限制。"*
+最小智慧體提示：*"依循 https://github.com/imBlanker/multi-agents-workflow 中的 `docs/AGENT_INSTALL.md` 安裝並設定 MAW，然後對此專案執行 `mawf plan`，並回報所選架構、智慧體與成本限制。"*
 
 ---
 
@@ -104,13 +104,13 @@ curl -fsSL https://raw.githubusercontent.com/imBlanker/multi-agent-workflow-for-
 - **cc-switch 安全＋專案脫鉤。** 既有 cc-switch 資料皆為唯讀；MAW 的**專案**功能與 cc-switch 不完整的 `profiles` 功能**暫時脫鉤**（程式碼保留、預設停用；`MAW_CC_PROJECT_SYNC=1` 可臨時重開）。MAW 仍對專案級各 agents/subagents 的模型設定握有強力權限（`.maw/agents/*.json`），只從 cc-switch **唯讀同步供應商設定資訊**——各供應商 `config.toml`／`config.json` 中的高價值設定（base_url、model、auth_mode、failover……）。另有（可選）路由豁免。
 
 ## 2. 何時使用
-**全新的複雜專案**：`maw init -u <user>` → `maw plan`。當單一智慧體不敷使用（檔案繁多、多種語言、高風險、上下文超出單一視窗）且你需要有成本上限的多智慧體執行與 Codex 審查關卡時使用。**不要**用於微小的固定任務（單一迴圈工程智慧體更便宜）。
+**全新的複雜專案**：`mawf init -u <user>` → `mawf plan`。當單一智慧體不敷使用（檔案繁多、多種語言、高風險、上下文超出單一視窗）且你需要有成本上限的多智慧體執行與 Codex 審查關卡時使用。**不要**用於微小的固定任務（單一迴圈工程智慧體更便宜）。
 
-**背景閱讀——智慧體系統概念。** 對 MAW 評分與選擇的這些範式仍陌生？請閱讀線上報告——[智慧體架構範式研究報告](https://imblanker.github.io/multi-agent-workflow-for-a-complicated-codebase/agent-architecture-paradigms.html)（由 GitHub Pages 渲染；源檔：[`docs/agent-architecture-paradigms.html`](./docs/agent-architecture-paradigms.html)）：一份短小的研究報告，釐清 **Augmented LLM**、**Workflow 與 Agent 的區別**、**Multi-Agent**、**Subagents**、**Orchestrator-Worker**、**Loop Engineering**、**Graph Engineering** —— 各自是什麼、何時用、需要什麼前提。
+**背景閱讀——智慧體系統概念。** 對 MAW 評分與選擇的這些範式仍陌生？請閱讀線上報告——[智慧體架構範式研究報告](https://imblanker.github.io/multi-agents-workflow/agent-architecture-paradigms.html)（由 GitHub Pages 渲染；源檔：[`docs/agent-architecture-paradigms.html`](./docs/agent-architecture-paradigms.html)）：一份短小的研究報告，釐清 **Augmented LLM**、**Workflow 與 Agent 的區別**、**Multi-Agent**、**Subagents**、**Orchestrator-Worker**、**Loop Engineering**、**Graph Engineering** —— 各自是什麼、何時用、需要什麼前提。
 
 ## 3. 系統架構
 ```
-   user/project → maw plan: probe → score architectures → select → generate per-agent configs (.maw/)
+   user/project → mawf plan: probe → score architectures → select → generate per-agent configs (.maw/)
         │
    ┌────┴───────────────────────────────────────────────────────┐
    ▼              ▼                                            ▼
@@ -133,7 +133,7 @@ curl -fsSL https://raw.githubusercontent.com/imBlanker/multi-agent-workflow-for-
 | **DeepSeek Harness (dsh)** | ✅ 支援 | 設定位於 `~/.dsh/settings.yaml`（`llm-pi-ai.providers`；不經 cc-switch）；無命名智慧體檔案——可攜的 `.maw/agents/<role>.md` 即是透過 dsh 提示驅動的子智慧體工具 spawn 的載荷；技能 → `$DSH_HOME/skills` + `.agents/skills`；花費速率不可測（僅並發），價格從 cc-switch 同步的 `model-pricing.json` 按 id 匹配；MCP 由 dsh patch 層管理。 |
 | Gemini CLI / opencode / 其他 | ❌ 不支援 | （其 cc-switch 定價仍可能被讀取用於成本估計。） |
 
-`maw doctor` 回報宿主＋路由策略合規性。
+`mawf doctor` 回報宿主＋路由策略合規性。
 
 ## 5. 工作流選擇機制
 | 訊號 | 可能選擇 |
@@ -149,42 +149,42 @@ curl -fsSL https://raw.githubusercontent.com/imBlanker/multi-agent-workflow-for-
 架構可**組合**（例如 `ultracode` = `graph` + `loop` + 一個 Codex 審查關卡）。完整評分表：[`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md)。
 
 ## 6. 智慧體與子智慧體設定
-`maw plan` 在 `.maw/` 下為每個角色寫入**可獨立編輯**的設定（`workflow.json`、`config.yaml`、`plan.md`、`graph.json`、`agents/<role>.md`+`.json`、`runtime/`）。動態新增／移除：`maw add-agent --role <r> ...`／`maw remove-agent --role <r>`。直接編輯任一檔案 —— 執行器會在執行時重新讀取。
+`mawf plan` 在 `.maw/` 下為每個角色寫入**可獨立編輯**的設定（`workflow.json`、`config.yaml`、`plan.md`、`graph.json`、`agents/<role>.md`+`.json`、`runtime/`）。動態新增／移除：`mawf add-agent --role <r> ...`／`mawf remove-agent --role <r>`。直接編輯任一檔案 —— 執行器會在執行時重新讀取。
 
 **能力感知的模型選擇**（[`src/modelcap.js`](./src/modelcap.js)，靈感來自 [Artificial Analysis](https://artificialanalysis.ai) 的約 10 個分能力模型榜單 —— intelligence／coding／math／agentic／multimodal-vision／image／image-edit／video／tts／stt）。對每個角色，MAW 會：① 將 cc-switch 中**每個可用的供應商模型**依能力分類（全多模態的 agentic 模型、僅推理／對話的 agentic 模型、多模態但非 agentic 的模型是三種不同的東西）；② 剔除不適合該角色的模型（例如圖像生成模型絕不可能成為實現者）；③ 將其餘模型依**能力適配 → 供應商剩餘額度／餘額 → 花銷速率**排序（額度 = `limit_daily/monthly_usd` − `usage_daily_rollups` 中的消費；未設定上限時額度為未知）。精選目錄一律標記為估算值（`estimated:true`）。即時檢視：
 
 ```bash
-maw models                # capability view of all provider models + per-role assignments
-maw models --app codex    # same for the codex app_type
+mawf models                # capability view of all provider models + per-role assignments
+mawf models --app codex    # same for the codex app_type
 ```
 
 每個智慧體的 `.json`／`.md` 都帶有完整的 `model_selection` 記錄（所選 provider＋模型、能力適配、剩餘額度、價格、理由、備選）—— 見 [`examples/.maw-sample/agents/orchestrator.json`](./examples/.maw-sample/agents/orchestrator.json)。
 
 **模型價格閘門（HITL，強制）。** 每當 MAW 要配用單價較高的模型——**Input > $2/1M Tokens 或 Output > $10/1M Tokens**（[`src/pricegate.js`](./src/pricegate.js)，唯一事實來源）——都會**暫停相關工作並先向人工報告**：
 
-- `maw plan`／`maw init`／`maw add-agent` 列印 ⚠ PRICE GATE 報告（角色、供應商、模型、價格、閾值）並**以退出碼 3 暫停**；生成的 `.maw/` 檔案保留在磁碟上供人工審查。
-- `maw guard`／`maw acquire` 對尚未獲人工批准的昂貴模型角色**拒絕放行**，暫停狀態得以維持。
-- 人工可透過三種方式恢復：改用更便宜的模型（編輯 `.maw/agents/<role>.json` 後重跑 `maw plan`）、按角色明確批准（`maw approve-model --role <role> --yes`——重跑 plan 後仍然有效）、或單次執行覆蓋（`--allow-pricey`）。
+- `mawf plan`／`mawf init`／`mawf add-agent` 列印 ⚠ PRICE GATE 報告（角色、供應商、模型、價格、閾值）並**以退出碼 3 暫停**；生成的 `.maw/` 檔案保留在磁碟上供人工審查。
+- `mawf guard`／`mawf acquire` 對尚未獲人工批准的昂貴模型角色**拒絕放行**，暫停狀態得以維持。
+- 人工可透過三種方式恢復：改用更便宜的模型（編輯 `.maw/agents/<role>.json` 後重跑 `mawf plan`）、按角色明確批准（`mawf approve-model --role <role> --yes`——重跑 plan 後仍然有效）、或單次執行覆蓋（`--allow-pricey`）。
 
 ## 7. cc-switch 整合與路由策略
 MAW 預設將你的 cc-switch 視為**唯讀**。以下規則在程式碼中強制執行（[`src/ccswitch.js`](./src/ccswitch.js)、`guardSql`）：
 
-- **每次 init 前先做快照。** `maw init` **首先**將**所有** cc-switch 設定檔打包為帶時間戳的歸檔，位於 `~/.cc-switch/maw-backups/cc-switch-snapshot-<timestamp>.tar.gz`（在無 `tar` 可用的環境退為目錄複製＋sha256 清單）——早於 MAW 觸碰任何其他內容之前。只讀取既有檔案；只在 `maw-backups/` 下寫入**新**檔案。
+- **每次 init 前先做快照。** `mawf init` **首先**將**所有** cc-switch 設定檔打包為帶時間戳的歸檔，位於 `~/.cc-switch/maw-backups/cc-switch-snapshot-<timestamp>.tar.gz`（在無 `tar` 可用的環境退為目錄複製＋sha256 清單）——早於 MAW 觸碰任何其他內容之前。只讀取既有檔案；只在 `maw-backups/` 下寫入**新**檔案。
 - **既有 cc-switch 資料皆為唯讀。** 讀取使用唯讀 SQLite 連線（`node:sqlite` `readOnly:true`）。
 - **專案功能預設脫鉤。** cc-switch 的「專案」功能（`profiles` 表）不完整，MAW 不再讀寫 profiles：MAW 自己在 `.maw/agents/*.json` 管理專案級 agents/subagents 模型設定，只**唯讀同步供應商設定資訊**（各供應商 `config.toml`／`config.json` 的高價值設定——base_url、model、auth_mode、failover 佇列……）。profile 相關程式碼模組保留在 `src/ccswitch.js`（含測試）但已停用；設 `MAW_CC_PROJECT_SYNC=1` 可臨時重開舊的建立／重用 `MAW: <project> (<user>)` profile 行為。
 - **絕不碰 `默认` 設定檔。** 任何名稱含 `默认`（例如 `Claude Code 默认`、`Codex 默认`）的設定檔**絕不**被寫入、更新或刪除 —— 一道硬性護欄會予以拒絕（即使重開舊同步也仍然生效）。
-- **路由規則**（`maw routing`／`maw doctor` 檢查；`maw routing --fix` 套用豁免，**只**寫入 claude/codex 的 `proxy_config`）：
+- **路由規則**（`mawf routing`／`mawf doctor` 檢查；`mawf routing --fix` 套用豁免，**只**寫入 claude/codex 的 `proxy_config`）：
   - **Claude Code：** 本地路由**恆為開啟**＋自動故障轉移**恆為開啟**。
   - **Codex：** 當使用 **OpenAI OAuth（ChatGPT）登入** 時 → 本地路由**關閉**；否則**開啟**。（OAuth 由 `codex_oauth_auth.json`＋供應商的 `auth.auth_mode === "chatgpt"` 偵測。）
 
 ## 8. trellis init 作為強制的下一步
-**務必在 `maw init` 之後立即執行 `trellis init -u <user-name>`。** MAW 會自動為你完成（它呼叫 [`@mindfoldhq/trellis`](https://github.com/mindfoldhq/trellis) —— 一個更強大、更嚴謹的工作流框架）。使用 `maw init --no-trellis` 跳過。
+**務必在 `mawf init` 之後立即執行 `trellis init -u <user-name>`。** MAW 會自動為你完成（它呼叫 [`@mindfoldhq/trellis`](https://github.com/mindfoldhq/trellis) —— 一個更強大、更嚴謹的工作流框架）。使用 `mawf init --no-trellis` 跳過。
 
 由於 trellis 與 MAW 都能管理檔案，發生衝突時 MAW 會**暫停** trellis init：
 1. **快照** MAW 管理的檔案（`.maw/*`，排除 `runtime/`／`logs/`）。
 2. **執行** `trellis init -u <user> -y --claude --codex`，將輸出串流至 `.maw/logs/trellis-init-<timestamp>.log`。
 3. **偵測** trellis 動過的任何 MAW 管理檔案 → **暫停**，在終端機印出衝突詳情＋概覽＋日誌路徑。
-4. **你逐項選擇**：`[m]` 保留 MAW（透過 `maw plan` 重新產生）· `[t]` 保留 trellis · `[r]` 重新執行 trellis init 以**恢復進度**。
+4. **你逐項選擇**：`[m]` 保留 MAW（透過 `mawf plan` 重新產生）· `[t]` 保留 trellis · `[r]` 重新執行 trellis init 以**恢復進度**。
 5. MAW 套用你的選擇並繼續。
 
 （黑箱 CLI 無法在寫入途中暫停，因此 MAW 在衝突寫入後立即偵測，再透過重新執行冪等的 `trellis init` 來恢復。）見 [`src/trellis.js`](./src/trellis.js)。
@@ -195,33 +195,33 @@ MAW 預設將你的 cc-switch 視為**唯讀**。以下規則在程式碼中強�
 來自 cc-switch `proxy_request_logs` 的真實推理消費 → USD/分鐘。**每智慧體** $5/分鐘、**總計** $10/分鐘（獨立）、**最大並發** 16 —— 可在 `.maw/config.yaml` 或透過旗標編輯。定價來源鏈：cc-switch `model_pricing` → 供應商 `cost_multiplier` → 內建**估計值**（標記 `estimated:true`）→ `null`（絕不偽造）。不經 cc-switch 代理路由的宿主（pi、dsh）沒有可測的消費速率 → 速率限額降級為僅並發；dsh 上的**價格門**仍透過 cc-switch 自動同步的 `~/.cc-switch/model-pricing.json` 生效（命中的模型 id 獲得真實價格，未命中保持未知）。
 
 ```bash
-maw cost      # current rate + top sessions + used% vs limit
-maw guard     # ALLOW/DENY a new spawn right now (pre-spawn check)
-maw acquire --id <id> --role <r>   # take a slot
-maw release --id <id>             # release a slot
+mawf cost      # current rate + top sessions + used% vs limit
+mawf guard     # ALLOW/DENY a new spawn right now (pre-spawn check)
+mawf acquire --id <id> --role <r>   # take a slot
+mawf release --id <id>             # release a slot
 ```
 
 ## 10. 安裝
 **來自 npm（一旦發布）：** `npx multi-agent-workflow install`。
 **來自 fork／clone（目前）：**
 ```bash
-git clone https://github.com/<you>/multi-agent-workflow-for-a-complicated-codebase.git
-cd multi-agent-workflow-for-a-complicated-codebase
-npx . install          # or node bin/maw.js install
+git clone https://github.com/<you>/multi-agents-workflow.git
+cd multi-agents-workflow
+npx . install          # or node bin/mawf.js install
 ```
 `install` 將指令／智慧體／hook／技能複製進 Claude Code（並盡力處理 Codex），並在 `~/.maw/installed.json` 清單記錄**每一個寫入的檔案**，且為非破壞性（解除安裝會跨全部宿主精確移除這些檔案——包括不帶 `maw-*` 前綴的外掛 agents/hooks——並清理因此變空的目錄）。專案 `.maw/` 設定預設**保留**，傳 `--purge-config` 才刪除；`--restore-routing` 可將 cc-switch `proxy_config` 回滾到 init 前的快照。`update` 重新複製模板，保留你的編輯。`upgrade` 自升級：checkout 安裝走 `git fetch` + ff-only 拉取（`--dry-run`/`--remote`/`--apply-templates`；絕不 stash/rebase/force），npm 安裝走 `npm i -g`。
 
 ## 11. 使用範例
-**最小：** `maw init -u alice`（先對 cc-switch 做快照）→ `maw plan --project .` → `maw run` → `maw cost`。
-**模型選擇：** `maw models` —— 檢視每個角色分得哪個 provider（API key）＋模型，以及原因（能力適配 → 剩餘額度 → 花銷速率）。
-**完整：** `maw plan --project . --task-type coding --risk high --parallel 6 --value high --context large` → 每次產生前執行 `maw guard` → `maw acquire/release` → `maw review --after post-implementation`。
+**最小：** `mawf init -u alice`（先對 cc-switch 做快照）→ `mawf plan --project .` → `mawf run` → `mawf cost`。
+**模型選擇：** `mawf models` —— 檢視每個角色分得哪個 provider（API key）＋模型，以及原因（能力適配 → 剩餘額度 → 花銷速率）。
+**完整：** `mawf plan --project . --task-type coding --risk high --parallel 6 --value high --context large` → 每次產生前執行 `mawf guard` → `mawf acquire/release` → `mawf review --after post-implementation`。
 見 [`examples/complex-project-workflow.md`](./examples/complex-project-workflow.md) 與產生的 [`examples/.maw-sample/`](./examples/.maw-sample/)。
 
-**常見錯誤：** `cc-switch database not found` → `maw doctor`；`DENY spawn ... per-agent limit` → 降低並發或調高 `--per-agent`；`codex not ready` → 安裝 codex＋codex-plugin-cc（MAW 在風險 ≥ 中等時降級為第二個 Claude 審查者）；`routing NOT compliant` → `maw routing --fix`。
+**常見錯誤：** `cc-switch database not found` → `mawf doctor`；`DENY spawn ... per-agent limit` → 降低並發或調高 `--per-agent`；`codex not ready` → 安裝 codex＋codex-plugin-cc（MAW 在風險 ≥ 中等時降級為第二個 Claude 審查者）；`routing NOT compliant` → `mawf routing --fix`。
 
 ## 12. 目錄結構
 ```
-bin/maw.js  src/  plugin/  skills/  defaults/  examples/  tests/  docs/
+bin/mawf.js  src/  plugin/  skills/  defaults/  examples/  tests/  docs/
 .github/workflows/ci.yml  README.{md,zh-Hans,zh-Hant}  LICENSE(MIT)
 ```
 
@@ -240,7 +240,7 @@ cc-switch 預設唯讀；唯一的寫入為 (a) 已脫鉤的專案設定檔同�
 > 歡迎貢獻 —— 見 [`CONTRIBUTING.md`](./CONTRIBUTING.md) 與 [`docs/GOVERNANCE.md`](./docs/GOVERNANCE.md)。*(未捏造其他貢獻者。)*
 
 ## 16. 聯絡方式
-- issue：<https://github.com/imBlanker/multi-agent-workflow-for-a-complicated-codebase/issues>
+- issue：<https://github.com/imBlanker/multi-agents-workflow/issues>
 - 作者：**imBlanker**（GitHub）。*(聯絡資訊待補；未捏造。)*
 
 ---
@@ -249,17 +249,17 @@ cc-switch 預設唯讀；唯一的寫入為 (a) 已脫鉤的專案設定檔同�
 ## 測試
 ```bash
 npm test        # 69 node:test cases
-node bin/maw.js doctor
+node bin/mawf.js doctor
 ```
 
 ## GitHub Stars 趨勢
 頂部的徽章恆顯示即時星數（透過 [shields.io](https://shields.io)）。下方趨勢圖透過官方 [star-history](https://www.star-history.com/blog/how-to-use-github-star-history#how-to-embed-the-chart-in-your-readme)「**Generate embed code**」流程，以封裝的儲存庫讀取權杖（`sealed_token`）內嵌——無論 star-history 共享權杖池狀態如何皆可靠渲染，感知深色／淺色模式，每次檢視皆自動更新：
 
-<a href="https://www.star-history.com/?type=date&repos=imBlanker%2Fmulti-agent-workflow-for-a-complicated-codebase">
+<a href="https://www.star-history.com/?type=date&repos=imBlanker%2Fmulti-agents-workflow">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=imBlanker/multi-agent-workflow-for-a-complicated-codebase&type=date&theme=dark&legend=top-left&sealed_token=PYzm97OB-CHuFqRbxwItWNfcNPaj1VeB_w7lokYexF6G_txF6lQ5fkUsDSa2CA-OXsxYMZMRjbrqcsM4xF_3tlnZqyQRfDYzMvEEFRDiRV2FhIbBv3Ythw" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=imBlanker/multi-agent-workflow-for-a-complicated-codebase&type=date&legend=top-left&sealed_token=PYzm97OB-CHuFqRbxwItWNfcNPaj1VeB_w7lokYexF6G_txF6lQ5fkUsDSa2CA-OXsxYMZMRjbrqcsM4xF_3tlnZqyQRfDYzMvEEFRDiRV2FhIbBv3Ythw" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=imBlanker/multi-agent-workflow-for-a-complicated-codebase&type=date&legend=top-left&sealed_token=PYzm97OB-CHuFqRbxwItWNfcNPaj1VeB_w7lokYexF6G_txF6lQ5fkUsDSa2CA-OXsxYMZMRjbrqcsM4xF_3tlnZqyQRfDYzMvEEFRDiRV2FhIbBv3Ythw" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=imBlanker/multi-agents-workflow&type=date&theme=dark&legend=top-left&sealed_token=PYzm97OB-CHuFqRbxwItWNfcNPaj1VeB_w7lokYexF6G_txF6lQ5fkUsDSa2CA-OXsxYMZMRjbrqcsM4xF_3tlnZqyQRfDYzMvEEFRDiRV2FhIbBv3Ythw" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=imBlanker/multi-agents-workflow&type=date&legend=top-left&sealed_token=PYzm97OB-CHuFqRbxwItWNfcNPaj1VeB_w7lokYexF6G_txF6lQ5fkUsDSa2CA-OXsxYMZMRjbrqcsM4xF_3tlnZqyQRfDYzMvEEFRDiRV2FhIbBv3Ythw" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=imBlanker/multi-agents-workflow&type=date&legend=top-left&sealed_token=PYzm97OB-CHuFqRbxwItWNfcNPaj1VeB_w7lokYexF6G_txF6lQ5fkUsDSa2CA-OXsxYMZMRjbrqcsM4xF_3tlnZqyQRfDYzMvEEFRDiRV2FhIbBv3Ythw" />
  </picture>
 </a>
 

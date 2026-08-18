@@ -105,7 +105,7 @@ Each module is a single responsibility; all are plain ESM with `node:` built-ins
 | Module | Responsibility (one line) |
 |---|---|
 | `ccswitch.js` | Read-only access to the cc-switch SQLite DB via `node:sqlite` (`readOnly: true`), falling back to the `sqlite3` CLI; returns providers, `model_pricing`, `settings`, and the real-spend cost rate from `proxy_request_logs`. **Project functionality is DECOUPLED by default**: profile read/write (`readProfiles`/`createProjectProfile`/`guardSql`) is kept but disabled unless `MAW_CC_PROJECT_SYNC=1`; only provider-config sync (each provider's `config.toml`/`config.json` high-value settings) + the routing carve-out remain active. Pi is NOT cc-switch-managed (no pi app_type / traffic) → routing is skipped for pi hosts, and cost degrades to concurrency-only. dsh is likewise NOT cc-switch-managed: `dshprovider.js` reads `$DSH_HOME/settings.yaml` (`llm-pi-ai.providers`) into the same provider shape (app_type "dsh"), and `readCcPricingJson()` imports cc-switch's auto-synced `~/.cc-switch/model-pricing.json` so matched model ids keep real prices for the price gate. |
-| `pricegate.js` | The HITL model price gate: assigning a model with Input > $2/1M or Output > $10/1M tokens pauses the work (`checkPriceGate` / `priceGateReport`); enforced by planner, configgen, plan/init/add-agent (exit 3), guard/acquire (deny), and `maw approve-model`. |
+| `pricegate.js` | The HITL model price gate: assigning a model with Input > $2/1M or Output > $10/1M tokens pauses the work (`checkPriceGate` / `priceGateReport`); enforced by planner, configgen, plan/init/add-agent (exit 3), guard/acquire (deny), and `mawf approve-model`. |
 | `pricing.js` | Model price resolution with a documented fallback chain (cc-switch → multiplier → vendored estimate → `null`); `projectRate` is a planning projection only. |
 | `planner.js` | The deterministic `scoreArchitectures` + `planWorkflow`: scores six architectures, picks `primary`, builds the `selected[]` set, the agent roster, parallel/serial groups, risk-gated review points, loops, cost config, and the `priceGate` block list (roles whose model assignment exceeds the HITL price gate). |
 | `graph.js` | `WorkflowGraph`: nodes/edges, validation (cycles permitted only via explicit `loop` self-edges), `topoBatches()` (Kahn-style parallel batches with `review`/`gate` nodes forcing their own batch, `loop` nodes expanding to `maxIterations`), and `graphFromPlan()`. |
@@ -113,11 +113,11 @@ Each module is a single responsibility; all are plain ESM with `node:` built-ins
 | `cost.js` | The cost guard: `guard()`/`acquire()`/`release()` enforce **total** rate, **per-session** (per-agent) rate, and concurrency cap, using real spend from `ccswitch.costRate`/`perSessionRate` and a small `.maw/runtime/concurrency.json` state file. |
 | `codex.js` | Codex review via the `codex-plugin-cc` companion script (`status`, `runReview`, `shouldReview`); risk-gated, degrades gracefully when codex or the plugin is missing. |
 | `piprovider.js` | Pi provider/model reader: reads `~/.pi/agent/` (`settings.json`, `models.json`, `auth.json` existence-only) and emits cc-switch-shaped providers + estimated pricing (apiKey bytes never exported). |
-| `trellis.js` | Chains `trellis init -u <user>` after `maw init`; host-aware platform flags (`--pi` vs `--claude --codex`), MAW-file snapshot/diff conflict detection. |
+| `trellis.js` | Chains `trellis init -u <user>` after `mawf init`; host-aware platform flags (`--pi` vs `--claude --codex`), MAW-file snapshot/diff conflict detection. |
 | `trellistracker.js` | Pure upstream tracker for `@mindfoldhq/trellis` (npm latest + GitHub repo health), used by `.github/workflows/trellis-tracker.yml`; the only exception is upstream deletion (404 → one notice issue, pause, workflow still succeeds). |
 | `installer.js` | Copies the Claude Code plugin (commands/agents/hooks/skills) into host dirs, writes `~/.maw/installed.json`; best-effort Codex agent copy; pi skills/prompts into `~/.pi/agent/` and dsh skills into `$DSH_HOME/skills` when those are the host. **Manifest v2 records every written file**, so `uninstall` removes exactly those files across all hosts (including the non-`maw-*` plugin agents/hooks; legacy pre-v2 manifests fall back to the prefix scan), prunes directories it emptied (never the host home itself), keeps project `.maw/` configs by default (`--purge-config` deletes them plus `.pi/agents/maw-*`), and `--restore-routing` (ccswitch.js) rolls `proxy_config` back to the pre-init snapshot. |
 | `host.js` | Detects the host agent software (`claude-code`/`codex`/`pi`/`unknown`) and its capabilities (`hasSubagents`, `hasMultiAgent`, `hasDynamicWorkflow`, `hasGraphWorkflow`, `codexPluginInstalled`); `MAW_HOST=pi` forces pi. |
-| `doctor.js` | `maw doctor`: environment + capability report (Node version, cc-switch DB, host, codex status, pi config + spend note). |
+| `doctor.js` | `mawf doctor`: environment + capability report (Node version, cc-switch DB, host, codex status, pi config + spend note). |
 | `probe.js` | Derives workflow signals (`files`, `loc`, `languages`) from a real directory tree, ignoring `node_modules`/`.git`/build dirs; feeds `inferSignals` in the planner. |
 
 ## 5. Cost Control
@@ -154,14 +154,14 @@ enforcement rate), from `src/pricing.js`:
    `source: "fallback:estimate"`, `estimated: true`.
 4. unknown → `null`. **Never faked as exact.**
 
-When a price is an estimate, configs, `maw cost`, and `maw doctor` say so
+When a price is an estimate, configs, `mawf cost`, and `mawf doctor` say so
 explicitly via the `estimated: true` flag.
 
 ## 6. Codex Integration
 
 **Pi/dsh cost degradation.** Pi and dsh are not routed via the cc-switch
 proxy, so `proxy_request_logs` contains no pi/dsh traffic → `costRate()`
-reports 0 for them and `maw cost` marks their spend as estimated/unknown; the
+reports 0 for them and `mawf cost` marks their spend as estimated/unknown; the
 guard falls back to concurrency-only limiting (the same graceful degradation
 as a missing cc-switch DB). dsh additionally sources prices from the synced
 `model-pricing.json`, so its **price gate** stays live for matched ids.
@@ -190,7 +190,7 @@ selected.
 substitutes a **second Claude Code agent** as the reviewer (role `reviewer`,
 model `claude`, tools `Read`/`Grep`/`Glob`). The plan still ships a review gate;
 it is just not Codex. `codex.status()` reports `ready: false` with the reason
-(binary missing vs. companion missing) so `maw doctor` can tell the user exactly
+(binary missing vs. companion missing) so `mawf doctor` can tell the user exactly
 what to install.
 
 ## 7. Portability
@@ -208,8 +208,8 @@ user can add, remove, or edit any file; the runner re-reads it at execute time.
   and portable skills.
 - **Codex** gets agent definitions copied to `~/.codex/agents` (best-effort) and
   is invoked as the reviewer via `codex-plugin-cc`.
-- **Pi Agent** reads `.maw/` and gets native pi agent files (`.pi/agents/maw-*.md`) + pi prompts + skills during `maw plan` / `maw install`; spawn via the native subagent tool. Pi is NOT cc-switch-managed: its providers/MCP/skills live in `~/.pi/agent/`, and cost control is concurrency-only (spend not measured).
-- **DeepSeek Harness (dsh)** reads `.maw/` and gets skills copied into `$DSH_HOME/skills` during `maw install`. dsh has no named agent-definition surface: the portable `.maw/agents/<role>.md` IS the spawn payload, passed through dsh's prompt-driven subagent tool from one orchestrator session (`dsh web` / `--profile headless`). Providers/models come from `$DSH_HOME/settings.yaml` via `dshprovider.js`; MCP servers are managed by dsh patch layers (MAW reports only); AGENTS.md context is loaded by dsh's agent-instructions (user-global + project root down to cwd, 64 KiB cap).
+- **Pi Agent** reads `.maw/` and gets native pi agent files (`.pi/agents/maw-*.md`) + pi prompts + skills during `mawf plan` / `mawf install`; spawn via the native subagent tool. Pi is NOT cc-switch-managed: its providers/MCP/skills live in `~/.pi/agent/`, and cost control is concurrency-only (spend not measured).
+- **DeepSeek Harness (dsh)** reads `.maw/` and gets skills copied into `$DSH_HOME/skills` during `mawf install`. dsh has no named agent-definition surface: the portable `.maw/agents/<role>.md` IS the spawn payload, passed through dsh's prompt-driven subagent tool from one orchestrator session (`dsh web` / `--profile headless`). Providers/models come from `$DSH_HOME/settings.yaml` via `dshprovider.js`; MCP servers are managed by dsh patch layers (MAW reports only); AGENTS.md context is loaded by dsh's agent-instructions (user-global + project root down to cwd, 64 KiB cap).
 - **Gemini CLI / opencode / others** read `.maw/` directly; no native glue yet.
 
 Crucially, when the host has a **native** dynamic-workflow or multi-agent

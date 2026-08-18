@@ -1,5 +1,5 @@
 // @ts-check
-// CLI dispatch for `maw`. All subcommands are plain functions so they can be
+// CLI dispatch for `mawf`. All subcommands are plain functions so they can be
 // unit-tested without spawning a process.
 import fs from "node:fs";
 import path from "node:path";
@@ -110,7 +110,7 @@ export function main(argv = process.argv.slice(2)) {
 /** @param {string} s @param {boolean} [ok] */
 function out(s, ok) { process.stdout.write(s + "\n"); if (ok === false) process.exitCode = 1; }
 
-function cmdVersion() { out(`maw ${pkgVersion()}`); }
+function cmdVersion() { out(`mawf ${pkgVersion()}`); }
 
 function pkgVersion() {
   try {
@@ -122,7 +122,7 @@ function pkgVersion() {
 function cmdHelp() {
   out(`maw — portable multi-agent workflow system for complex codebases
 
-Usage: maw <command> [options]
+Usage: mawf <command> [options]
 
 Commands:
   init          Snapshot cc-switch, then initialize a .maw/ workspace
@@ -152,7 +152,7 @@ Commands:
   update        Reinstall (overwrites templates, keeps user edits)
   upgrade       Self-upgrade: git fetch + ff-only pull (checkout installs);
                 npm i -g <name>@latest (npm installs). --dry-run to preview.
-                Never stashes/rebases/forces; follow up with 'maw update'
+                Never stashes/rebases/forces; follow up with 'mawf update'
   doctor        Environment + capability check
   version       Print version
   help          This message
@@ -167,25 +167,25 @@ Flags (common):
   --total <usd>        total workflow cost-rate limit USD/min (default 10)
   --concurrency <n>    max concurrent agents (default 16)
   --allow-pricey       record human approval for every price-gated role and
-                       continue (same effect as "maw approve-model --role X --yes")
-  --self-test          run planner against the maw repo itself (smoke)
+                       continue (same effect as "mawf approve-model --role X --yes")
+  --self-test          run planner against the mawf repo itself (smoke)
 
 Price gate (mandatory policy): assigning a model with Input > $2/1M Tokens or
 Output > $10/1M Tokens pauses the related work and reports to a human first.
 plan/init/add-agent exit 3 when paused; guard/acquire deny gated roles until
-"maw approve-model --role <role> --yes" or a cheaper model is configured.
+"mawf approve-model --role <role> --yes" or a cheaper model is configured.
 `);
 }
 
 function cmdUnknown(cmd) {
-  out(`unknown command: ${cmd} (try \`maw help\`)`, false);
+  out(`unknown command: ${cmd} (try \`mawf help\`)`, false);
 }
 
 // --- init ---
 function cmdInit(f, flags) {
   const project = flags.project ? path.resolve(flags.project) : process.cwd();
   const user = flags.u || flags.user || "";
-  if (!user) { out(`init requires -u <user-name> (e.g. maw init -u alice)`, false); return; }
+  if (!user) { out(`init requires -u <user-name> (e.g. mawf init -u alice)`, false); return; }
   ensureDir(path.join(project, ".maw", "agents"));
   ensureDir(path.join(project, ".maw", "runtime"));
   const ctx = loadCtx({ dbPath: flags.db });
@@ -215,7 +215,7 @@ function cmdInit(f, flags) {
     out("");
     out(priceGateReport(gateBlocks));
     if (!flags["allow-pricey"]) {
-      out(`maw init PAUSED by the price gate (exit 3) — resolve the roles above (\`maw approve-model --role <role> --yes\` or edit .maw/agents/*.json to a cheaper model), then re-run \`maw init -u ${user}\`.`, false);
+      out(`mawf init PAUSED by the price gate (exit 3) — resolve the roles above (\`mawf approve-model --role <role> --yes\` or edit .maw/agents/*.json to a cheaper model), then re-run \`mawf init -u ${user}\`.`, false);
       process.exitCode = 3;
       return;
     }
@@ -258,7 +258,7 @@ function cmdInit(f, flags) {
         if (ar.ok) { out(`  routing applied: ${ar.applied.join("; ")}`); }
         else out(`  routing fix failed: ${ar.error}`, false);
       } else {
-        out(`    run \`maw routing --fix\` to apply (writes ONLY proxy_config for claude/codex)`);
+        out(`    run \`mawf routing --fix\` to apply (writes ONLY proxy_config for claude/codex)`);
       }
     }
   }
@@ -276,7 +276,7 @@ function cmdInit(f, flags) {
   if (tr.conflicts.length) {
     out(`  ⚠ ${tr.conflicts.length} conflict(s) between MAW and trellis detected (see log):`, false);
     for (const c of tr.conflicts.slice(0, 10)) out(`    - ${path.relative(project, c.file)} (${c.kind})`);
-    out(`    re-run \`maw plan --project ${project}\` to regenerate MAW's side, or \`trellis init -u ${user}\` to resume trellis`);
+    out(`    re-run \`mawf plan --project ${project}\` to regenerate MAW's side, or \`trellis init -u ${user}\` to resume trellis`);
   }
 }
 
@@ -339,7 +339,7 @@ function cmdRouting(f, flags) {
     if (ar.ok) { out(`  applied: ${ar.applied.join("; ")}`); out(`  ${ar.note}`); }
     else out(`  fix failed: ${ar.error}`, false);
   } else {
-    out(`  run \`maw routing --fix\` to apply (writes ONLY proxy_config for claude/codex; never touches profiles/providers)`);
+    out(`  run \`mawf routing --fix\` to apply (writes ONLY proxy_config for claude/codex; never touches profiles/providers)`);
   }
 }
 
@@ -379,13 +379,13 @@ function cmdPlan(f, flags) {
 
   // Price gate (HITL): a model assignment with Input > $2/1M or Output >
   // $10/1M pauses the plan and reports to a human. --allow-pricey records the
-  // human approval (same effect as `maw approve-model`) and continues.
+  // human approval (same effect as `mawf approve-model`) and continues.
   const gateBlocks = (plan.priceGate?.blockedRoles ?? []).map((b) => ({ role: b.role, model: b.model, provider: b.provider, check: b.gate }));
   if (gateBlocks.length) {
     out("");
     out(priceGateReport(gateBlocks));
     if (!flags["allow-pricey"]) {
-      out(`maw plan PAUSED by the price gate (exit 3) — resolve via \`maw approve-model --role <role> --yes\`, a cheaper model in .maw/agents/*.json, or re-run with --allow-pricey.`, false);
+      out(`mawf plan PAUSED by the price gate (exit 3) — resolve via \`mawf approve-model --role <role> --yes\`, a cheaper model in .maw/agents/*.json, or re-run with --allow-pricey.`, false);
       process.exitCode = 3;
       return;
     }
@@ -412,7 +412,7 @@ function cmdPlan(f, flags) {
 function cmdConfig(f, flags) {
   const project = flags.project ? path.resolve(flags.project) : process.cwd();
   const p = path.join(project, ".maw", "config.yaml");
-  if (!exists(p)) { out(`no config at ${p}; run \`maw plan\` first`, false); return; }
+  if (!exists(p)) { out(`no config at ${p}; run \`mawf plan\` first`, false); return; }
   out(fs.readFileSync(p, "utf8"));
 }
 
@@ -461,7 +461,7 @@ function cmdAcquire(f, flags) {
   const blocks = blockedRolesFromAgents(project).filter((b) => !flags.role || b.role === role);
   if (blocks.length) {
     const b = blocks[0];
-    const r = { allowed: false, priceGate: true, reason: `PRICE GATE: role "${b.role}" is paused for human review (expensive model ${b.model}) — approve with \`maw approve-model --role ${b.role} --yes\` or configure a cheaper model`, running: 0, ratePerMin: 0, remainingConcurrency: 0 };
+    const r = { allowed: false, priceGate: true, reason: `PRICE GATE: role "${b.role}" is paused for human review (expensive model ${b.model}) — approve with \`mawf approve-model --role ${b.role} --yes\` or configure a cheaper model`, running: 0, ratePerMin: 0, remainingConcurrency: 0 };
     out(JSON.stringify(r));
     process.exitCode = 3;
     return;
@@ -511,7 +511,7 @@ function blockedRolesFromAgents(project) {
 function approveRoleModel(project, role, opts = {}) {
   const p = path.join(project, ".maw", "agents", slug(role) + ".json");
   const j = exists(p) ? readJson(p, null) : null;
-  if (!j) return { ok: false, error: `no agent json for role "${role}" (run maw plan first)` };
+  if (!j) return { ok: false, error: `no agent json for role "${role}" (run mawf plan first)` };
   if (!j.price_gate) return { ok: false, error: `role "${role}" is not price-gated; nothing to approve` };
   if (opts.yes !== true) return { ok: false, error: "pass --yes to confirm" };
   j.price_gate = { ...j.price_gate, approved: true };
@@ -523,7 +523,7 @@ function approveRoleModel(project, role, opts = {}) {
 function cmdAddAgent(f, flags) {
   const project = flags.project ? path.resolve(flags.project) : process.cwd();
   const wfPath = path.join(project, ".maw", "workflow.json");
-  if (!exists(wfPath)) { out(`no workflow.json; run \`maw plan\` first`, false); return; }
+  if (!exists(wfPath)) { out(`no workflow.json; run \`mawf plan\` first`, false); return; }
   const plan = readJson(wfPath);
   const role = flags.role || `agent-${plan.agents.length + 1}`;
   if (plan.agents.some((a) => a.role === role)) { out(`role ${role} already exists`, false); return; }
@@ -584,7 +584,7 @@ function cmdRemoveAgent(f, flags) {
 function cmdRun(f, flags) {
   const project = flags.project ? path.resolve(flags.project) : process.cwd();
   const wfPath = path.join(project, ".maw", "workflow.json");
-  if (!exists(wfPath)) { out(`no workflow.json; run \`maw plan\` first`, false); return; }
+  if (!exists(wfPath)) { out(`no workflow.json; run \`mawf plan\` first`, false); return; }
   const plan = readJson(wfPath);
   const g = graphFromPlan({ ...plan, name: plan.name });
   const { batches, notes } = g.topoBatches();
@@ -595,8 +595,8 @@ function cmdRun(f, flags) {
     for (const n of b) out(`  - ${n.id} [${n.kind}] ${n.role || ""} — ${n.description || ""}`);
   });
   if (notes.length) { out(`\nnotes:`); for (const n of notes) out(`  - ${n}`); }
-  out(`\nBefore each spawn, run: maw guard${flags.project ? ` --project ${flags.project}` : ""}`);
-  out(`Acquire/release slots with: maw acquire --id <id>; maw release --id <id>`);
+  out(`\nBefore each spawn, run: mawf guard${flags.project ? ` --project ${flags.project}` : ""}`);
+  out(`Acquire/release slots with: mawf acquire --id <id>; mawf release --id <id>`);
   if (plan.hostApp === "dsh") {
     out(`\ndsh invocation: run one orchestrator session via \`dsh web\` (workspace = ${project}) or`);
     out(`\`dsh --profile headless "<task>"\`; spawn workers with the subagent tool using`);
@@ -629,7 +629,7 @@ function cmdReview(f, flags) {
 function cmdGraph(f, flags) {
   const project = flags.project ? path.resolve(flags.project) : process.cwd();
   const wfPath = path.join(project, ".maw", "graph.json");
-  if (!exists(wfPath)) { out(`no graph.json; run \`maw plan\` first`, false); return; }
+  if (!exists(wfPath)) { out(`no graph.json; run \`mawf plan\` first`, false); return; }
   const g = readJson(wfPath).graph;
   const wf = new WorkflowGraph(g);
   out(JSON.stringify({ nodes: wf.nodes.length, edges: wf.edges.length, validation: wf.validate(), batches: wf.topoBatches().batches.length }, null, 2));
@@ -638,7 +638,7 @@ function cmdGraph(f, flags) {
 // --- install/uninstall/update ---
 function cmdInstall(f, flags) {
   const r = install({ force: flags.force });
-  out(`installed maw ${pkgVersion()}`);
+  out(`installed mawf ${pkgVersion()}`);
   for (const c of r.copied) out(`  copied -> ${c}`);
   out(`  host: ${r.host.app} (codex plugin: ${r.host.codexPluginInstalled ? "yes" : "no"})`);
   if (r.warnings.length) for (const w of r.warnings) out(`  ! ${w}`);
@@ -648,7 +648,7 @@ function cmdUninstall(f, flags) {
   // --keep-config (explicit) and --purge-config both given -> keep (safe default)
   const purge = flags["purge-config"] === true && flags["keep-config"] !== true;
   const r = uninstall({ project, purgeConfig: purge });
-  out(`uninstalled maw — ${r.removed.length} file(s)/dir(s) removed`);
+  out(`uninstalled mawf — ${r.removed.length} file(s)/dir(s) removed`);
   for (const c of r.removed) out(`  removed: ${c}`);
   if (r.purged.length) {
     out(`  purged configs (--purge-config):`);
@@ -673,7 +673,7 @@ function cmdUninstall(f, flags) {
 }
 function cmdUpdate(f, flags) {
   const r = update({ force: flags.force });
-  out(`updated maw ${pkgVersion()}`);
+  out(`updated mawf ${pkgVersion()}`);
   for (const c of r.copied) out(`  copied -> ${c}`);
 }
 function cmdUpgrade(f, flags) {
@@ -685,13 +685,13 @@ function cmdUpgrade(f, flags) {
   });
   for (const line of r.output) out(`  ${line}`);
   if (!r.ok) { out(`upgrade failed: ${r.error}`, false); process.exitCode = 1; return; }
-  out(`upgraded maw${r.from && r.to ? ` ${r.from} -> ${r.to}` : ""} (mode: ${r.mode})`);
+  out(`upgraded mawf${r.from && r.to ? ` ${r.from} -> ${r.to}` : ""} (mode: ${r.mode})`);
 }
 
 // --- doctor ---
 function cmdDoctor() {
   const r = doctor();
-  out(`maw doctor — ${r.summary}`);
+  out(`mawf doctor — ${r.summary}`);
   for (const c of r.checks) out(`  [${c.status.toUpperCase().padEnd(4)}] ${c.name}: ${c.detail}`);
   if (!r.ok) process.exitCode = 1;
 }
@@ -729,7 +729,7 @@ function readPlanCost(flags) {
 
 const AGENTS_INIT = `# MAW Workspace
 
-This directory is generated by \`maw plan\`. Everything here is editable.
+This directory is generated by \`mawf plan\`. Everything here is editable.
 
 - \`workflow.json\` — the full plan (re-read by the runner at execute time)
 - \`config.yaml\`   — global knobs: cost limits, concurrency, pricing sources
@@ -739,5 +739,5 @@ This directory is generated by \`maw plan\`. Everything here is editable.
 - \`graph.json\`     — workflow graph (nodes/edges)
 - \`runtime/\`       — concurrency + cost state (gitignored)
 
-Re-run \`maw plan\` to regenerate from fresh project signals.
+Re-run \`mawf plan\` to regenerate from fresh project signals.
 `;

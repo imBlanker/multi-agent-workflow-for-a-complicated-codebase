@@ -141,7 +141,7 @@ test("dsh host: portable specs are the payload, nothing materialized under .dsh/
   const impl = fs.readFileSync(path.join(proj, ".maw", "agents", "implementer.md"), "utf8");
   assert.match(impl, /prompt-driven subagent tool/);
   assert.match(impl, new RegExp("\\.maw/agents/implementer\\.md"));
-  assert.match(impl, /maw acquire --role implementer/);
+  assert.match(impl, /mawf acquire --role implementer/);
   assert.match(impl, /model-pricing\.json/);
   // machine config carries app_type dsh
   const spec = readJson(path.join(proj, ".maw", "agents", "implementer.json"));

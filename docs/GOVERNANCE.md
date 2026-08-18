@@ -34,8 +34,8 @@ is the short contributor guide.
 
 ## 3. Issue model
 - **Search existing issues first** (open + closed) to avoid duplicates.
-- Use the [bug report](https://github.com/imBlanker/multi-agent-workflow-for-a-complicated-codebase/issues/new?template=bug_report.md) or
-  [feature request](https://github.com/imBlanker/multi-agent-workflow-for-a-complicated-codebase/issues/new?template=feature_request.md)
+- Use the [bug report](https://github.com/imBlanker/multi-agents-workflow/issues/new?template=bug_report.md) or
+  [feature request](https://github.com/imBlanker/multi-agents-workflow/issues/new?template=feature_request.md)
   template; include repro steps, environment, expected/actual.
 - One issue per problem. Answer maintainer questions promptly.
 - `good first issue` / `help wanted` labels flag newcomer-friendly work.

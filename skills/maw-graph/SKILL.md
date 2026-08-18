@@ -12,9 +12,9 @@ MAW models the workflow as nodes + edges (fixed or conditional). Structure is de
 
 ## Inspect the graph
 ```bash
-maw graph --project .    # nodes/edges + batch count
+mawf graph --project .    # nodes/edges + batch count
 ```
-Read `.maw/graph.json` for the full structure. Edit `.maw/workflow.json` to add nodes/edges and re-run `maw plan`.
+Read `.maw/graph.json` for the full structure. Edit `.maw/workflow.json` to add nodes/edges and re-run `mawf plan`.
 
 ## Predictability vs agency
 As a system becomes more agentic it becomes less predictable. MAW lets you sit anywhere on this curve: the planner picks `graph` when predictability/HITL/persistence matter; `dynamic`/`multi-agent` when flexibility matters. You can layer them.

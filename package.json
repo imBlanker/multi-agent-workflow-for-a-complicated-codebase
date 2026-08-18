@@ -1,10 +1,11 @@
 {
-  "name": "multi-agent-workflow",
-  "version": "0.1.0",
-  "description": "A portable, dynamic multi-agent workflow system for complex codebases. Reads cc-switch config, selects the right agent architecture (loop / orchestrator-workers / multi-agent / graph / dynamic / ultracode), generates per-agent configs, enforces cost-rate limits, and integrates Codex review via codex-plugin-cc.",
+  "name": "multi-agents-workflow",
+  "version": "0.2.0",
+  "description": "A portable, dynamic multi-agents workflow system for complex codebases. Reads cc-switch config, selects the right agent architecture (loop / orchestrator-workers / multi-agent / graph / dynamic / ultracode), generates per-agent configs, enforces cost-rate limits, and integrates Codex review.",
   "type": "module",
   "main": "src/index.js",
   "bin": {
+    "mawf": "bin/mawf.js",
     "maw": "bin/maw.js"
   },
   "files": [
@@ -20,7 +21,8 @@
     "test": "node --test --test-reporter=spec \"tests/**/*.test.js\"",
     "test:watch": "node --test --watch tests/",
     "smoke": "node bin/maw.js doctor && node bin/maw.js plan --self-test",
-    "demo": "node bin/maw.js plan --project examples/sample-project --out examples/.maw-sample"
+    "demo": "node bin/maw.js plan --project examples/sample-project --out examples/.maw-sample",
+    "prepublishOnly": "npm test"
   },
   "engines": {
     "node": ">=20.17"
@@ -39,12 +41,12 @@
   ],
   "author": "imBlanker",
   "license": "MIT",
-  "homepage": "https://github.com/imBlanker/multi-agent-workflow-for-a-complicated-codebase",
+  "homepage": "https://github.com/imBlanker/multi-agents-workflow",
   "repository": {
     "type": "git",
-    "url": "https://github.com/imBlanker/multi-agent-workflow-for-a-complicated-codebase.git"
+    "url": "https://github.com/imBlanker/multi-agents-workflow.git"
   },
   "bugs": {
-    "url": "https://github.com/imBlanker/multi-agent-workflow-for-a-complicated-codebase/issues"
+    "url": "https://github.com/imBlanker/multi-agents-workflow/issues"
   }
 }

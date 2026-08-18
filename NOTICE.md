@@ -1,7 +1,7 @@
 # NOTICE
 
 **MAW — Multi-Agent Workflow for Complex Codebases**
-Repository: <https://github.com/imBlanker/multi-agent-workflow-for-a-complicated-codebase>
+Repository: <https://github.com/imBlanker/multi-agents-workflow>
 
 MAW is licensed under the **MIT License**. Copyright © 2026 WUSHANGZHEN0010.
 The full license text is in [`LICENSE`](./LICENSE). All source code in this
@@ -70,7 +70,7 @@ this file is the detailed, license-focused record.
 
 - **License:** MIT — <https://github.com/milanglacier/pi-dynamic-workflow>
 - **Borrowed:** The **dynamic workflow selection** approach — picking the right topology for a given task rather than hardcoding one.
-- **Why it fit:** MAW's headline feature is `maw plan`, which scores and selects among six architectures against real project signals. This project validated that dynamic selection (vs. a fixed graph) is a sound design, and it shaped MAW's "score → select → combine" planner.
+- **Why it fit:** MAW's headline feature is `mawf plan`, which scores and selects among six architectures against real project signals. This project validated that dynamic selection (vs. a fixed graph) is a sound design, and it shaped MAW's "score → select → combine" planner.
 - **Code copied:** No — MAW's planner (`src/planner.js`) is original scoring logic; no source reused.
 
 ### srijansk / `agent-relay`
