@@ -5,7 +5,7 @@
 > Human-facing overview: [`README.md`](../README.md).
 
 ## 0. Identity & scope
-- MAW = `multi-agent-workflow`, CLI `maw`, MIT, zero runtime deps (Node ≥ 20.17).
+- MAW = `multi-agents-workflow`, CLI `mawf`, MIT, zero runtime deps (Node ≥ 20.17).
 - **Supported hosts: Claude Code, Codex, Pi Agent, and DeepSeek Harness (dsh).** If the user runs Gemini CLI / opencode / others, tell them MAW does not support their host.
 - Repo: <https://github.com/imBlanker/multi-agents-workflow>
 

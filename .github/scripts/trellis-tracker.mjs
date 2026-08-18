@@ -13,7 +13,7 @@ import { checkTrellisUpstream, isTrackerIssueOpen, GITHUB_REPO_URL } from "../..
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const statePath = path.join(root, ".github", "trellis-tracker", "state.json");
-const repo = process.env.GITHUB_REPOSITORY || "imBlanker/multi-agent-workflow-for-a-complicated-codebase";
+const repo = process.env.GITHUB_REPOSITORY || "imBlanker/multi-agents-workflow";
 const token = process.env.GH_TOKEN || "";
 const apiBase = `https://api.github.com/repos/${repo}`;
 

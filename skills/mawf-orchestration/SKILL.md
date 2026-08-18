@@ -2,7 +2,7 @@
 
 > Use when planning or running a multi-agent workflow for a complex codebase.
 
-MAW (multi-agent-workflow) dynamically picks an architecture per project and writes per-agent, independently-editable configs under `.maw/`.
+MAW (multi-agents-workflow) dynamically picks an architecture per project and writes per-agent, independently-editable configs under `.maw/`.
 
 ## When to use
 - A new complex project: after `mawf init`, run `mawf plan`.

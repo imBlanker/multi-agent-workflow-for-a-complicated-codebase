@@ -1,12 +1,11 @@
 {
   "name": "multi-agents-workflow",
-  "version": "0.2.1",
+  "version": "0.4.0",
   "description": "A portable, dynamic multi-agents workflow system for complex codebases. Reads cc-switch config, selects the right agent architecture (loop / orchestrator-workers / multi-agent / graph / dynamic / ultracode), generates per-agent configs, enforces cost-rate limits, and integrates Codex review.",
   "type": "module",
   "main": "src/index.js",
   "bin": {
-    "mawf": "bin/mawf.js",
-    "maw": "bin/maw.js"
+    "mawf": "bin/mawf.js"
   },
   "files": [
     "bin",
@@ -15,13 +14,14 @@
     "skills",
     "defaults",
     "examples",
-    "README.md"
+    "README.md",
+    "CHANGELOG.md"
   ],
   "scripts": {
     "test": "node --test --test-reporter=spec \"tests/**/*.test.js\"",
     "test:watch": "node --test --watch tests/",
-    "smoke": "node bin/maw.js doctor && node bin/maw.js plan --self-test",
-    "demo": "node bin/maw.js plan --project examples/sample-project --out examples/.maw-sample",
+    "smoke": "node bin/mawf.js doctor && node bin/mawf.js plan --self-test",
+    "demo": "node bin/mawf.js plan --project examples/sample-project --out examples/.maw-sample",
     "prepublishOnly": "npm test"
   },
   "engines": {

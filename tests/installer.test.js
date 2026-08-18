@@ -19,9 +19,9 @@ test("install copies commands/agents/skills into the host and writes a manifest"
   assert.ok(r.copied.some((c) => c.includes("commands")));
   assert.ok(r.copied.some((c) => c.includes("agents")));
   assert.ok(r.copied.some((c) => c.includes("skills")));
-  assert.ok(fs.existsSync(path.join(claudeDir, "commands", "maw-plan.md")));
+  assert.ok(fs.existsSync(path.join(claudeDir, "commands", "mawf-plan.md")));
   assert.ok(fs.existsSync(path.join(claudeDir, "agents", "orchestrator.md")));
-  assert.ok(fs.existsSync(path.join(claudeDir, "skills", "maw-orchestration", "SKILL.md")));
+  assert.ok(fs.existsSync(path.join(claudeDir, "skills", "mawf-orchestration", "SKILL.md")));
   assert.ok(fs.existsSync(path.join(tmpHome, ".maw", "installed.json")));
 });
 
@@ -31,7 +31,7 @@ test("update overwrites templates but preserves user-added files", () => {
   const r = update({ claudeDir });
   assert.equal(r.ok, true);
   assert.ok(fs.existsSync(userFile), "user file must survive update");
-  assert.ok(fs.existsSync(path.join(claudeDir, "commands", "maw-plan.md")));
+  assert.ok(fs.existsSync(path.join(claudeDir, "commands", "mawf-plan.md")));
 });
 
 test("uninstall removes maw-* files only and the manifest", () => {
@@ -40,7 +40,7 @@ test("uninstall removes maw-* files only and the manifest", () => {
   fs.writeFileSync(other, "not mine");
   const r = uninstall();
   assert.equal(r.ok, true);
-  assert.ok(!fs.existsSync(path.join(claudeDir, "commands", "maw-plan.md")), "maw command removed");
+  assert.ok(!fs.existsSync(path.join(claudeDir, "commands", "mawf-plan.md")), "maw command removed");
   assert.ok(fs.existsSync(other), "non-maw file preserved");
 });
 
@@ -53,8 +53,8 @@ test("install on a pi host copies skills+prompts into the pi home and records pi
     assert.equal(r.ok, true);
     assert.ok(r.copied.some((c) => c.includes("pi skills")), `pi skills missing from: ${r.copied.join(" | ")}`);
     assert.ok(r.copied.some((c) => c.includes("pi prompts")), `pi prompts missing`);
-    assert.ok(fs.existsSync(path.join(piHome, "skills", "maw-orchestration", "SKILL.md")));
-    assert.ok(fs.existsSync(path.join(piHome, "prompts", "maw-plan.md")));
+    assert.ok(fs.existsSync(path.join(piHome, "skills", "mawf-orchestration", "SKILL.md")));
+    assert.ok(fs.existsSync(path.join(piHome, "prompts", "mawf-plan.md")));
     const m = JSON.parse(fs.readFileSync(path.join(tmpHome, ".maw", "installed.json"), "utf8"));
     assert.equal(m.dirs.piDir, piHome);
   } finally { delete process.env.MAW_HOST; }
@@ -71,7 +71,7 @@ test("install on a dsh host copies skills into $DSH_HOME/skills and records dshD
     assert.ok(r.copied.some((c) => c.includes("dsh skills")), `dsh skills missing from: ${r.copied.join(" | ")}`);
     // no prompts surface for dsh
     assert.ok(!r.copied.some((c) => c.includes("dsh prompts")), "dsh has no prompts surface");
-    assert.ok(fs.existsSync(path.join(dshHome, "skills", "maw-orchestration", "SKILL.md")));
+    assert.ok(fs.existsSync(path.join(dshHome, "skills", "mawf-orchestration", "SKILL.md")));
     const m = JSON.parse(fs.readFileSync(path.join(tmpHome, ".maw", "installed.json"), "utf8"));
     assert.equal(m.dirs.dshDir, dshHome);
     // a non-maw dsh skill must survive uninstall
@@ -79,7 +79,7 @@ test("install on a dsh host copies skills into $DSH_HOME/skills and records dshD
     fs.writeFileSync(path.join(dshHome, "skills", "user-skill", "SKILL.md"), "# keep\n");
     const u = uninstall();
     assert.equal(u.ok, true);
-    assert.ok(!fs.existsSync(path.join(dshHome, "skills", "maw-orchestration")), "maw skill removed");
+    assert.ok(!fs.existsSync(path.join(dshHome, "skills", "mawf-orchestration")), "maw skill removed");
     assert.ok(fs.existsSync(path.join(dshHome, "skills", "user-skill", "SKILL.md")), "non-maw dsh skill preserved");
   } finally { delete process.env.MAW_HOST; }
 });
@@ -115,7 +115,7 @@ test("legacy manifest (dirs only) still uninstalls via the prefix fallback", () 
   fs.writeFileSync(path.join(claudeDir, "commands", "user-own.md"), "mine");
   const u = uninstall({ project: tmpHome });
   assert.equal(u.ok, true);
-  assert.ok(!fs.existsSync(path.join(claudeDir, "commands", "maw-plan.md")), "maw-* removed by fallback");
+  assert.ok(!fs.existsSync(path.join(claudeDir, "commands", "mawf-plan.md")), "maw-* removed by fallback");
   assert.ok(fs.existsSync(path.join(claudeDir, "commands", "user-own.md")), "user file preserved by fallback");
 });
 

@@ -6,7 +6,7 @@ import os from "node:os";
 import { guard, acquire, release, report } from "../src/cost.js";
 import { makeFixtureDb } from "./fixtures/make-db.mjs";
 
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "maw-cost-"));
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "mawf-cost-"));
 const dbPath = path.join(tmp, "cc-switch.db");
 const stateDir = path.join(tmp, "runtime");
 

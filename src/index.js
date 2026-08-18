@@ -123,7 +123,7 @@ function pkgVersion() {
 }
 
 function cmdHelp() {
-  out(`maw — portable multi-agent workflow system for complex codebases
+  out(`mawf — portable multi-agents workflow system for complex codebases
 
 Usage: mawf <command> [options]
 

@@ -8,6 +8,8 @@
 
 # MAW — 面向複雜程式碼庫的多智慧體工作流系統
 
+[變更日誌](./CHANGELOG.zh-Hant.md)（[English](./CHANGELOG.md)·[简](./CHANGELOG.zh-Hans.md)）
+
 > 一個可攜、**動態**的多智慧體工作流系統。面對全新的複雜專案，MAW 會讀取你的 [cc-switch](https://github.com/farion1231/cc-switch) 設定，探測程式碼庫，並挑選合適的智慧體架構 —— *迴圈工程*、*編排者-工人*（子智慧體）、*多智慧體*、*圖工作流*、*動態工作流* 或 *ultracode* —— 或其組合。它為每個智慧體產生可獨立編輯的設定，強制執行**真實消費的成本速率限制**，並透過 [`codex-plugin-cc`](https://github.com/openai/codex-plugin-cc) 整合 **Codex 審查**。
 
 > **支援的宿主：Claude Code、Codex、Pi Agent 與 DeepSeek Harness (dsh)。** 其他智慧體軟體（Gemini CLI、opencode……）刻意**不予**支援。注意：Pi Agent 與 dsh **不**經 cc-switch 管理——pi 的設定位於 `~/.pi/agent/`，dsh 的供應商/模型位於 `~/.dsh/settings.yaml`。二者的花費速率不可測（不經代理），速率限額降級為僅並發；dsh 的模型價格仍可從 cc-switch 自動同步的 `~/.cc-switch/model-pricing.json` 按模型 id 匹配。
@@ -32,7 +34,7 @@
 
 > **提示：你可以把整份 README 交給你的智慧體，讓它為你安裝並設定 MAW —— 見下方 [Agent 指南](#agent-指南)。**
 
-MAW 是一個 CLI（`maw`）加上一個 Claude Code 外掛。最快路徑：
+MAW 是一個 CLI（`mawf`）加上一個 Claude Code 外掛。最快路徑：
 
 ```bash
 # 1. Fork the repo (see 🍴 Fork first), then clone YOUR fork:
@@ -121,7 +123,7 @@ curl -fsSL https://raw.githubusercontent.com/imBlanker/multi-agents-workflow/mai
  request_logs   cost guard (pre-spawn): $/min per-agent + total, concurrency cap
 ```
 - **引擎**（`src/`）：[`ccswitch.js`](./src/ccswitch.js)（唯讀供應商設定同步＋路由；專案設定檔同步預設脫鉤）、[`planner.js`](./src/planner.js)、[`graph.js`](./src/graph.js)、[`configgen.js`](./src/configgen.js)、[`cost.js`](./src/cost.js)、[`codex.js`](./src/codex.js)、[`trellis.js`](./src/trellis.js)、[`pricegate.js`](./src/pricegate.js)、[`installer.js`](./src/installer.js)、[`doctor.js`](./src/doctor.js)、[`host.js`](./src/host.js)、[`probe.js`](./src/probe.js)。
-- **外掛**（`plugin/`）：Claude Code 指令（`/maw:plan`、`/maw:run`、`/maw:cost`、`/maw:doctor`、`/maw:add-agent`、`/maw:review`）、智慧體定義、一個 `PreToolUse` 成本護欄 hook。
+- **外掛**（`plugin/`）：Claude Code 指令（`/mawf:plan`、`/mawf:run`、`/mawf:cost`、`/mawf:doctor`、`/mawf:add-agent`、`/mawf:review`）、智慧體定義、一個 `PreToolUse` 成本護欄 hook。
 - **技能**（`skills/`）：可攜的技能檔案。
 
 ## 4. 支援的智慧體軟體
@@ -202,7 +204,7 @@ mawf release --id <id>             # release a slot
 ```
 
 ## 10. 安裝
-**來自 npm（一旦發布）：** `npx multi-agent-workflow install`。
+**來自 npm：** `npx multi-agents-workflow@latest install`。
 **來自 fork／clone（目前）：**
 ```bash
 git clone https://github.com/<you>/multi-agents-workflow.git

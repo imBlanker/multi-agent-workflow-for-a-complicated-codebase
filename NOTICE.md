@@ -124,7 +124,7 @@ lightweight but deliberate security review. The checks applied to each source:
 
 **No referenced project was copied wholesale, renamed, or rebranded as MAW.**
 MAW is original code: its engine (`src/`), Claude Code plugin (`plugin/`),
-portable skills (`skills/`), CLI (`bin/maw.js`), and tests (`tests/`) were all
+portable skills (`skills/`), CLI (`bin/mawf.js`), and tests (`tests/`) were all
 written from scratch by the MAW authors. From the projects above we adopted
 only *ideas* and *architectural structures*; where an external tool is used at
 runtime (only `codex-plugin-cc`), it is invoked as an out-of-process dependency

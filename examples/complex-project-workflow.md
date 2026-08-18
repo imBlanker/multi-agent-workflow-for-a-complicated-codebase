@@ -1,6 +1,6 @@
 # Complex Project Workflow — an end-to-end MAW walkthrough
 
-This walkthrough traces a single complex SaaS refactor through MAW end to end: `init` → `plan` → inspect → execute → cost control → dynamic mutation → graceful degradation → result. Every command output and file path below is taken from the real generated sample at [`examples/.maw-sample/`](./.maw-sample/) and the runnable sample project at [`examples/sample-project/`](./sample-project/). You can reproduce each step by running `node bin/maw.js <command>` against `examples/sample-project`.
+This walkthrough traces a single complex SaaS refactor through MAW end to end: `init` → `plan` → inspect → execute → cost control → dynamic mutation → graceful degradation → result. Every command output and file path below is taken from the real generated sample at [`examples/.maw-sample/`](./.maw-sample/) and the runnable sample project at [`examples/sample-project/`](./sample-project/). You can reproduce each step by running `node bin/mawf.js <command>` against `examples/sample-project`.
 
 ---
 
