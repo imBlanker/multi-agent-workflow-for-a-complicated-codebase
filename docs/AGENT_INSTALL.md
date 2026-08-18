@@ -121,6 +121,9 @@ npx . uninstall --restore-routing
                     # rolls cc-switch proxy_config (claude/codex) back to the
                     # latest pre-MAW snapshot (~/.cc-switch/maw-backups/)
 npx . update        # re-copies templates, keeps user edits
+npx . upgrade       # self-upgrade: git fetch + ff-only pull (checkout installs;
+                    # never stashes/rebases/forces; --dry-run to preview;
+                    # --apply-templates refreshes installed templates after)
 ```
 Uninstall never removes trellis-owned files (`.trellis/`, trellis entries in `.agents/skills` / `.dsh/skills`) — mention them for manual removal. Snapshots under `~/.cc-switch/maw-backups/` are the user's audit trail and are kept.
 
