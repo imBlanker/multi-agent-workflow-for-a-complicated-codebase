@@ -137,6 +137,19 @@ test("uninstall keeps configs by default; --purge-config removes .maw and .pi/ag
   assert.ok(purge.purged.some((p) => p === path.join(proj, ".maw")));
 });
 
+test("uninstall removes maw-* leftovers from an OLDER install even when the current manifest does not list them", () => {
+  install({ claudeDir });
+  // simulate an update() that dropped a skill: stale maw-* file on disk,
+  // absent from the freshly written manifest
+  fs.mkdirSync(path.join(claudeDir, "skills", "maw-retired-skill"), { recursive: true });
+  fs.writeFileSync(path.join(claudeDir, "skills", "maw-retired-skill", "SKILL.md"), "# old\n");
+  const mp = path.join(tmpHome, ".maw", "installed.json");
+  const m = JSON.parse(fs.readFileSync(mp, "utf8"));
+  assert.ok(!m.files.some((f) => f.includes("maw-retired-skill")), "fixture premise: not in manifest");
+  const u = uninstall({ project: tmpHome });
+  assert.ok(!fs.existsSync(path.join(claudeDir, "skills", "maw-retired-skill")), "stale maw-* leftover must be removed by the prefix safety net");
+});
+
 test.after(() => {
   process.env.HOME = os.homedir();
   try { fs.rmSync(tmpHome, { recursive: true, force: true }); } catch {}

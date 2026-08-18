@@ -173,15 +173,18 @@ export function uninstall(opts = {}) {
     }
   }
 
-  // 2) legacy fallback (pre-v2 manifests without files[]): prefix scan only.
-  //    Documented limitation: non-prefixed plugin agents/hooks from a legacy
-  //    install are not caught here — they were recorded starting at v2.
-  if (!Array.isArray(m.files) || !m.files.length) {
-    for (const dir of hostDirs) {
-      for (const sub of ["commands", "agents", "skills", "hooks", "prompts"]) {
-        const p = path.join(dir, sub);
-        if (exists(p)) removeIfOurs(p, removed);
-      }
+  // 2) prefix-scan safety net — ALWAYS runs, on top of the exact removal:
+  //    `update()` rewrites the manifest with the CURRENT package's file list,
+  //    so maw-*/codex-rescue files from an OLDER install that no longer ship
+  //    would otherwise survive exact-mode uninstall. The scan is conservative
+  //    (maw-*/codex-rescue prefix only) and doubles as the legacy fallback for
+  //    pre-v2 manifests that have no files[] at all. Documented limitation:
+  //    non-prefixed plugin agents/hooks from a legacy install are only caught
+  //    when the current manifest records them (they are recorded since v2).
+  for (const dir of hostDirs) {
+    for (const sub of ["commands", "agents", "skills", "hooks", "prompts"]) {
+      const p = path.join(dir, sub);
+      if (exists(p)) removeIfOurs(p, removed);
     }
   }
 
