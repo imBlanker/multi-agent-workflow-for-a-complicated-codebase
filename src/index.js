@@ -11,6 +11,7 @@ import { generateConfigs } from "./configgen.js";
 import { report as costReport, guard as costGuard, acquire, release } from "./cost.js";
 import { install, uninstall, update } from "./installer.js";
 import { doctor } from "./doctor.js";
+import { upgrade } from "./upgrade.js";
 import { runReview, shouldReview, status as codexStatus } from "./codex.js";
 import { probeProject } from "./probe.js";
 import { WorkflowGraph, graphFromPlan } from "./graph.js";
@@ -97,6 +98,7 @@ export function main(argv = process.argv.slice(2)) {
     case "install": return cmdInstall(f, flags);
     case "uninstall": return cmdUninstall(f, flags);
     case "update": return cmdUpdate(f, flags);
+    case "upgrade": return cmdUpgrade(f, flags);
     case "doctor": return cmdDoctor(f, flags);
     case "graph": return cmdGraph(f, flags);
     case "version": return cmdVersion();
@@ -148,6 +150,9 @@ Commands:
                 wins if both); --restore-routing rolls cc-switch proxy_config
                 back to the pre-init snapshot
   update        Reinstall (overwrites templates, keeps user edits)
+  upgrade       Self-upgrade: git fetch + ff-only pull (checkout installs);
+                npm i -g <name>@latest (npm installs). --dry-run to preview.
+                Never stashes/rebases/forces; follow up with 'maw update'
   doctor        Environment + capability check
   version       Print version
   help          This message
@@ -670,6 +675,17 @@ function cmdUpdate(f, flags) {
   const r = update({ force: flags.force });
   out(`updated maw ${pkgVersion()}`);
   for (const c of r.copied) out(`  copied -> ${c}`);
+}
+function cmdUpgrade(f, flags) {
+  const r = upgrade({
+    dryRun: flags["dry-run"] === true,
+    remote: typeof flags.remote === "string" ? flags.remote : undefined,
+    applyTemplates: flags["apply-templates"] === true,
+    tag: typeof flags.tag === "string" ? flags.tag : undefined,
+  });
+  for (const line of r.output) out(`  ${line}`);
+  if (!r.ok) { out(`upgrade failed: ${r.error}`, false); process.exitCode = 1; return; }
+  out(`upgraded maw${r.from && r.to ? ` ${r.from} -> ${r.to}` : ""} (mode: ${r.mode})`);
 }
 
 // --- doctor ---

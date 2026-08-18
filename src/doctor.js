@@ -8,6 +8,7 @@ import { detectHost, hostCapabilities } from "./host.js";
 import { status as codexStatus } from "./codex.js";
 import { detectTrellis } from "./trellis.js";
 import { readDshConfig, readDshAsCc, readCredentialKeys, dshDefaultModel, dshCostRateNote, readCcPricingJson } from "./dshprovider.js";
+import { detectInstallMode } from "./upgrade.js";
 import path from "node:path";
 import os from "node:os";
 
@@ -15,6 +16,15 @@ const PKG_ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "
 const SUPPORTED = ["claude-code", "codex", "pi", "dsh"]; // supported host agents (pi/dsh per MAW support-surface policy)
 
 /** cc-switch synced model-pricing.json + its lastSyncAt, or {error}. */
+/** Best-effort `git describe` for a checkout, "?" when unavailable. @param {string} gitRoot */
+function gitDescribe(gitRoot) {
+  try {
+    return execFileSync("git", ["-C", gitRoot, "describe", "--tags", "--always", "--dirty"], { encoding: "utf8", timeout: 10000 }).trim();
+  } catch {
+    return "?";
+  }
+}
+
 function pricingSyncInfo() {
   try {
     const doc = readJson(path.join(os.homedir(), ".cc-switch", "model-pricing.json"), null);
@@ -133,6 +143,21 @@ export function doctor() {
   // package
   const pkg = readJson(path.join(PKG_ROOT, "package.json"), { version: "?" });
   checks.push({ name: "MAW package", status: "ok", detail: `v${pkg.version}` });
+
+  // install mode + self-upgrade path
+  try {
+    const det = detectInstallMode();
+    if (det.mode === "checkout" && det.gitRoot) {
+      const desc = gitDescribe(det.gitRoot);
+      checks.push({ name: "MAW install mode", status: "ok", detail: `git checkout at ${det.gitRoot} (${desc}); self-upgrade: maw upgrade` });
+    } else if (det.mode === "npm" && det.squatted) {
+      checks.push({ name: "MAW install mode", status: "warn", detail: `npm global resolves to the squatted third-party name "${det.pkgName}" — upgrade from a git checkout instead` });
+    } else {
+      checks.push({ name: "MAW install mode", status: "ok", detail: `npm global (${det.pkgName}); self-upgrade: maw upgrade` });
+    }
+  } catch {
+    checks.push({ name: "MAW install mode", status: "warn", detail: "could not detect" });
+  }
 
   const fails = checks.filter((c) => c.status === "fail").length;
   const warns = checks.filter((c) => c.status === "warn").length;
