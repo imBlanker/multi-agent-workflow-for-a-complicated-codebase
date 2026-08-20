@@ -63,9 +63,14 @@ function fullFixture() {
   w(path.join(piDir, "extensions", "rtk.ts"), "// ext");
   w(path.join(piDir, "mcp.json"), JSON.stringify({ mcpServers: { exa: {}, context7: {} } }));
   w(path.join(piDir, "AGENTS.md"), "# pi global");
-  // pi models.json (providers/models for readPiAsCc)
+  // pi models.json (providers/models for readPiAsCc) + models-store.json
+  // (pi's cached remote catalogs — switchable via /model)
   w(path.join(piDir, "models.json"), JSON.stringify({
     providers: { "prov-a": { models: [{ id: "glm-4.5-air", cost: { input: 0.1, output: 0.4 } }] } },
+  }));
+  w(path.join(piDir, "models-store.json"), JSON.stringify({
+    "openai-codex": { models: ["gpt-5.5", "gpt-5.4"] },
+    "zai-coding-cn": { models: ["glm-4.7"] },
   }));
 
   // dsh: settings.yaml (strong marker) + skills + AGENTS.md
@@ -136,6 +141,10 @@ test("scanInventory: full 4-host fixture — all hosts present with expected sur
   assert.ok(pi.mcps.some((m) => m.name === "context7" && m.source === "pi-mcp.json"));
   assert.equal(pi.mcps.length, 2);
   assert.ok(pi.models.some((m) => m.id === "glm-4.5-air"), JSON.stringify(pi.models));
+  // catalog merge: models-store.json providers join the switchable pool
+  assert.equal(pi.models.length, 4, JSON.stringify(pi.models.map((m) => m.id)));
+  assert.ok(pi.models.some((m) => m.id === "gpt-5.5"));
+  assert.ok(pi.models.some((m) => m.id === "glm-4.7"));
 
   const dsh = by.dsh;
   assert.deepEqual(dsh.skills.map((s) => s.name), ["dsh-skill"]);
