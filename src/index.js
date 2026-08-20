@@ -22,6 +22,7 @@ import { classifyModel, selectModelForRole, candidatesForAppType, baseRole } fro
 import { resolvePrice } from "./pricing.js";
 import { checkPriceGate, priceGateReport } from "./pricegate.js";
 import { readDshAsCc } from "./dshprovider.js";
+import { scanInventory, writeInventoryArtifacts } from "./inventory.js";
 
 /**
  * Load cc-switch + host context once.
@@ -97,6 +98,7 @@ export function main(argv = process.argv.slice(2)) {
     case "run": return cmdRun(f, flags);
     case "review": return cmdReview(f, flags);
     case "models": return cmdModels(f, flags);
+    case "inventory": return cmdInventory(f, flags);
     case "routing": return cmdRouting(f, flags);
     case "install": return cmdInstall(f, flags);
     case "uninstall": return cmdUninstall(f, flags);
@@ -132,6 +134,9 @@ Commands:
                 (cc-switch project-profile sync is DECOUPLED by default; set
                 MAW_CC_PROJECT_SYNC=1 to temporarily re-enable)
   plan          Probe the project and generate a workflow plan + per-agent configs
+  inventory     Scan ALL installed supported hosts (claude/codex/pi/dsh) and
+                write .maw/inventory.json + inventory-digest.md (machine-wide
+                awareness: skills/plugins/MCP/prompts/models); --json to stdout
   models        Show capability-aware model/provider selection per role
   config        Print the effective .maw/config.yaml
   cost          Report current cost rate (USD/min) from cc-switch logs
@@ -289,6 +294,28 @@ function capLine(caps) {
   const mark = (v) => (v === true ? "✓" : v === false ? "✗" : "?");
   return `agentic${mark(caps.agentic)} reasoning${mark(caps.reasoning)} coding${mark(caps.coding)} vision${mark(caps.visionIn)}`;
 }
+function cmdInventory(f, flags) {
+  const project = flags.project ? path.resolve(flags.project) : process.cwd();
+  const report = scanInventory({ projectDir: project, dbPath: flags.db, probe: !!flags.verify });
+  if (flags.json) { out(JSON.stringify(report, null, 2)); return; }
+  const paths = writeInventoryArtifacts(project, report);
+  out(`cross-host inventory${flags.verify ? " (--verify: probed host CLIs for MCP status)" : ""}: ${report.hosts.length} host(s) — ${report.hosts.map((h) => h.app).join(", ") || "none"}`);
+  for (const h of report.hosts) {
+    if (h.error) out(`  ${h.app}: scan error — ${h.error} (skipped gracefully)`);
+    else {
+      const mcpStatus = h.mcps.length ? `; mcp ${h.mcps.filter((m) => m.status === "connected").length}✓/${h.mcps.filter((m) => m.status === "failed").length}✗/${h.mcps.filter((m) => m.status === "pending-approval").length}⏸/${h.mcps.filter((m) => m.status === "unsupported").length}⚠` : "";
+      out(`  ${h.app}: ${h.skills.length} skills, ${h.plugins.length} plugins${h.marketplaces?.length ? `, ${h.marketplaces.length} marketplaces` : ""}, ${h.mcps.length} mcp${mcpStatus}, ${h.models.length} models; prompts global ${h.prompts?.global ? "✓" : "✗"} / project ${(h.prompts?.project || []).join("+") || "✗"}`);
+      if (flags.verify) {
+        const cliOnly = h.mcps.filter((m) => m.source === "claude-cli" || m.source === "codex-cli");
+        if (cliOnly.length) out(`    verify: CLI-only servers added: ${cliOnly.map((m) => m.name).join(", ")}`);
+        if (h.mcpNote) out(`    verify: ${h.mcpNote}`);
+        if (h.harnessNote) out(`    verify: ${h.harnessNote}`);
+      }
+    }
+  }
+  out(`  wrote ${paths.jsonPath} + ${paths.digestPath}`);
+}
+
 function cmdModels(f, flags) {
   const ctx = loadCtx({ dbPath: flags.db });
   if (!ctx.cc.dbPath && !(ctx.cc.allProviders || []).length) { out(`cc-switch database not found`, false); return; }
@@ -379,6 +406,11 @@ function cmdPlan(f, flags) {
 
   const plan = planWorkflow(signals, { host: ctx.host, ccSwitch: ctx.cc, cost: costFrom(flags) });
   const gen = generateConfigs(project, plan, ctx.cc);
+  try {
+    const inv = scanInventory({ projectDir: project, dbPath: flags.db });
+    const invPaths = writeInventoryArtifacts(project, inv);
+    out(`  inventory: ${inv.hosts.length} host(s) → ${path.relative(project, invPaths.digestPath)}`);
+  } catch (e) { out(`  inventory: skipped — ${e?.message ?? e}`); }
 
   // Price gate (HITL): a model assignment with Input > $2/1M or Output >
   // $10/1M pauses the plan and reports to a human. --allow-pricey records the
