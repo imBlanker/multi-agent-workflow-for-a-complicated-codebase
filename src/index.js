@@ -23,6 +23,7 @@ import { resolvePrice } from "./pricing.js";
 import { checkPriceGate, priceGateReport } from "./pricegate.js";
 import { readDshAsCc } from "./dshprovider.js";
 import { scanInventory, writeInventoryArtifacts } from "./inventory.js";
+import { adviseTask, checkFreshness, renderAdvise } from "./advise.js";
 
 /**
  * Load cc-switch + host context once.
@@ -99,6 +100,7 @@ export function main(argv = process.argv.slice(2)) {
     case "review": return cmdReview(f, flags);
     case "models": return cmdModels(f, flags);
     case "inventory": return cmdInventory(f, flags);
+    case "advise": return cmdAdvise(f, flags);
     case "routing": return cmdRouting(f, flags);
     case "install": return cmdInstall(f, flags);
     case "uninstall": return cmdUninstall(f, flags);
@@ -137,6 +139,11 @@ Commands:
   inventory     Scan ALL installed supported hosts (claude/codex/pi/dsh) and
                 write .maw/inventory.json + inventory-digest.md (machine-wide
                 awareness: skills/plugins/MCP/prompts/models); --json to stdout
+  advise        Deterministic stay/switch recommendation for the current task
+                across ALL installed hosts (scores + reasons + exact launch
+                command; switch pre-creates a .maw/handoff brief). Never
+                executes anything. --check-fresh prints STALE/ADVISED_TODAY
+                (UTC+8 day gate for proactive re-advising)
   models        Show capability-aware model/provider selection per role
   config        Print the effective .maw/config.yaml
   cost          Report current cost rate (USD/min) from cc-switch logs
@@ -305,6 +312,24 @@ function cmdInventory(f, flags) {
     else out(`  ${h.app}: ${h.skills.length} skills, ${h.plugins.length} plugins, ${h.mcps.length} mcp, ${h.models.length} models; prompts global ${h.prompts?.global ? "✓" : "✗"} / project ${(h.prompts?.project || []).join("+") || "✗"}`);
   }
   out(`  wrote ${paths.jsonPath} + ${paths.digestPath}`);
+}
+
+function cmdAdvise(f, flags) {
+  const project = flags.project ? path.resolve(flags.project) : process.cwd();
+  if (flags["check-fresh"]) {
+    const state = path.join(project, ".maw", "runtime", "advise-state.json");
+    out(checkFreshness(state));
+    return;
+  }
+  const r = adviseTask({
+    projectDir: project,
+    task: flags.task,
+    domain: flags.domain,
+    difficulty: flags.difficulty ? Number(flags.difficulty) : undefined,
+    currentHost: flags.host,
+  });
+  if (flags.json) { out(JSON.stringify(r, null, 2)); return; }
+  out(renderAdvise(r));
 }
 
 function cmdModels(f, flags) {
