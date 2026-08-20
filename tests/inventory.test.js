@@ -37,23 +37,31 @@ function fullFixture() {
   w(path.join(claudeDir, "plugins", "installed_plugins.json"), JSON.stringify({ plugins: { "codex-plugin-cc": {}, "other": {} } }));
   mk(path.join(claudeDir, "plugins", "marketplaces", "openai-codex"));
   w(path.join(claudeDir, "CLAUDE.md"), "# global");
-  w(claudeJson, JSON.stringify({ mcpServers: { "zai-cn-web-search": {}, exa: {} } }));
+  w(claudeJson, JSON.stringify({
+    mcpServers: { "zai-cn-web-search": {}, exa: {} },
+    projects: { "/other/machine/proj": { mcpServers: { "claude-flow": {}, "ruv-swarm": {} } } },
+  }));
 
   // codex: skills (codex-* family + plain) + config.toml mcp_servers + AGENTS.md
   w(path.join(codexDir, "skills", "codex-review", "SKILL.md"), "---\ndescription: codex review skill\n---\nx\n");
   w(path.join(codexDir, "skills", "plain-skill", "SKILL.md"), "---\ndescription: plain\n---\nx\n");
-  w(path.join(codexDir, "config.toml"), `[mcp_servers.context7]\ncommand = "npx"\n\n[mcp_servers.\"grok-search\"]\ncommand = "x"\n`);
+  w(path.join(codexDir, "config.toml"), `[mcp_servers.context7]\ncommand = "npx"\n\n[mcp_servers.\"grok-search\"]\ncommand = "x"\n\n[plugins.\"documents@openai-primary-runtime\"]\nenabled = true\n\n[plugins.\"github@openai-curated\"]\nenabled = true\n`);
   w(path.join(codexDir, "AGENTS.md"), "# codex global");
 
   // pi: skills (one symlinked to the claude skill → cross-dir dedupe is per
   // host, so here we test within-pi dedupe: two names → same realPath)
   const realSkill = mk(path.join(root, "shared-skill"));
   w(path.join(realSkill, "SKILL.md"), "---\ndescription: shared\n---\nx\n");
+  // pi global standard skills dir (~/.agents/skills in production)
+  w(path.join(root, "h", ".agents", "skills", "caveman", "SKILL.md"), "---\ndescription: ultra-compressed communication mode\n---\nx\n");
   mk(path.join(piDir, "skills"));
   fs.symlinkSync(realSkill, path.join(piDir, "skills", "alias-a"));
   fs.symlinkSync(realSkill, path.join(piDir, "skills", "alias-b"));
   w(path.join(piDir, "npm", "package.json"), JSON.stringify({ name: "pi-extensions", dependencies: { "some-pkg": "^1.0.0", "pi-mcp-adapter": "^2.0.0" } }));
+  w(path.join(piDir, "npm", "node_modules", "pi-mcp-adapter", "package.json"), JSON.stringify({ name: "pi-mcp-adapter", pi: { skills: ["./skills"] } }));
+  w(path.join(piDir, "npm", "node_modules", "pi-mcp-adapter", "skills", "mcp-scripting", "SKILL.md"), `---\ndescription: Write mcpScript JavaScript\n---\nx\n`);
   w(path.join(piDir, "extensions", "rtk.ts"), "// ext");
+  w(path.join(piDir, "mcp.json"), JSON.stringify({ mcpServers: { exa: {}, context7: {} } }));
   w(path.join(piDir, "AGENTS.md"), "# pi global");
   // pi models.json (providers/models for readPiAsCc)
   w(path.join(piDir, "models.json"), JSON.stringify({
@@ -61,7 +69,7 @@ function fullFixture() {
   }));
 
   // dsh: settings.yaml (strong marker) + skills + AGENTS.md
-  w(path.join(dshHome, "settings.yaml"), `agent-presets:\n  default: liangshen\nllm-pi-ai:\n  providers:\n    zai-coding-cn:\n      baseURL: https://example\n      models:\n        - id: glm-4.5-air\n          name: GLM-4.5-Air\nmcp:\n  dsh-layer-a:\n    enabled: true\n`);
+  w(path.join(dshHome, "settings.yaml"), `agent-presets:\n  default: liangshen\nllm-pi-ai:\n  providers:\n    zai-coding-cn:\n      baseURL: https://example\n      models:\n        - id: glm-4.5-air\n          name: GLM-4.5-Air\nmcp-client:\n  dsh-layer-a:\n    enabled: true\n`);
   w(path.join(dshHome, "skills", "dsh-skill", "SKILL.md"), "---\ndescription: dsh skill\n---\nx\n");
   w(path.join(dshHome, "AGENTS.md"), "# dsh global");
 
@@ -71,13 +79,14 @@ function fullFixture() {
   w(path.join(projectDir, ".maw", "agents", "orchestrator.md"), "# orch");
   w(path.join(projectDir, ".mcp.json"), JSON.stringify({ mcpServers: { "proj-mcp": {} } }));
 
-  return { root, claudeDir, codexDir, piDir, dshHome, claudeJson, projectDir };
+  return { root, claudeDir, codexDir, piDir, dshHome, claudeJson, projectDir, agentsSkillsDir: path.join(root, "h", ".agents", "skills") };
 }
 
 function scanOf(fx) {
   return scanInventory({
     claudeDir: fx.claudeDir, codexDir: fx.codexDir, piDir: fx.piDir, dshHome: fx.dshHome,
-    claudeJson: fx.claudeJson, projectDir: fx.projectDir, dbPath: "/nonexistent/ccswitch.db",
+    claudeJson: fx.claudeJson, projectDir: fx.projectDir, agentsSkillsDir: fx.agentsSkillsDir,
+    dbPath: "/nonexistent/ccswitch.db",
   });
 }
 
@@ -92,8 +101,10 @@ test("scanInventory: full 4-host fixture — all hosts present with expected sur
   assert.deepEqual(claude.skills.map((s) => s.name).sort(), ["grilling", "handoff"]);
   assert.equal(claude.skills[0].description, "Grill the user relentlessly");
   assert.ok(claude.plugins.some((p) => p.name === "codex-plugin-cc" && p.source === "installed"));
-  assert.ok(claude.plugins.some((p) => p.name === "openai-codex" && p.source === "marketplace"));
+  assert.equal(claude.plugins.length, 2); // installed_plugins.json keys only; marketplaces are NOT plugins
   assert.ok(claude.mcps.some((m) => m.name === "zai-cn-web-search" && m.source === "user"));
+  assert.ok(claude.mcps.some((m) => m.name === "claude-flow" && m.source === "claude-project:/other/machine/proj"));
+  assert.ok(claude.mcps.some((m) => m.name === "ruv-swarm"));
   assert.ok(claude.mcps.some((m) => m.name === "proj-mcp" && m.source === "project"));
   assert.ok(claude.prompts.global.endsWith("CLAUDE.md"));
   assert.deepEqual(claude.prompts.project, ["AGENTS.md"]); // fixture project has no CLAUDE.md
@@ -102,23 +113,28 @@ test("scanInventory: full 4-host fixture — all hosts present with expected sur
   assert.ok(claude.workflowsHarnesses.some((w) => w.name === "orchestrator"));
 
   const codex = by.codex;
-  assert.deepEqual(codex.skills.map((s) => s.name), ["plain-skill"]); // codex-* counted as plugins
-  assert.ok(codex.plugins.some((p) => p.name === "codex-review" && p.source === "codex-skill"));
+  assert.deepEqual(codex.skills.map((s) => s.name).sort(), ["codex-review", "plain-skill"]);
+  assert.ok(codex.plugins.some((p) => p.name === "documents@openai-primary-runtime" && p.source === "codex-config.toml"));
+  assert.ok(codex.plugins.some((p) => p.name === "github@openai-curated"));
+  assert.equal(codex.plugins.length, 2);
   assert.ok(codex.mcps.some((m) => m.name === "context7" && m.source === "codex-config.toml"));
   assert.ok(codex.mcps.some((m) => m.name === "grok-search"));
   assert.ok(codex.prompts.global.endsWith("AGENTS.md"));
 
   const pi = by.pi;
-  // two symlink names → ONE real skill entry (realPath dedupe)
-  assert.deepEqual(pi.skills.map((s) => s.name), ["alias-a"]);
+  // two symlink names → ONE real skill entry (realPath dedupe) + global
+  // ~/.agents/skills + npm package skills all discovered
+  assert.deepEqual(pi.skills.map((s) => s.name).sort(), ["alias-a", "caveman", "mcp-scripting"]);
   assert.ok(pi.plugins.some((p) => p.name === "some-pkg" && p.source === "npm"));
   assert.ok(pi.plugins.some((p) => p.name === "rtk.ts" && p.source === "extension"));
-  assert.ok(pi.mcps.some((m) => m.name === "pi-mcp-adapter" && m.source === "pi-mcp-adapter"));
+  assert.ok(pi.mcps.some((m) => m.name === "exa" && m.source === "pi-mcp.json"));
+  assert.ok(pi.mcps.some((m) => m.name === "context7" && m.source === "pi-mcp.json"));
+  assert.equal(pi.mcps.length, 2);
   assert.ok(pi.models.some((m) => m.id === "glm-4.5-air"), JSON.stringify(pi.models));
 
   const dsh = by.dsh;
   assert.deepEqual(dsh.skills.map((s) => s.name), ["dsh-skill"]);
-  assert.ok(dsh.mcps.some((m) => m.name === "dsh-layer-a" && m.source === "dsh-patch-layer"));
+  assert.ok(dsh.mcps.some((m) => m.name === "dsh-layer-a" && m.source === "dsh-mcp-client"));
   assert.ok(dsh.models.some((m) => m.id === "glm-4.5-air"));
   assert.ok(dsh.prompts.global.endsWith("AGENTS.md"));
 });
