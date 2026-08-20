@@ -54,7 +54,7 @@ function utc8Now(clock) {
 function utc8Day(clock) { return utc8Now(clock).toISOString().slice(0, 10); }
 /** UTC+8 stamp "YYYYMMDD-HHmmss". @param {() => Date|number} [clock] */
 function utc8Stamp(clock) {
-  return utc8Now(clock).toISOString().replace(/-/g, "").replace("T", "-").slice(0, 15);
+  return utc8Now(clock).toISOString().replace(/-/g, "").replace("T", "-").replace(/:/g, "").slice(0, 15);
 }
 
 /**
@@ -137,6 +137,7 @@ function scoreSkillMatch(tokens, host) {
     ...(host.plugins || []).map((p) => ({ kind: "plugins", name: p.name, desc: "" })),
     ...(host.mcps || []).map((m) => ({ kind: "mcps", name: m.name, desc: "" })),
   ];
+  const hits = [];
   for (const e of entries) {
     const name = String(e.name || "").toLowerCase();
     const desc = String(e.desc || "").toLowerCase();
@@ -149,9 +150,12 @@ function scoreSkillMatch(tokens, host) {
     if (best > 0) {
       raw += best;
       matched[e.kind].push(e.name);
-      reasons.push(`${e.kind === "mcps" ? "mcp" : e.kind.slice(0, -1)} match: ${e.name}`);
+      hits.push({ name: e.name, kind: e.kind, best });
     }
   }
+  // strongest hits first in reasons (exact name > name substring > description)
+  hits.sort((a, b) => b.best - a.best);
+  for (const h of hits) reasons.push(`${h.kind === "mcps" ? "mcp" : h.kind.slice(0, -1)} match: ${h.name}`);
   return { score: Math.min(30, raw * 2), reasons, matched };
 }
 
