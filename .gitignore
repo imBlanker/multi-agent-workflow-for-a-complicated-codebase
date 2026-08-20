@@ -11,6 +11,12 @@ package-lock.json.bak
 # sample lives at examples/.maw-sample/ and is intentionally NOT ignored.
 .mawf/
 
+# Proactive-injection runtime artifacts (advise-managed blocks) at the repo
+# root — regenerated on every advise run, never tracked (see commit 3c3527f);
+# untracked files would otherwise trip `mawf upgrade`'s clean-tree guard.
+/AGENTS.md
+/CLAUDE.md
+
 # OS / editor
 .DS_Store
 Thumbs.db
