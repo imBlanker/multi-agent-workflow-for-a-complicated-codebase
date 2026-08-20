@@ -224,6 +224,11 @@ function cmdInit(f, flags) {
     const inj = writeManagedBlocks(project);
     out(`  cross-host advise block: ${inj.created.length ? `${inj.created.length} created, ` : ""}${inj.written.length} ensured (AGENTS.md/CLAUDE.md)`);
   } catch (e) { out(`  cross-host advise block: skipped — ${e?.message ?? e}`); }
+  try {
+    const inv = scanInventory({ projectDir: project, dbPath: flags.db });
+    const invPaths = writeInventoryArtifacts(project, inv);
+    out(`  inventory: ${inv.hosts.length} host(s) → ${path.relative(project, invPaths.digestPath)}`);
+  } catch (e) { out(`  inventory: skipped — ${e?.message ?? e}`); }
   out(`  host: ${ctx.host.app} (caps: ${hostCapabilities(ctx.host).join(", ") || "none"}); supported: Claude Code + Codex + Pi + DeepSeek Harness (dsh)`);
   out(`  cc-switch: ${ctx.cc.dbPath ? "ok (read-only)" : "not found"}; user: ${user}`);
   out(`  primary architecture: ${plan.primary}`);
