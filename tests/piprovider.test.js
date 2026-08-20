@@ -59,6 +59,14 @@ function piFixture() {
     path.join(dir, "auth.json"),
     JSON.stringify({ "deep-worker": { apiKey: "sk-AUTH-SECRET" } }),
   );
+  // cached remote catalogs (switchable via /model; docs providers.md)
+  fs.writeFileSync(
+    path.join(dir, "models-store.json"),
+    JSON.stringify({
+      "openai-codex": { models: ["gpt-5.5", "gpt-5.4-mini"] },
+      "zai-coding-cn": { models: ["glm-4.7", "glm-5-turbo"] },
+    }),
+  );
   return dir;
 }
 
@@ -86,7 +94,7 @@ test("readPiAsCc produces cc-switch-shaped object with app_type:pi providers", (
   // all providers enumerated, all pi
   assert.deepEqual(
     cc.allProviders.map((p) => p.name).sort(),
-    ["deep-worker", "openai-codex"],
+    ["deep-worker", "openai-codex", "zai-coding-cn"],
   );
   assert.ok(cc.allProviders.every((p) => p.app_type === "pi"));
   // pricing merged from models.json cost (per-M USD, same scale as cc-switch)
@@ -104,6 +112,21 @@ test("readPiAsCc produces cc-switch-shaped object with app_type:pi providers", (
   });
 });
 
+test("readPiAsCc merges models-store.json catalogs into the switchable pool", () => {
+  const dir = piFixture();
+  const cc = readPiAsCc({ piDir: dir });
+  const byName = Object.fromEntries(cc.allProviders.map((p) => [p.name, p]));
+  // catalog EXTENDS an existing models.json provider (openai-codex: 1 + 1 new)
+  assert.deepEqual(byName["openai-codex"].settings_config._piModels.sort(), ["gpt-5.4-mini", "gpt-5.5"]);
+  // catalog-only provider becomes a provider_type pi-catalog row
+  assert.equal(byName["zai-coding-cn"].provider_type, "pi-catalog");
+  assert.equal(byName["zai-coding-cn"].is_current, 0);
+  assert.deepEqual(byName["zai-coding-cn"].settings_config._piModels.sort(), ["glm-4.7", "glm-5-turbo"]);
+  // every switchable model is enumerated for capability selection
+  const all = candidatesForAppType(cc, "pi").map((c) => c.model).sort();
+  assert.deepEqual(all, ["deepseek-v4-flash", "glm-4.7", "glm-5-turbo", "glm-5.2", "gpt-5.4-mini", "gpt-5.5"]);
+});
+
 test("SECURITY: readPiAsCc output never contains apiKey or key bytes", () => {
   const dir = piFixture();
   const cc = readPiAsCc({ piDir: dir });
@@ -119,7 +142,7 @@ test("candidatesForAppType(cc,'pi') enumerates every provider x model", () => {
   const cands = candidatesForAppType(cc, "pi");
   assert.deepEqual(
     cands.map((c) => c.model).sort(),
-    ["deepseek-v4-flash", "glm-5.2", "gpt-5.5"],
+    ["deepseek-v4-flash", "glm-4.7", "glm-5-turbo", "glm-5.2", "gpt-5.4-mini", "gpt-5.5"],
   );
   assert.ok(cands.every((c) => c.appType === "pi"));
   assert.ok(cands.find((c) => c.model === "deepseek-v4-flash" && c.isCurrent));

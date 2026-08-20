@@ -112,6 +112,34 @@ export function readPiAsCc(opts = {}) {
     }
   }
 
+  // merge catalog providers from models-store.json — pi's cached remote
+  // catalogs (subscription/built-in providers like openai-codex / deepseek /
+  // zai-coding-cn, switchable via /model once auth is configured; docs:
+  // providers.md + sdk.md). A catalog name already present in models.json
+  // extends that provider's model list instead of duplicating it.
+  const store = cfg.modelsStore && typeof cfg.modelsStore === "object" ? cfg.modelsStore : {};
+  for (const [name, entry] of Object.entries(store)) {
+    const raw = Array.isArray(entry?.models) ? entry.models : [];
+    const ids = raw.map((m) => (typeof m === "string" ? m : m?.id)).filter(Boolean);
+    if (!ids.length) continue;
+    const existing = allProviders.find((p) => p.id === name);
+    if (existing) {
+      const merged = [...new Set([...(existing.settings_config._piModels || []), ...ids])];
+      existing.settings_config._piModels = merged;
+      if (!existing.settings_config.model) existing.settings_config.model = merged[0];
+    } else {
+      allProviders.push({
+        id: name,
+        name,
+        app_type: "pi",
+        is_current: 0,
+        provider_type: "pi-catalog",
+        cost_multiplier: 1,
+        settings_config: { model: ids[0], _piModels: ids, _piCatalog: true },
+      });
+    }
+  }
+
   if (!currentProviders.pi && allProviders.length) {
     // defaultProvider not found among providers — fall back to the first one
     const fb = { ...allProviders[0], is_current: 1 };
