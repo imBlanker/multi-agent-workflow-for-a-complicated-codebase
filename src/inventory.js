@@ -14,6 +14,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import { execSync } from "node:child_process";
 import { exists, isFile, readJson, readText, writeJson, writeText, ensureDir } from "./util.js";
 import { detectHost, hostCapabilities } from "./host.js";
 import { readCcSwitch } from "./ccswitch.js";
@@ -32,8 +33,96 @@ import { resolvePrice } from "./pricing.js";
 
 const APP_TYPES = { "claude-code": "claude", codex: "codex", pi: "pi", dsh: "dsh" };
 
+/** Default CLI runner for probe mode (injectable in tests; hermetic default off).
+ *  60s timeout: `claude mcp list` performs live health checks. */
+function runCliDefault(cmd) {
+  try { return execSync(cmd, { stdio: ["ignore", "pipe", "ignore"], encoding: "utf8", timeout: 60000 }); }
+  catch { return ""; }
+}
+
+/** Parse `claude mcp list` lines → Map(name → status). Word-based — symbol
+ *  codepoints differ across terminals. Observed states: Connected /
+ *  Pending approval / Failed to connect. Both the full name and its
+ *  @alias-stripped base are keyed (claude-flow@alpha → claude-flow). */
+function probeClaudeMcp(runCli) {
+  const txt = runCli("claude mcp list");
+  const map = new Map();
+  for (const line of String(txt).split("\n")) {
+    const m = line.match(/^([^:\s]+):/);
+    if (!m) continue;
+    let status = null;
+    if (/\bPending approval/.test(line)) status = "pending-approval";
+    else if (/\bFailed\b/.test(line)) status = "failed";
+    else if (/\bConnected\b/.test(line)) status = "connected";
+    if (!status) continue;
+    map.set(m[1], status);
+    map.set(m[1].split("@")[0], status);
+  }
+  return map;
+}
+
+/** Parse `codex mcp list --json` → Map(name → status). */
+function probeCodexMcp(runCli) {
+  const txt = runCli("codex mcp list --json");
+  const map = new Map();
+  try {
+    const list = JSON.parse(txt);
+    for (const s of list || []) {
+      if (!s?.name) continue;
+      if (s.enabled === false) map.set(s.name, "disabled");
+      else if (s.auth_status === "unsupported") map.set(s.name, "unsupported");
+      else map.set(s.name, "unknown");
+    }
+  } catch {}
+  return map;
+}
+
+/** Attach CLI-probed statuses to static mcp entries; add CLI-only servers. */
+function applyMcpStatus(mcps, probeMap, cliSource) {
+  for (const m of mcps) {
+    const st = probeMap.get(m.name);
+    if (st) m.status = st;
+  }
+  for (const [name, status] of probeMap) {
+    // base keys (alias-stripped) duplicate a full key — skip adding them twice
+    if (name.includes("@") && probeMap.has(name.split("@")[0])) continue;
+    if (mcps.some((m) => m.name === name)) continue;
+    mcps.push({ name, source: cliSource, status });
+  }
+}
+
 /** @returns {string} */
 function home() { return os.homedir(); }
+
+/** Parse dsh --dump-config component blocks → plugin entries.
+ *  dsh is everything-as-a-plugin: every component (ui/tool/session/skill/...)
+ *  is a plugin. The dump lists active-profile components; the dsh web UI
+ *  remains the FULL plugin truth (it can show more than the dump). */
+function parseDshPlugins(dump) {
+  const out = [];
+  const text = String(dump);
+  const originRe = /^# == ([^\n]+)/m;
+  // iterate entries; `disabled: true` counts ONLY when it appears inside THIS
+  // entry's block (before the next `- id:` or `# ==` line)
+  const entries = [...text.matchAll(/^- id: ([\w-]+)\n\s+name: '?([^'\n]+)'?/gm)];
+  for (let i = 0; i < entries.length; i++) {
+    const m = entries[i];
+    const blockEnd = i + 1 < entries.length ? entries[i + 1].index : text.length;
+    // block start: last `# ==` comment line before this entry
+    const before = text.slice(Math.max(0, m.index - 200), m.index);
+    const originMatches = [...before.matchAll(/^# == ([^\n]+)$/gm)];
+    const origin = originMatches.length ? originMatches[originMatches.length - 1][1].trim() : "";
+    const block = text.slice(m.index, blockEnd);
+    out.push({
+      id: m[1],
+      name: m[2].trim(),
+      status: /disabled:\s*true/.test(block) ? "disabled" : "active",
+      origin,
+      source: "dump-config",
+    });
+  }
+  return out;
+}
 
 /**
  * Scan one skills directory: every child dir containing SKILL.md becomes an
@@ -98,11 +187,36 @@ export function listSkills(dirs) {
   const seen = new Set();
   const out = [];
   for (const d of dirs) {
-    for (const s of scanSkillsDir(d)) {
+    const dir = Array.isArray(d) ? d[0] : d;
+    const origin = Array.isArray(d) ? d[1] : "user-global";
+    for (const s of scanSkillsDir(dir)) {
       if (seen.has(s.realPath)) continue;
       seen.add(s.realPath);
-      out.push(s);
+      out.push({ ...s, origin });
     }
+    // pi discovery rule: root .md files in ~/.pi/agent/skills and .pi/skills
+    // are individual skills (ignored in .agents/skills dirs)
+    if (Array.isArray(d) && (origin === "user-global" || origin === "project")) {
+      for (const s of scanRootMdSkills(dir)) {
+        if (seen.has(s.realPath)) continue;
+        seen.add(s.realPath);
+        out.push({ ...s, origin });
+      }
+    }
+  }
+  return out;
+}
+
+/** Root-level *.md files as skills (pi rule; none on the verify machine). */
+function scanRootMdSkills(dir) {
+  if (!exists(dir)) return [];
+  let entries = [];
+  try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return []; }
+  const out = [];
+  for (const e of entries) {
+    if (!e.isFile() || !e.name.endsWith(".md")) continue;
+    const p = path.join(dir, e.name);
+    out.push({ name: e.name.replace(/\.md$/, ""), path: p, realPath: fs.realpathSync(p), description: "" });
   }
   return out;
 }
@@ -152,6 +266,27 @@ function modelsForAppType(cc, appType) {
 }
 
 /**
+ * Ancestor `.agents/skills` dirs from projectDir upward, stopping after the
+ * git root (dir containing .git) or at fs root; projectDir itself excluded
+ * (already scanned as "project").
+ * @param {string} projectDir
+ * @returns {string[]}
+ */
+function ancestorAgentsSkillsDirs(projectDir) {
+  const out = [];
+  let cur = path.resolve(projectDir);
+  for (;;) {
+    const parent = path.dirname(cur);
+    if (parent === cur) break;
+    cur = parent;
+    const dir = path.join(cur, ".agents", "skills");
+    if (exists(dir)) out.push(dir);
+    if (exists(path.join(cur, ".git"))) break;
+  }
+  return out;
+}
+
+/**
  * Scan ALL installed supported hosts + the project → InventoryReport.
  * All host dirs are injectable (tests NEVER touch the real ~).
  * @param {object} [opts]
@@ -164,6 +299,8 @@ function modelsForAppType(cc, appType) {
  * @param {string} [opts.projectDir]  default process.cwd()
  * @param {string} [opts.dbPath]      cc-switch db override
  * @param {string} [opts.dshDumpConfig] dsh --dump-config output override (default "" → skip the real `dsh` exec; hermetic)
+ * @param {boolean} [opts.probe]  run host CLIs to attach MCP statuses (verify mode)
+ * @param {(cmd: string) => string} [opts.runCli] injectable CLI runner (tests)
  * @returns {InventoryReport}
  */
 export function scanInventory(opts = {}) {
@@ -182,11 +319,11 @@ export function scanInventory(opts = {}) {
   const hosts = [];
   const push = (fn) => { try { hosts.push(fn()); } catch (err) { hosts.push({ app: "unknown", error: String(err?.message ?? err) }); } };
 
-  if (exists(claudeDir)) push(() => scanClaude({ claudeDir, claudeJson, projectDir, cc, hostInfo }));
-  if (exists(codexDir)) push(() => scanCodex({ codexDir, projectDir, cc, hostInfo }));
-  if (exists(piDir)) push(() => scanPi({ piDir, projectDir, cc, hostInfo, agentsSkillsDir: opts.agentsSkillsDir }));
+  if (exists(claudeDir)) push(() => scanClaude({ claudeDir, claudeJson, projectDir, cc, hostInfo, probe: !!opts.probe, runCli: opts.runCli ?? runCliDefault }));
+  if (exists(codexDir)) push(() => scanCodex({ codexDir, projectDir, cc, hostInfo, probe: !!opts.probe, runCli: opts.runCli ?? runCliDefault }));
+  if (exists(piDir)) push(() => scanPi({ piDir, projectDir, cc, hostInfo, agentsSkillsDir: opts.agentsSkillsDir, probe: !!opts.probe, runCli: opts.runCli ?? runCliDefault }));
   if (exists(path.join(dshHome, "settings.yaml")) || exists(path.join(dshHome, "profiles"))) {
-    push(() => scanDsh({ dshHome, projectDir, cc, hostInfo, dumpConfig: opts.dshDumpConfig ?? "" }));
+    push(() => scanDsh({ dshHome, projectDir, cc, hostInfo, dumpConfig: opts.dshDumpConfig ?? "", probe: !!opts.probe, runCli: opts.runCli ?? runCliDefault }));
   }
 
   return { generatedAt: new Date().toISOString(), projectDir, hosts };
@@ -197,14 +334,27 @@ export function scanInventory(opts = {}) {
  */
 function scanClaude(o) {
   const app = "claude-code";
-  const skills = listSkills([path.join(o.claudeDir, "skills")]);
+  const skills = listSkills([
+    [path.join(o.claudeDir, "skills"), "user-global"],
+    [path.join(o.projectDir, ".claude", "skills"), "project"],
+  ]);
   const plugins = [];
   const installed = readJson(path.join(o.claudeDir, "plugins", "installed_plugins.json"), null);
   const instMap = installed?.plugins && typeof installed.plugins === "object" ? installed.plugins : null;
   if (instMap) for (const k of Object.keys(instMap)) plugins.push({ name: k, source: "installed" });
-  // NOTE: marketplace dirs under plugins/marketplaces/ are NOT plugins; enable
-  // state lives with `claude plugin list` (all 3 were disabled on the verify
-  // machine) — plugin-provided skills are intentionally NOT counted.
+  // marketplaces are their own category (plugin/skill catalogs live there)
+  const marketplaces = [];
+  const mkts = path.join(o.claudeDir, "plugins", "marketplaces");
+  if (exists(mkts)) {
+    try {
+      for (const e of fs.readdirSync(mkts, { withFileTypes: true })) {
+        if (e.isDirectory()) marketplaces.push(e.name);
+      }
+    } catch {}
+  }
+  // NOTE: plugin-provided skills counted only when the plugin is enabled —
+  // enable state is not file-detectable; on the verify machine all 3 user
+  // plugins are disabled, so plugin skills stay uncounted (digest notes it).
   const mcps = [...mcpFromJson(o.claudeJson, "user")];
   // project-scoped servers recorded under ~/.claude.json projects[*].mcpServers
   // (verified vs `claude mcp list`: global + all project entries are listed)
@@ -220,12 +370,23 @@ function scanClaude(o) {
   for (const e of mcpFromJson(path.join(o.projectDir, ".mcp.json"), "project")) {
     if (!mcps.some((m) => m.name === e.name)) mcps.push(e);
   }
+  if (o.probe) {
+    // `claude mcp list` health output is nondeterministic (failed servers
+    // may be omitted when they fail slowly); retry once if any statically-
+    // known server is missing from the probe result.
+    let map = probeClaudeMcp(o.runCli);
+    const known = mcps.map((m) => m.name);
+    if (known.length && !known.every((n) => map.has(n))) {
+      map = new Map([...map, ...probeClaudeMcp(o.runCli)]);
+    }
+    applyMcpStatus(mcps, map, "claude-cli");
+  }
   const global = isFile(path.join(o.claudeDir, "CLAUDE.md")) ? path.join(o.claudeDir, "CLAUDE.md") : null;
   return {
     app, homeDir: o.claudeDir,
     detected: o.hostInfo.detected.filter((d) => /claude/i.test(d)),
     capabilities: hostCapabilities({ ...o.hostInfo, app: "claude-code" }),
-    skills, plugins, mcps,
+    skills, plugins, marketplaces, mcps,
     prompts: { global, project: projectPromptSurfaces(o.projectDir, ["AGENTS.md", "CLAUDE.md"]) },
     models: modelsForAppType(o.cc, APP_TYPES[app]),
     workflowsHarnesses: projectWorkflows(o.projectDir),
@@ -267,12 +428,14 @@ function scanCodex(o) {
   for (const e of mcpFromJson(path.join(o.codexDir, "mcp.json"), "codex-config")) {
     if (!mcps.some((m) => m.name === e.name)) mcps.push(e);
   }
+  if (o.probe) applyMcpStatus(mcps, probeCodexMcp(o.runCli), "codex-cli");
+  const mcpNote = "codex_apps builtin connector (official OpenAI features when connected) is visible in the codex UI, not in mcp configs";
   const global = isFile(path.join(o.codexDir, "AGENTS.md")) ? path.join(o.codexDir, "AGENTS.md") : null;
   return {
     app, homeDir: o.codexDir,
     detected: o.hostInfo.detected.filter((d) => /codex/i.test(d)),
     capabilities: hostCapabilities({ ...o.hostInfo, app: "codex" }),
-    skills, plugins, mcps,
+    skills, plugins, marketplaces: [], mcps, mcpNote,
     prompts: { global, project: projectPromptSurfaces(o.projectDir, ["AGENTS.md"]) },
     models: modelsForAppType(o.cc, APP_TYPES[app]),
     workflowsHarnesses: projectWorkflows(o.projectDir),
@@ -289,17 +452,22 @@ function scanPi(o) {
   // project .pi/skills + .agents/skills, and skills/ dirs of npm packages
   // (package.json `pi.skills`, default ./skills).
   const skillDirs = [
-    path.join(o.piDir, "skills"),
-    o.agentsSkillsDir ?? path.join(home(), ".agents", "skills"),
-    path.join(o.projectDir, ".pi", "skills"),
-    path.join(o.projectDir, ".agents", "skills"),
+    [path.join(o.piDir, "skills"), "user-global"],
+    [o.agentsSkillsDir ?? path.join(home(), ".agents", "skills"), "agents-global"],
+    [path.join(o.projectDir, ".pi", "skills"), "project"],
+    [path.join(o.projectDir, ".agents", "skills"), "project"],
   ];
+  // pi discovery rule: .agents/skills in cwd AND ancestor directories up to
+  // the git repo root (fs root when not in a repo)
+  for (const anc of ancestorAgentsSkillsDirs(o.projectDir)) {
+    skillDirs.push([anc, "project-ancestor"]);
+  }
   const nmDir = path.join(o.piDir, "npm", "node_modules");
   if (exists(nmDir)) {
     try {
       for (const e of fs.readdirSync(nmDir, { withFileTypes: true })) {
         if (e.isDirectory() && exists(path.join(nmDir, e.name, "skills"))) {
-          skillDirs.push(path.join(nmDir, e.name, "skills"));
+          skillDirs.push([path.join(nmDir, e.name, "skills"), "npm-package"]);
         }
       }
     } catch {}
@@ -328,7 +496,7 @@ function scanPi(o) {
     app, homeDir: o.piDir,
     detected: o.hostInfo.detected.filter((d) => /pi agent/i.test(d)),
     capabilities: hostCapabilities({ ...o.hostInfo, app: "pi" }),
-    skills, plugins, mcps,
+    skills, plugins, marketplaces: [], mcps,
     prompts: { global, project: projectPromptSurfaces(o.projectDir, ["AGENTS.md"]) },
     models: modelsForAppType(piAsCc, APP_TYPES[app]),
     workflowsHarnesses: projectWorkflows(o.projectDir),
@@ -340,8 +508,19 @@ function scanPi(o) {
  */
 function scanDsh(o) {
   const app = "dsh";
-  const skills = listSkills([path.join(o.dshHome, "skills")]);
-  const plugins = [];
+  const skills = listSkills([[path.join(o.dshHome, "skills"), "user-global"]]);
+  // everything-as-a-plugin: probe mode parses --dump-config into the plugin
+  // list (active/disabled per component). Static mode: [] + note. The dsh web
+  // UI is the FULL plugin truth (may show more than the dump).
+  let plugins = [];
+  let harnessNote = "dsh is everything-as-a-plugin; run `mawf inventory --verify` for the dump-config plugin list (web profile); the dsh web UI plugin panel is the full truth";
+  let dump = o.dumpConfig ?? "";
+  if (o.probe && !dump) dump = o.runCli("dsh --profile web --dump-config");
+  if (dump) {
+    plugins = parseDshPlugins(dump);
+    const active = plugins.filter((p) => p.status === "active").length;
+    harnessNote = `everything-as-a-plugin: dump-config lists ${plugins.length} components (${active} active / ${plugins.length - active} disabled); the dsh web UI plugin panel may show more`;
+  }
   // MCP report-only: dsh MCP servers are configured under the
   // `@deepseek-ai/dsh-mcp-client` component — top-level `mcp-client:` key in
   // settings.yaml (verified in dsh docs/config-catalog.md); patch layers manage it.
@@ -361,12 +540,12 @@ function scanDsh(o) {
     } catch {}
   }
   const global = isFile(path.join(o.dshHome, "AGENTS.md")) ? path.join(o.dshHome, "AGENTS.md") : null;
-  const dshAsCc = readDshAsCc({ dshHome: o.dshHome, ccSwitch: { modelPricing: o.cc?.modelPricing }, dumpConfig: o.dumpConfig });
+  const dshAsCc = readDshAsCc({ dshHome: o.dshHome, ccSwitch: { modelPricing: o.cc?.modelPricing }, dumpConfig: dump });
   return {
     app, homeDir: o.dshHome,
     detected: o.hostInfo.detected.filter((d) => /dsh|deepseek/i.test(d)),
     capabilities: hostCapabilities({ ...o.hostInfo, app: "dsh" }),
-    skills, plugins, mcps,
+    skills, plugins, marketplaces: [], mcps, harnessNote,
     prompts: { global, project: projectPromptSurfaces(o.projectDir, ["AGENTS.md"]) },
     models: modelsForAppType(dshAsCc, APP_TYPES[app]),
     workflowsHarnesses: projectWorkflows(o.projectDir),
@@ -440,7 +619,11 @@ export function renderDigest(report) {
     lines.push(`- home: ${h.homeDir}`);
     lines.push(`- skills (${h.skills.length}): ${nameList(h.skills.map((s) => s.name))}`);
     lines.push(`- plugins (${h.plugins.length}): ${nameList(h.plugins.map((p) => p.name))}`);
-    lines.push(`- mcp (${h.mcps.length}): ${nameList(h.mcps.map((m) => m.name))}`);
+    const mcpNames = (h.mcps || []).map((m) => `${m.name}${m.status === "connected" ? "✓" : m.status === "failed" ? "✗" : m.status === "pending-approval" ? "⏸" : m.status === "unsupported" ? "⚠" : m.status === "disabled" ? "⊘" : ""}`);
+    lines.push(`- mcp (${h.mcps.length}): ${nameList(mcpNames)}`);
+    if (h.marketplaces?.length) lines.push(`- marketplaces (${h.marketplaces.length}): ${nameList(h.marketplaces)}`);
+    if (h.mcpNote) lines.push(`- mcp note: ${h.mcpNote}`);
+    if (h.harnessNote) lines.push(`- harness: ${h.harnessNote}`);
     const models = (h.models || []).map((m) => {
       const tags = m.tags?.length ? ` [${m.tags.join(",")}]` : "";
       const price = m.price ? ` ($${m.price.input_per_m}/$${m.price.output_per_m} per M${m.price.estimated ? " est." : ""})` : "";

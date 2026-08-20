@@ -303,13 +303,22 @@ function capLine(caps) {
 }
 function cmdInventory(f, flags) {
   const project = flags.project ? path.resolve(flags.project) : process.cwd();
-  const report = scanInventory({ projectDir: project, dbPath: flags.db });
+  const report = scanInventory({ projectDir: project, dbPath: flags.db, probe: !!flags.verify });
   if (flags.json) { out(JSON.stringify(report, null, 2)); return; }
   const paths = writeInventoryArtifacts(project, report);
-  out(`cross-host inventory: ${report.hosts.length} host(s) — ${report.hosts.map((h) => h.app).join(", ") || "none"}`);
+  out(`cross-host inventory${flags.verify ? " (--verify: probed host CLIs for MCP status)" : ""}: ${report.hosts.length} host(s) — ${report.hosts.map((h) => h.app).join(", ") || "none"}`);
   for (const h of report.hosts) {
     if (h.error) out(`  ${h.app}: scan error — ${h.error} (skipped gracefully)`);
-    else out(`  ${h.app}: ${h.skills.length} skills, ${h.plugins.length} plugins, ${h.mcps.length} mcp, ${h.models.length} models; prompts global ${h.prompts?.global ? "✓" : "✗"} / project ${(h.prompts?.project || []).join("+") || "✗"}`);
+    else {
+      const mcpStatus = h.mcps.length ? `; mcp ${h.mcps.filter((m) => m.status === "connected").length}✓/${h.mcps.filter((m) => m.status === "failed").length}✗/${h.mcps.filter((m) => m.status === "pending-approval").length}⏸/${h.mcps.filter((m) => m.status === "unsupported").length}⚠` : "";
+      out(`  ${h.app}: ${h.skills.length} skills, ${h.plugins.length} plugins${h.marketplaces?.length ? `, ${h.marketplaces.length} marketplaces` : ""}, ${h.mcps.length} mcp${mcpStatus}, ${h.models.length} models; prompts global ${h.prompts?.global ? "✓" : "✗"} / project ${(h.prompts?.project || []).join("+") || "✗"}`);
+      if (flags.verify) {
+        const cliOnly = h.mcps.filter((m) => m.source === "claude-cli" || m.source === "codex-cli");
+        if (cliOnly.length) out(`    verify: CLI-only servers added: ${cliOnly.map((m) => m.name).join(", ")}`);
+        if (h.mcpNote) out(`    verify: ${h.mcpNote}`);
+        if (h.harnessNote) out(`    verify: ${h.harnessNote}`);
+      }
+    }
   }
   out(`  wrote ${paths.jsonPath} + ${paths.digestPath}`);
 }

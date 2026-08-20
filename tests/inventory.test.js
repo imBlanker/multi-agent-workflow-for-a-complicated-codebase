@@ -73,8 +73,9 @@ function fullFixture() {
   w(path.join(dshHome, "skills", "dsh-skill", "SKILL.md"), "---\ndescription: dsh skill\n---\nx\n");
   w(path.join(dshHome, "AGENTS.md"), "# dsh global");
 
-  // project: AGENTS.md + .maw workflows + project .mcp.json
+  // project: AGENTS.md + .maw workflows + project .mcp.json + project .claude/skills
   w(path.join(projectDir, "AGENTS.md"), "# proj");
+  w(path.join(projectDir, ".claude", "skills", "proj-claude-skill", "SKILL.md"), "---\ndescription: project-level claude skill\n---\nx\n");
   w(path.join(projectDir, ".maw", "workflow.json"), JSON.stringify({ nodes: [] }));
   w(path.join(projectDir, ".maw", "agents", "orchestrator.md"), "# orch");
   w(path.join(projectDir, ".mcp.json"), JSON.stringify({ mcpServers: { "proj-mcp": {} } }));
@@ -98,7 +99,9 @@ test("scanInventory: full 4-host fixture — all hosts present with expected sur
 
   const claude = by["claude-code"];
   assert.ok(!claude.error, claude.error);
-  assert.deepEqual(claude.skills.map((s) => s.name).sort(), ["grilling", "handoff"]);
+  assert.deepEqual(claude.skills.map((s) => s.name).sort(), ["grilling", "handoff", "proj-claude-skill"]);
+  assert.deepEqual(claude.skills.map((s) => s.origin).sort(), ["project", "user-global", "user-global"]);
+  assert.ok(claude.marketplaces.includes("openai-codex"));
   assert.equal(claude.skills[0].description, "Grill the user relentlessly");
   assert.ok(claude.plugins.some((p) => p.name === "codex-plugin-cc" && p.source === "installed"));
   assert.equal(claude.plugins.length, 2); // installed_plugins.json keys only; marketplaces are NOT plugins
@@ -125,6 +128,8 @@ test("scanInventory: full 4-host fixture — all hosts present with expected sur
   // two symlink names → ONE real skill entry (realPath dedupe) + global
   // ~/.agents/skills + npm package skills all discovered
   assert.deepEqual(pi.skills.map((s) => s.name).sort(), ["alias-a", "caveman", "mcp-scripting"]);
+  const piOrigins = new Set(pi.skills.map((s) => s.origin));
+  assert.ok(piOrigins.has("user-global") && piOrigins.has("agents-global") && piOrigins.has("npm-package"), [...piOrigins]);
   assert.ok(pi.plugins.some((p) => p.name === "some-pkg" && p.source === "npm"));
   assert.ok(pi.plugins.some((p) => p.name === "rtk.ts" && p.source === "extension"));
   assert.ok(pi.mcps.some((m) => m.name === "exa" && m.source === "pi-mcp.json"));
@@ -137,6 +142,46 @@ test("scanInventory: full 4-host fixture — all hosts present with expected sur
   assert.ok(dsh.mcps.some((m) => m.name === "dsh-layer-a" && m.source === "dsh-mcp-client"));
   assert.ok(dsh.models.some((m) => m.id === "glm-4.5-air"));
   assert.ok(dsh.prompts.global.endsWith("AGENTS.md"));
+  assert.ok(String(dsh.harnessNote).includes("dsh web UI"));
+});
+
+test("scanInventory probe (verify mode): CLI statuses attached + CLI-only servers added", () => {
+  const fx = fullFixture();
+  const runCli = (cmd) => {
+    if (cmd === "claude mcp list") {
+      return "zai-cn-web-search: https://x (HTTP) - ✔ Connected\nclaude-flow: npx x - ✘ Failed to connect — boom\nghost-server: npx y - ✔ Connected\n";
+    }
+    if (cmd === "codex mcp list --json") {
+      return JSON.stringify([
+        { name: "context7", enabled: true, auth_status: "unsupported" },
+        { name: "cli-only-server", enabled: true, auth_status: "ok" },
+      ]);
+    }
+    if (cmd === "dsh --profile web --dump-config") {
+      return "# == @deepseek-ai/dsh-base\n- id: skill\n  name: '@deepseek-ai/dsh-skill'\n# == @deepseek-ai/dsh-base, patched by @deepseek-ai/dsh-web-app\n- id: skill-filesystem\n  name: '@deepseek-ai/dsh-skill-filesystem'\n  disabled: true\n# == @deepseek-ai/dsh-base\n- id: ui-timer\n  name: '@deepseek-ai/cordis-plugin-timer'\n";
+    }
+    return "";
+  };
+  const r = scanInventory({
+    claudeDir: fx.claudeDir, codexDir: fx.codexDir, piDir: fx.piDir, dshHome: fx.dshHome,
+    claudeJson: fx.claudeJson, projectDir: fx.projectDir, agentsSkillsDir: fx.agentsSkillsDir,
+    dbPath: "/nonexistent/ccswitch.db", probe: true, runCli,
+  });
+  const claude = r.hosts.find((h) => h.app === "claude-code");
+  assert.equal(claude.mcps.find((m) => m.name === "zai-cn-web-search").status, "connected");
+  assert.equal(claude.mcps.find((m) => m.name === "claude-flow").status, "failed");
+  assert.ok(claude.mcps.some((m) => m.name === "ghost-server" && m.source === "claude-cli" && m.status === "connected"));
+  const codex = r.hosts.find((h) => h.app === "codex");
+  assert.equal(codex.mcps.find((m) => m.name === "context7").status, "unsupported");
+  assert.ok(codex.mcps.some((m) => m.name === "cli-only-server" && m.source === "codex-cli"));
+  assert.ok(String(codex.mcpNote).includes("codex_apps"));
+  const dsh = r.hosts.find((h) => h.app === "dsh");
+  assert.equal(dsh.plugins.length, 3); // everything-as-a-plugin: dump-config parsed
+  const skillPlugin = dsh.plugins.find((p) => p.id === "skill");
+  assert.equal(skillPlugin.name, "@deepseek-ai/dsh-skill");
+  assert.equal(skillPlugin.status, "active");
+  assert.equal(dsh.plugins.find((p) => p.id === "skill-filesystem").status, "disabled");
+  assert.ok(String(dsh.harnessNote).includes("everything-as-a-plugin"));
 });
 
 test("scanInventory: missing dsh → 3 hosts, no error exit, others unaffected", () => {
@@ -177,6 +222,7 @@ test("renderDigest: structure + hard cap 200 lines with truncation marker", () =
   assert.ok(/\(\+\d+ more — see \.maw\/inventory\.json\)/.test(digest), "truncation marker present");
   assert.ok(digest.includes("## claude-code — caps:"));
   assert.ok(digest.includes("- mcp ("));
+  assert.ok(digest.includes("- marketplaces ("));
 });
 
 test("renderDigest: per-host sections with capabilities/skills/mcp/models", () => {
@@ -205,6 +251,6 @@ test("scanInventory: cc-switch absent → hosts still scanned, models empty", ()
   fs.rmSync(path.join(fx.claudeDir, "skills"), { recursive: true, force: true }); // claude dir still exists
   const r = scanOf(fx);
   const claude = r.hosts.find((h) => h.app === "claude-code");
-  assert.deepEqual(claude.skills, []);
+  assert.deepEqual(claude.skills.filter((s) => s.origin === "user-global"), []); // user dir emptied
   assert.deepEqual(claude.models, []); // no cc-switch db in fixture (dbPath nonexistent)
 });
