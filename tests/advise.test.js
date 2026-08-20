@@ -28,7 +28,12 @@ function fixtureInventory() {
     hosts: [
       host("pi", {
         skills: [{ name: "research", path: "/p", realPath: "/p", description: "deep 调研 and multi-repo analysis" }],
-        mcps: [{ name: "exa", source: "user" }],
+        mcps: [
+          { name: "exa", source: "user", status: "connected" },
+          { name: "dead-mcp", source: "user", status: "failed" },
+          { name: "pend-mcp", source: "user", status: "pending-approval" },
+        ],
+        plugins: [{ name: "live-plugin", source: "npm", status: "active" }, { name: "dead-plugin", source: "npm", status: "disabled" }],
         models: [
           { id: "glm-4.6", provider: "p", source: "pi", isCurrent: true, family: "agentic", tags: ["agentic", "reasoning"], price: { input_per_m: 1, output_per_m: 4, source: "pi", estimated: true } },
         ],
@@ -72,6 +77,11 @@ test("adviseTask: research task — pi scores via skill/mcp match, JSON shape va
   const pi = r.scores.find((s) => s.host === "pi");
   assert.ok(pi.breakdown.skillMatch > 0, "pi skill match scored");
   assert.ok(pi.matched.skills.includes("research") || pi.matched.mcps.includes("exa"));
+  // unusable surfaces never match: failed/pending MCPs, disabled plugins
+  assert.ok(!pi.matched.mcps.includes("dead-mcp"));
+  assert.ok(!pi.matched.mcps.includes("pend-mcp"));
+  assert.ok(!pi.matched.plugins.includes("dead-plugin"));
+  assert.equal(pi.matched.plugins.includes("live-plugin"), false); // name won't match task tokens; just no crash
   assert.ok(Array.isArray(r.tokens) && r.tokens.length > 0);
   assert.ok(r.tokens.some((t) => t === "调研" || t.length === 2)); // CJK bigram present
   for (const s of r.scores) {

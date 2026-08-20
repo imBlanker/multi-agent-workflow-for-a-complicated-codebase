@@ -132,10 +132,12 @@ function scoreSkillMatch(tokens, host) {
   const reasons = [];
   const matched = { skills: [], mcps: [], plugins: [] };
   let raw = 0;
+  const usableMcp = (m) => !m.status || m.status === "connected";
+  const usablePlugin = (p) => !p.status || p.status === "active";
   const entries = [
     ...(host.skills || []).map((s) => ({ kind: "skills", name: s.name, desc: s.description || "" })),
-    ...(host.plugins || []).map((p) => ({ kind: "plugins", name: p.name, desc: "" })),
-    ...(host.mcps || []).map((m) => ({ kind: "mcps", name: m.name, desc: "" })),
+    ...(host.plugins || []).filter(usablePlugin).map((p) => ({ kind: "plugins", name: p.name, desc: "" })),
+    ...(host.mcps || []).filter(usableMcp).map((m) => ({ kind: "mcps", name: m.name, desc: "" })),
   ];
   const hits = [];
   for (const e of entries) {
