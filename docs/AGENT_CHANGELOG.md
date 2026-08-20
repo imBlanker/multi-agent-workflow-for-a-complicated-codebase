@@ -6,6 +6,21 @@ coding agents operating this repo). Human narrative: [`../CHANGELOG.md`](../CHAN
 
 Package: `multi-agents-workflow` · CLI: `mawf` · Node ≥ 20.17 · zero runtime deps.
 
+## 0.5.1 (2026-08-20)
+
+```yaml
+version: 0.5.1
+semver_impact: patch
+fixed:
+  - "doctor: dsh profile list no longer reports node_modules (pnpm/dsh symlink farm at ~/.dsh/profiles/node_modules) as a profile; new listDshProfiles() in src/dshprovider.js (real dirs only, skips node_modules/dot-entries, missing profiles/ -> []); regression test added"
+verified:
+  - "compat with DeepSeek Harness (dsh) 0.1.0-rc.8: agent-default-model dump row byte-identical to rc.6; settings.yaml llm-pi-ai.providers schema unchanged; inventory --verify clean over the enlarged plugin table (no dupes); advise scoring intact; no dsh session-store reads (rc.8 SQLite format break = non-issue); wording compliant with rc.8 BRAND_GUIDELINES (descriptive use permitted)"
+upgrade:
+  npm: "npm i -g multi-agents-workflow@0.5.1"
+  checkout: "mawf upgrade"
+smoke: "mawf doctor && mawf --version && mawf inventory --verify"
+```
+
 ## 0.5.0 (2026-08-20)
 
 ```yaml

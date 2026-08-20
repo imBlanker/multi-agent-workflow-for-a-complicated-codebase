@@ -7,7 +7,7 @@ import { readCcSwitch, findDb, readRouting, routingPolicy } from "./ccswitch.js"
 import { detectHost, hostCapabilities } from "./host.js";
 import { status as codexStatus } from "./codex.js";
 import { detectTrellis } from "./trellis.js";
-import { readDshConfig, readDshAsCc, readCredentialKeys, dshDefaultModel, dshCostRateNote, readCcPricingJson } from "./dshprovider.js";
+import { readDshConfig, readDshAsCc, readCredentialKeys, dshDefaultModel, dshCostRateNote, readCcPricingJson, listDshProfiles } from "./dshprovider.js";
 import { detectInstallMode } from "./upgrade.js";
 import path from "node:path";
 import os from "node:os";
@@ -108,7 +108,8 @@ export function doctor() {
     const cc = readDshAsCc({ dshHome });
     const provs = cc?.allProviders ?? [];
     const modelIds = provs.flatMap((p) => p.settings_config?._dshModels ?? []);
-    checks.push({ name: "DeepSeek Harness (dsh) config", status: "ok", detail: `${dshHome}${version !== "?" ? `; dsh ${version}` : ""}; profiles: ${(fs.readdirSync(path.join(dshHome, "profiles")).join(", ") || "none")}` });
+    const profiles = listDshProfiles(dshHome);
+    checks.push({ name: "DeepSeek Harness (dsh) config", status: "ok", detail: `${dshHome}${version !== "?" ? `; dsh ${version}` : ""}; profiles: ${profiles.join(", ") || "none"}` });
     checks.push({
       name: "dsh providers (settings.yaml)",
       status: provs.length ? "ok" : "warn",

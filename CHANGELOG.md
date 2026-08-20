@@ -4,6 +4,16 @@ All notable changes to **multi-agents-workflow (MAW)** are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com/); versions follow
 [SemVer](https://semver.org/). Agent-oriented summary: [`docs/AGENT_CHANGELOG.md`](docs/AGENT_CHANGELOG.md).
 
+## [0.5.1] - 2026-08-20
+
+### Fixed
+
+- **doctor: dsh profile list no longer misreports `node_modules` as a profile.** The pnpm/dsh symlink farm that can appear under `~/.dsh/profiles/node_modules` is now excluded by a dedicated `listDshProfiles()` reader (`src/dshprovider.js`): real profile directories only — `node_modules` and dot-entries skipped, missing `profiles/` degrades to `[]`. Regression-tested.
+
+### Verified
+
+- Compatibility with **DeepSeek Harness (dsh) 0.1.0-rc.8**: `agent-default-model` dump row byte-identical to rc.6 (provider/model extraction intact); `settings.yaml` `llm-pi-ai.providers` schema unchanged; `mawf inventory --verify` clean over the enlarged everything-as-a-plugin table (no duplicates); `mawf advise` scoring intact; MAW never reads dsh's session store, so rc.8's incompatible SQLite format is a non-issue; wording complies with rc.8 brand guidelines (descriptive "DeepSeek Harness (dsh)" usage is explicitly permitted).
+
 ## [0.5.0] - 2026-08-20
 
 ### Added

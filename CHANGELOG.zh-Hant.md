@@ -4,6 +4,16 @@
 格式：[Keep a Changelog](https://keepachangelog.com/)；版本遵循
 [SemVer](https://semver.org/)。
 
+## [0.5.1] - 2026-08-20
+
+### 修復
+
+- **doctor：dsh profile 列表不再把 `node_modules` 誤報為 profile。** 新增專用讀取器 `listDshProfiles()`（`src/dshprovider.js`）：僅枚舉真實 profile 目錄——跳過 `node_modules` 與點前綴目錄，`profiles/` 缺失時安全降級為 `[]`。附回歸測試。
+
+### 驗證
+
+- 與 **DeepSeek Harness (dsh) 0.1.0-rc.8** 相容性驗證通過：`agent-default-model` dump 行與 rc.6 逐位元組一致（provider/model 提取不受影響）；`settings.yaml` `llm-pi-ai.providers` 結構不變；`mawf inventory --verify` 在擴容後的 everything-as-a-plugin 表上無重複、無錯報；`mawf advise` 評分正常；MAW 從不讀取 dsh 會話儲存，rc.8 的 SQLite 格式不相容對 MAW 無影響；措辭符合 rc.8 品牌規範（描述性使用 "DeepSeek Harness (dsh)" 被明確允許）。
+
 ## [0.5.0] - 2026-08-20
 
 ### 新增

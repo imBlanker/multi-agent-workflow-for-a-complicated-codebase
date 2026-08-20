@@ -78,6 +78,29 @@ export function readCcPricingJson(pricingPath) {
 }
 
 /**
+ * Enumerate dsh profile names under $DSH_HOME/profiles — directories only,
+ * skipping `node_modules` (pnpm/dsh symlink farm for global deps, NOT a
+ * profile) and dot-entries. Missing dir → []. Never throws.
+ * @param {string} [dshHome]
+ * @returns {string[]}
+ */
+export function listDshProfiles(dshHome) {
+  const dir = dshHome || findDshHome();
+  if (!dir) return [];
+  const profilesDir = path.join(dir, "profiles");
+  if (!exists(profilesDir)) return [];
+  try {
+    return fs
+      .readdirSync(profilesDir, { withFileTypes: true })
+      .filter((e) => e.isDirectory() && e.name !== "node_modules" && !e.name.startsWith("."))
+      .map((e) => e.name)
+      .sort();
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Credential KEY NAMES present in $DSH_HOME/.credentials.yaml — names only,
  * values are never read or copied (they are write-only secrets).
  * @param {string} [dshHome]

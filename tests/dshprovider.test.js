@@ -13,6 +13,7 @@ import {
   dshDefaultModel,
   dshCostRateNote,
   readDshAsCc,
+  listDshProfiles,
 } from "../src/dshprovider.js";
 import { candidatesForAppType } from "../src/modelcap.js";
 
@@ -173,4 +174,18 @@ test("dshCostRateNote mentions concurrency-only and the pricing source", () => {
   const note = dshCostRateNote();
   assert.match(note, /concurrency-only/);
   assert.match(note, /model-pricing\.json/);
+});
+
+test("listDshProfiles returns real profile dirs only (skips node_modules, dot-dirs, files; missing dir → [])", () => {
+  const dir = mkDshHome();
+  // real profiles
+  fs.mkdirSync(path.join(dir, "profiles", "web"), { recursive: true });
+  fs.mkdirSync(path.join(dir, "profiles", "headless"));
+  // decoys: pnpm/dsh symlink farm + hidden dir + plain file (regression: doctor reported "node_modules" as a profile)
+  fs.mkdirSync(path.join(dir, "profiles", "node_modules"));
+  fs.mkdirSync(path.join(dir, "profiles", ".cache"));
+  fs.writeFileSync(path.join(dir, "profiles", "README.md"), "x");
+  assert.deepEqual(listDshProfiles(dir), ["headless", "web"]);
+  // missing profiles dir / missing home
+  assert.deepEqual(listDshProfiles(path.join(dir, "nonexistent")), []);
 });
