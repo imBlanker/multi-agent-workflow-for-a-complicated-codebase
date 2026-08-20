@@ -159,7 +159,8 @@ function modelsForAppType(cc, appType) {
  * @param {string} [opts.codexDir]    default ~/.codex
  * @param {string} [opts.piDir]       default $PI_AGENT_DIR | ~/.pi/agent
  * @param {string} [opts.dshHome]     default $DSH_HOME | ~/.dsh
- * @param {string} [opts.claudeJson]  default ~/.claude.json (mcpServers)
+ * @param {string} [opts.claudeJson]  default ~/.claude.json (mcpServers + projects)
+ * @param {string} [opts.agentsSkillsDir] default ~/.agents/skills (pi global standard skills dir)
  * @param {string} [opts.projectDir]  default process.cwd()
  * @param {string} [opts.dbPath]      cc-switch db override
  * @param {string} [opts.dshDumpConfig] dsh --dump-config output override (default "" → skip the real `dsh` exec; hermetic)
@@ -183,7 +184,7 @@ export function scanInventory(opts = {}) {
 
   if (exists(claudeDir)) push(() => scanClaude({ claudeDir, claudeJson, projectDir, cc, hostInfo }));
   if (exists(codexDir)) push(() => scanCodex({ codexDir, projectDir, cc, hostInfo }));
-  if (exists(piDir)) push(() => scanPi({ piDir, projectDir, cc, hostInfo }));
+  if (exists(piDir)) push(() => scanPi({ piDir, projectDir, cc, hostInfo, agentsSkillsDir: opts.agentsSkillsDir }));
   if (exists(path.join(dshHome, "settings.yaml")) || exists(path.join(dshHome, "profiles"))) {
     push(() => scanDsh({ dshHome, projectDir, cc, hostInfo, dumpConfig: opts.dshDumpConfig ?? "" }));
   }
@@ -201,15 +202,24 @@ function scanClaude(o) {
   const installed = readJson(path.join(o.claudeDir, "plugins", "installed_plugins.json"), null);
   const instMap = installed?.plugins && typeof installed.plugins === "object" ? installed.plugins : null;
   if (instMap) for (const k of Object.keys(instMap)) plugins.push({ name: k, source: "installed" });
-  const mkts = path.join(o.claudeDir, "plugins", "marketplaces");
-  if (exists(mkts)) {
-    try {
-      for (const e of fs.readdirSync(mkts, { withFileTypes: true })) {
-        if (e.isDirectory() && !plugins.some((p) => p.name === e.name)) plugins.push({ name: e.name, source: "marketplace" });
-      }
-    } catch {}
+  // NOTE: marketplace dirs under plugins/marketplaces/ are NOT plugins; enable
+  // state lives with `claude plugin list` (all 3 were disabled on the verify
+  // machine) — plugin-provided skills are intentionally NOT counted.
+  const mcps = [...mcpFromJson(o.claudeJson, "user")];
+  // project-scoped servers recorded under ~/.claude.json projects[*].mcpServers
+  // (verified vs `claude mcp list`: global + all project entries are listed)
+  const cj = readJson(o.claudeJson, null);
+  const projs = cj?.projects && typeof cj.projects === "object" ? cj.projects : {};
+  for (const [key, p] of Object.entries(projs)) {
+    const ms = p?.mcpServers && typeof p.mcpServers === "object" ? p.mcpServers : null;
+    if (!ms) continue;
+    for (const name of Object.keys(ms)) {
+      if (!mcps.some((m) => m.name === name)) mcps.push({ name, source: `claude-project:${key}` });
+    }
   }
-  const mcps = [...mcpFromJson(o.claudeJson, "user"), ...mcpFromJson(path.join(o.projectDir, ".mcp.json"), "project")];
+  for (const e of mcpFromJson(path.join(o.projectDir, ".mcp.json"), "project")) {
+    if (!mcps.some((m) => m.name === e.name)) mcps.push(e);
+  }
   const global = isFile(path.join(o.claudeDir, "CLAUDE.md")) ? path.join(o.claudeDir, "CLAUDE.md") : null;
   return {
     app, homeDir: o.claudeDir,
@@ -227,17 +237,22 @@ function scanClaude(o) {
  */
 function scanCodex(o) {
   const app = "codex";
-  const allSkills = listSkills([path.join(o.codexDir, "skills")]);
-  const skills = allSkills.filter((s) => !s.name.startsWith("codex-"));
-  const plugins = allSkills.filter((s) => s.name.startsWith("codex-")).map((s) => ({ name: s.name, source: "codex-skill" }));
+  const tomlFile = path.join(o.codexDir, "config.toml");
+  const toml = isFile(tomlFile) ? readText(tomlFile) : "";
+  const skills = listSkills([path.join(o.codexDir, "skills")]);
+  // plugins: [plugins."name@marketplace"] sections in config.toml (verified
+  // vs `codex plugin list` — installed+enabled plugins appear there)
+  const plugins = [];
+  for (const m of toml.matchAll(/^\[plugins\."([^"]+)"\]\s*$/gm)) {
+    plugins.push({ name: m[1], source: "codex-config.toml" });
+  }
   // MCP: codex keeps servers in config.toml [mcp_servers.<name>] sections;
   // mcp.json is a tolerated fallback shape.
   const mcps = [];
-  const toml = path.join(o.codexDir, "config.toml");
-  if (isFile(toml)) {
+  if (isFile(tomlFile)) {
     try {
       const names = [];
-      for (const m of readText(toml).matchAll(/^\[mcp_servers\.(?:"([^"]+)"|([A-Za-z0-9_-]+))\]\s*$/gm)) {
+      for (const m of toml.matchAll(/^\[mcp_servers\.(?:"([^"]+)"|([A-Za-z0-9_-]+))\]\s*$/gm)) {
         names.push(m[1] ?? m[2]);
       }
       // drop TOML sub-sections (e.g. [mcp_servers.<srv>.env]) — a dotted
@@ -269,7 +284,27 @@ function scanCodex(o) {
  */
 function scanPi(o) {
   const app = "pi";
-  const skills = listSkills([path.join(o.piDir, "skills"), path.join(o.projectDir, ".agents", "skills")]);
+  // Skill discovery dirs per pi docs (verified against this machine's live
+  // session): ~/.pi/agent/skills, ~/.agents/skills (global standard dir),
+  // project .pi/skills + .agents/skills, and skills/ dirs of npm packages
+  // (package.json `pi.skills`, default ./skills).
+  const skillDirs = [
+    path.join(o.piDir, "skills"),
+    o.agentsSkillsDir ?? path.join(home(), ".agents", "skills"),
+    path.join(o.projectDir, ".pi", "skills"),
+    path.join(o.projectDir, ".agents", "skills"),
+  ];
+  const nmDir = path.join(o.piDir, "npm", "node_modules");
+  if (exists(nmDir)) {
+    try {
+      for (const e of fs.readdirSync(nmDir, { withFileTypes: true })) {
+        if (e.isDirectory() && exists(path.join(nmDir, e.name, "skills"))) {
+          skillDirs.push(path.join(nmDir, e.name, "skills"));
+        }
+      }
+    } catch {}
+  }
+  const skills = listSkills(skillDirs);
   const plugins = [];
   // pi's npm surface is ONE workspace-style package.json whose dependencies
   // are the installed extensions/plugins (verified on a real install).
@@ -284,8 +319,9 @@ function scanPi(o) {
       }
     } catch {}
   }
-  // MCP best-effort: npm packages exposing MCP adapters (name contains "mcp")
-  const mcps = plugins.filter((p) => /mcp/i.test(p.name)).map((p) => ({ name: p.name, source: "pi-mcp-adapter" }));
+  // MCP: pi's real server list lives in ~/.pi/agent/mcp.json (verified: exa,
+  // context7, searchcode, zai-mcp-server, web-search-prime, web-reader, zread)
+  const mcps = mcpFromJson(path.join(o.piDir, "mcp.json"), "pi-mcp.json");
   const global = isFile(path.join(o.piDir, "AGENTS.md")) ? path.join(o.piDir, "AGENTS.md") : null;
   const piAsCc = readPiAsCc({ piDir: o.piDir, ccSwitch: { modelPricing: o.cc?.modelPricing } });
   return {
@@ -306,12 +342,15 @@ function scanDsh(o) {
   const app = "dsh";
   const skills = listSkills([path.join(o.dshHome, "skills")]);
   const plugins = [];
-  // MCP report-only: settings.yaml mcp section if present (patch layers)
+  // MCP report-only: dsh MCP servers are configured under the
+  // `@deepseek-ai/dsh-mcp-client` component — top-level `mcp-client:` key in
+  // settings.yaml (verified in dsh docs/config-catalog.md); patch layers manage it.
   const mcps = [];
   try {
     const yaml = readText(path.join(o.dshHome, "settings.yaml"));
-    const parsed = parseMcpSection(yaml);
-    for (const name of parsed) mcps.push({ name, source: "dsh-patch-layer" });
+    for (const name of parseTopLevelSection(yaml, "mcp-client")) {
+      mcps.push({ name, source: "dsh-mcp-client" });
+    }
   } catch {}
   const presets = path.join(o.dshHome, "agent-presets");
   if (exists(presets)) {
@@ -335,13 +374,15 @@ function scanDsh(o) {
 }
 
 /**
- * Extract top-level mcp server names from a settings.yaml snippet
- * (report-only; dsh MCP is managed by patch layers).
+ * Extract sub-key names under a top-level YAML key (2-space indented
+ * `name:` lines). Report-only heuristics — never authoritative.
  * @param {string} yaml
+ * @param {string} key
  * @returns {string[]}
  */
-function parseMcpSection(yaml) {
-  const m = yaml.match(/^mcp:\s*\n([\s\S]*?)(?=^\S|\n\S|$)/m);
+function parseTopLevelSection(yaml, key) {
+  const re = new RegExp(`^${key}:\\s*\\n([\\s\\S]*?)(?=^\\S|\\n\\S|$)`, "m");
+  const m = yaml.match(re);
   if (!m) return [];
   const names = [];
   for (const line of m[1].split("\n")) {
