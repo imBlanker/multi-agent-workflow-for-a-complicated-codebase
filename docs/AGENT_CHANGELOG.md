@@ -6,6 +6,25 @@ coding agents operating this repo). Human narrative: [`../CHANGELOG.md`](../CHAN
 
 Package: `multi-agents-workflow` · CLI: `mawf` · Node ≥ 20.17 · zero runtime deps.
 
+## 0.5.0 (2026-08-20)
+
+```yaml
+version: 0.5.0
+semver_impact: minor
+added:
+  - "mawf inventory [--json] [--verify]: scans ALL installed supported hosts (claude-code/codex/pi/dsh) + project -> .mawf/inventory.json + digest; skills (origin-tagged, realPath-deduped), plugins, marketplaces, MCP (+live status via host CLIs), models (pi merges models-store.json catalogs); init/plan regenerate"
+  - "mawf advise [--task] [--difficulty] [--json] [--check-fresh]: deterministic scoring (cap30/skill30/model25/cost15 + stayBonus 8, margin>=10), usable surfaces only; switch -> .mawf/handoff/ brief + exact launch cmd (dsh: kill -9 $(lsof -ti tcp:3080) && dsh web); NEVER executes"
+  - "proactive injection: managed block (<=20 lines) in project AGENTS.md+CLAUDE.md; session start + daily first prompt (UTC+8) re-advising via ADVISE-DONE footer; handoff pickup <48h; keep/purge reversible"
+  - "e2e tests + docs/ROADMAP.md (10 lesson-backed next-version items)"
+changed:
+  - "BREAKING: .maw -> .mawf (project workspace, ~/.mawf global manifest, samples, docs); one-time auto-migration at CLI entry (pre-existing .mawf wins; never merges)"
+upgrade:
+  npm: "npm i -g multi-agents-workflow@0.5.0"
+  checkout: "mawf upgrade"
+migration: "first command after upgrade auto-renames legacy .maw dirs; see CHANGELOG 0.5.0"
+smoke: "mawf doctor && mawf --version && mawf inventory --verify"
+```
+
 ## 0.4.2 (2026-08-18)
 
 ```yaml
