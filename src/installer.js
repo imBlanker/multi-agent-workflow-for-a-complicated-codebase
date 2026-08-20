@@ -8,6 +8,7 @@ import path from "node:path";
 import os from "node:os";
 import { exists, isFile, ensureDir, writeJson, readJson, writeText } from "./util.js";
 import { detectHost, hostCapabilities } from "./host.js";
+import { removeManagedBlocks } from "./injectblock.js";
 
 const PKG_ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
 
@@ -87,7 +88,7 @@ function copyTree(src, dest) {
  * @returns {string}
  */
 function manifestDir() {
-  return path.join(os.homedir(), ".maw");
+  return path.join(os.homedir(), ".mawf");
 }
 
 /** @returns {{ version: string, installedAt: string, host: any, dirs: any }} */
@@ -111,7 +112,7 @@ export function install(opts = {}) {
   // captured BEFORE anything is written — drives the stale-asset cleanup below
   const oldManifest = readManifest();
   if (host.app === "unknown") {
-    warnings.push("No host agent software detected; files copied to ~/.maw only. Install Claude Code or Codex for full integration.");
+    warnings.push("No host agent software detected; files copied to ~/.mawf only. Install Claude Code or Codex for full integration.");
   }
   const copied = [];
   /** @type {string[]} every file written (manifest v2 — exact uninstall) */
@@ -138,7 +139,7 @@ export function install(opts = {}) {
     if (exists(hooksSrc)) { written.push(...copyTree(hooksSrc, hooksDest)); copied.push(`${hooksDest} (hooks)`); }
   }
 
-  // Also drop skills into ~/.maw/skills so non-Claude hosts can symlink.
+  // Also drop skills into ~/.mawf/skills so non-Claude hosts can symlink.
   const portableSkillsDest = path.join(manifestDir(), "skills");
   const skillsSrc = path.join(PKG_ROOT, "skills");
   if (exists(skillsSrc)) { written.push(...copyTree(skillsSrc, portableSkillsDest)); copied.push(`${portableSkillsDest} (portable skills)`); }
@@ -181,7 +182,7 @@ export function install(opts = {}) {
   // never the .system child) when dsh is the detected host OR a previous
   // manifest recorded a dsh install (0.4.2 union — see the pi block above).
   // dsh has no slash-command palette and no named agent-definition surface —
-  // role specs stay portable under .maw/agents/ (materialized by configgen)
+  // role specs stay portable under .mawf/agents/ (materialized by configgen)
   // and spawn prompt-driven.
   const prevDsh = oldManifest?.dirs?.dshDir || oldManifest?.host?.app === "dsh";
   const dshDir = host.app === "dsh" && host.dshHome
@@ -206,7 +207,7 @@ export function install(opts = {}) {
   const hostRoots = [
     oldDirs.claudeDir, oldDirs.codexDir, oldDirs.piDir, oldDirs.dshDir,
     claudeDir, path.join(os.homedir(), ".codex"), piDir, dshDir,
-    manifestDir(), // boundary for portable-skill paths (~/.maw/skills/...)
+    manifestDir(), // boundary for portable-skill paths (~/.mawf/skills/...)
   ].filter(Boolean);
   const removedStale = cleanupStale(oldManifest, written, hostRoots);
 
@@ -231,7 +232,7 @@ export function install(opts = {}) {
  * - recorded host subdirs are pruned when they become empty (never when
  *   non-empty).
  * - configs are KEPT by default; opts.purgeConfig deletes the project's
- *   `.maw/` and `.pi/agents/maw-*.md` (never trellis-*).
+ *   `.mawf/` and `.pi/agents/maw-*.md` (never trellis-*).
  * - trellis-owned files are never touched.
  * @param {{ project?: string, purgeConfig?: boolean }} [opts]
  * @returns {{ ok: boolean, removed: string[], purged: string[], kept: string[] }}
@@ -272,7 +273,7 @@ export function uninstall(opts = {}) {
   //    host home itself, never unrelated user dirs).
   pruneEmptyAncestors(removed.filter((p) => !p.startsWith("(dir)")), hostDirs, removed);
 
-  // 4) portable skills + the manifest itself; prune ~/.maw when empty
+  // 4) portable skills + the manifest itself; prune ~/.mawf when empty
   const portable = path.join(manifestDir(), "skills");
   if (exists(portable)) { fs.rmSync(portable, { recursive: true, force: true }); removed.push(portable); }
   const manifestPath = path.join(manifestDir(), "installed.json");
@@ -281,8 +282,15 @@ export function uninstall(opts = {}) {
 
   // 5) config retention: keep by default, purge on explicit request
   const project = opts.project ? path.resolve(opts.project) : process.cwd();
-  const mawDir = path.join(project, ".maw");
+  const mawDir = path.join(project, ".mawf");
   if (opts.purgeConfig) {
+    // managed advise blocks first (reads .mawf/managed-blocks.json BEFORE the
+    // .mawf removal below): strip spans; delete files mawf created that are now
+    // header-only. NEVER touches the installer manifest files[].
+    try {
+      const inj = removeManagedBlocks(project);
+      for (const f of inj.emptied) purged.push(f);
+    } catch {}
     if (exists(mawDir)) { fs.rmSync(mawDir, { recursive: true, force: true }); purged.push(mawDir); }
     const piAgents = path.join(project, ".pi", "agents");
     if (exists(piAgents)) {
@@ -322,4 +330,31 @@ function removeIfOurs(dir, removed = []) {
  */
 export function update(opts = {}) {
   return install(opts);
+}
+
+/**
+ * One-time migration: legacy `.maw` dirs -> `.mawf` (both the project
+ * workspace and the global manifest dir ~/.maw). Runs at every CLI entry;
+ * no-op once the new dir exists. Never merges: old dir is renamed away only
+ * when the new one is absent (a pre-existing .mawf always wins).
+ * @param {{ project?: string }} [opts]
+ * @returns {string[]} migration notes (empty = nothing to do)
+ */
+export function migrateLegacyMawDirs(opts = {}) {
+  const project = path.resolve(opts.project ?? process.cwd());
+  const pairs = [
+    [path.join(os.homedir(), ".maw"), path.join(os.homedir(), ".mawf")],
+    [path.join(project, ".maw"), path.join(project, ".mawf")],
+  ];
+  /** @type {string[]} */
+  const notes = [];
+  for (const [oldDir, newDir] of pairs) {
+    try {
+      if (exists(oldDir) && !exists(newDir)) {
+        fs.renameSync(oldDir, newDir);
+        notes.push(`${oldDir} -> ${newDir}`);
+      }
+    } catch { /* best-effort; command proceeds with the old dir if rename fails */ }
+  }
+  return notes;
 }

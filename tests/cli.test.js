@@ -43,15 +43,15 @@ test("mawf doctor runs and reports checks", () => {
   assert.match(out, /cc-switch database/);
 });
 
-test("mawf plan probes the project and writes .maw/ (price gate approved via --allow-pricey)", () => {
+test("mawf plan probes the project and writes .mawf/ (price gate approved via --allow-pricey)", () => {
   const out = run(["plan", "--project", project, "--risk", "high", "--parallel", "4", "--allow-pricey"]);
   assert.match(out, /plan:/);
   assert.match(out, /agents:/);
   assert.match(out, /price gate: .*approved via --allow-pricey/);
-  assert.ok(fs.existsSync(path.join(project, ".maw", "workflow.json")));
-  assert.ok(fs.existsSync(path.join(project, ".maw", "config.yaml")));
-  assert.ok(fs.existsSync(path.join(project, ".maw", "plan.md")));
-  assert.ok(fs.existsSync(path.join(project, ".maw", "agents", "reviewer.json")));
+  assert.ok(fs.existsSync(path.join(project, ".mawf", "workflow.json")));
+  assert.ok(fs.existsSync(path.join(project, ".mawf", "config.yaml")));
+  assert.ok(fs.existsSync(path.join(project, ".mawf", "plan.md")));
+  assert.ok(fs.existsSync(path.join(project, ".mawf", "agents", "reviewer.json")));
 });
 
 test("mawf plan PAUSES (exit 3) with a human report when an expensive model is assigned", () => {
@@ -69,8 +69,8 @@ test("mawf plan PAUSES (exit 3) with a human report when an expensive model is a
   assert.match(out + err, /PRICE GATE/);
   assert.match(out + err, /PAUSED by the price gate/);
   // files are still written so the human can inspect the assignments
-  assert.ok(fs.existsSync(path.join(proj2, ".maw", "agents", "orchestrator.json")));
-  const oj = JSON.parse(fs.readFileSync(path.join(proj2, ".maw", "agents", "orchestrator.json"), "utf8"));
+  assert.ok(fs.existsSync(path.join(proj2, ".mawf", "agents", "orchestrator.json")));
+  const oj = JSON.parse(fs.readFileSync(path.join(proj2, ".mawf", "agents", "orchestrator.json"), "utf8"));
   assert.equal(oj.price_gate.blocked, true);
   assert.equal(oj.price_gate.approved, false);
 });
@@ -100,14 +100,14 @@ test("approve-model records the human decision; acquire then allows the role", (
   // approve with --yes
   const appr = run(["approve-model", "--project", proj3, "--role", "implementer", "--yes"]);
   assert.match(appr, /approved: role "implementer"/);
-  const j = JSON.parse(fs.readFileSync(path.join(proj3, ".maw", "agents", "implementer.json"), "utf8"));
+  const j = JSON.parse(fs.readFileSync(path.join(proj3, ".mawf", "agents", "implementer.json"), "utf8"));
   assert.equal(j.price_gate.approved, true);
   // acquire now allows the role
   const ok = run(["acquire", "--project", proj3, "--role", "implementer", "--id", "x2", "--per-agent", "100", "--total", "100"]);
   assert.match(ok, /"allowed":true/);
   // approval is sticky across a re-plan
   run(["plan", "--project", proj3, "--risk", "high", "--parallel", "4", "--allow-pricey"]);
-  const j2 = JSON.parse(fs.readFileSync(path.join(proj3, ".maw", "agents", "implementer.json"), "utf8"));
+  const j2 = JSON.parse(fs.readFileSync(path.join(proj3, ".mawf", "agents", "implementer.json"), "utf8"));
   assert.equal(j2.price_gate.approved, true);
 });
 
@@ -127,9 +127,9 @@ test("mawf guard allows then denies at the per-agent limit", () => {
 
 test("mawf add-agent / remove-agent mutate the plan", () => {
   run(["add-agent", "--project", project, "--role", "static-analyzer", "--model", "claude-sonnet-5", "--app", "claude", "--task", "Static analysis pass.", "--allow-pricey"]);
-  assert.ok(fs.existsSync(path.join(project, ".maw", "agents", "static-analyzer.json")));
+  assert.ok(fs.existsSync(path.join(project, ".mawf", "agents", "static-analyzer.json")));
   run(["remove-agent", "--project", project, "--role", "static-analyzer"]);
-  assert.ok(!fs.existsSync(path.join(project, ".maw", "agents", "static-analyzer.json")));
+  assert.ok(!fs.existsSync(path.join(project, ".mawf", "agents", "static-analyzer.json")));
 });
 
 test("mawf run emits batched execution guidance", () => {
@@ -145,9 +145,9 @@ test("mawf graph reports nodes/edges and batches", () => {
   assert.ok(j.batches > 0);
 });
 
-test("mawf init --no-trellis -u <user> creates .maw + a cc-switch project when MAW_CC_PROJECT_SYNC=1 (never 默认)", () => {
+test("mawf init --no-trellis -u <user> creates .mawf + a cc-switch project when MAW_CC_PROJECT_SYNC=1 (never 默认)", () => {
   const out = run(["init", "--project", project, "-u", "alice", "--no-trellis", "--allow-pricey"], { env: { MAW_CC_PROJECT_SYNC: "1" } });
-  assert.match(out, /Initialized .maw\//);
+  assert.match(out, /Initialized .mawf\//);
   assert.match(out, /cc-switch project: created/);
   assert.match(out, /protected 默认 profiles: Claude Code 默认, Codex 默认|protected 默认 profiles: Codex 默认, Claude Code 默认/);
   // trellis skipped note present

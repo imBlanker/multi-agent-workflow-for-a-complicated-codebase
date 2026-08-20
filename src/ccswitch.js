@@ -286,7 +286,7 @@ export function perSessionRate(opts = {}) {
 // table) is incomplete and cc-switch-cli has not caught up, so MAW's project
 // functionality is TEMPORARILY DECOUPLED from cc-switch: MAW no longer reads or
 // writes profiles by default. MAW keeps full authority over project-level
-// agent/subagent model configs (`.maw/agents/*.json`) and only syncs provider
+// agent/subagent model configs (`.mawf/agents/*.json`) and only syncs provider
 // config info (the high-value settings in each provider's config.toml /
 // config.json, e.g. base_url / model / auth_mode / failover) READ-ONLY from
 // cc-switch. The profile code modules below are KEPT (with tests) but disabled
@@ -465,7 +465,7 @@ export function createProjectProfile(opts) {
   if (!projectSyncEnabled()) {
     return {
       ok: false, disabled: true, name,
-      error: "cc-switch project-profile sync is decoupled (temporarily disabled); MAW manages project-level agent/subagent model configs in .maw/ and only syncs provider configs read-only. Set MAW_CC_PROJECT_SYNC=1 to re-enable.",
+      error: "cc-switch project-profile sync is decoupled (temporarily disabled); MAW manages project-level agent/subagent model configs in .mawf/ and only syncs provider configs read-only. Set MAW_CC_PROJECT_SYNC=1 to re-enable.",
     };
   }
   if (/默认/.test(name)) return { ok: false, error: "refused: project name contains '默认' (protected)", name };

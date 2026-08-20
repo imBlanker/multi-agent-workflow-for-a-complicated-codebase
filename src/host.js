@@ -120,7 +120,7 @@ export function detectHost(opts = {}) {
   // A bare ~/.dsh (e.g. created by an npx boot) must NOT count. dsh has no
   // named project-level agent-definition surface (subagents spawn
   // prompt-driven via the subagent tool), so no agentsDirs entry here; MAW
-  // role specs stay portable under .maw/agents/. MAW_HOST=dsh forces app=dsh
+  // role specs stay portable under .mawf/agents/. MAW_HOST=dsh forces app=dsh
   // even when Claude Code/Codex/Pi are also installed (otherwise dsh joins
   // last in precedence — it only claims the host when nothing else did).
   const dshBinary = sh("command -v dsh 2>/dev/null || which dsh 2>/dev/null") || null;

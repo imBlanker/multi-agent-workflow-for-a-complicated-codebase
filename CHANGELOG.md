@@ -4,6 +4,23 @@ All notable changes to **multi-agents-workflow (MAW)** are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com/); versions follow
 [SemVer](https://semver.org/). Agent-oriented summary: [`docs/AGENT_CHANGELOG.md`](docs/AGENT_CHANGELOG.md).
 
+## [Unreleased]
+
+### Changed
+
+- **`.maw` → `.mawf`** everywhere (project workspace, global manifest dir
+  `~/.mawf`, sample dirs, docs). One-time auto-migration at every CLI entry:
+  legacy dirs are renamed when the new dir is absent (pre-existing `.mawf`
+  always wins; never merges). Uninstall/upgrade/manifest flows operate on
+  `.mawf` after migration.
+
+### Added
+
+- `docs/ROADMAP.md` — next-version improvement items, each carrying its
+  lesson provenance (uninstall --dry-run, plugin enable-state probing, dsh
+  full-truth surfaces, probe retries, catalog pricing cross-ref, captured-
+  output smoke, stacked-PR hygiene).
+
 ## [0.4.2] — 2026-08-18
 
 ### Fixed

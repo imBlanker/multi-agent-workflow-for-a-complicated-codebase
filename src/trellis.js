@@ -39,7 +39,7 @@ export function detectTrellis() {
 
 /**
  * The MAW-managed files we snapshot for conflict detection (everything under
- * `.maw/` except runtime/logs state).
+ * `.mawf/` except runtime/logs state).
  * @param {string} project
  * @returns {string[]}
  */
@@ -54,7 +54,7 @@ export function mawManagedFiles(project) {
       else out.push(p);
     }
   };
-  walk(path.join(project, ".maw"));
+  walk(path.join(project, ".mawf"));
   return out;
 }
 
@@ -134,7 +134,7 @@ export function trellisPlatformFlags(hostApp) {
 export function runTrellisInit(opts) {
   const project = opts.project;
   const user = opts.user;
-  const logDir = ensureDir(path.join(project, ".maw", "logs"));
+  const logDir = ensureDir(path.join(project, ".mawf", "logs"));
   const ts = new Date().toISOString().replace(/[:.]/g, "-");
   const logPath = path.join(logDir, `trellis-init-${ts}.log`);
   if (!user) return { ok: false, code: null, conflicts: [], logPath, via: "", stdout: "", stderr: "user name required (-u <name>)" };

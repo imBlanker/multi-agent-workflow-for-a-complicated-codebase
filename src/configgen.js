@@ -1,13 +1,13 @@
 // @ts-check
 // Generate per-agent / per-role, independently-editable config files from a
-// plan + cc-switch data. Output layout under `.maw/`:
-//   .maw/workflow.json          the full plan (machine-readable)
-//   .maw/config.yaml           global knobs: cost limits, concurrency, pricing
-//   .maw/plan.md               human-readable execution guide
-//   .maw/agents/<role>.md       agent definition (portable; works for Claude Code
+// plan + cc-switch data. Output layout under `.mawf/`:
+//   .mawf/workflow.json          the full plan (machine-readable)
+//   .mawf/config.yaml           global knobs: cost limits, concurrency, pricing
+//   .mawf/plan.md               human-readable execution guide
+//   .mawf/agents/<role>.md       agent definition (portable; works for Claude Code
 //                               subagents and as a spec for Codex/other tools)
-//   .maw/agents/<role>.json     machine config: model, appType, cost limit, tools
-//   .maw/graph.json             the workflow graph (nodes/edges)
+//   .mawf/agents/<role>.json     machine config: model, appType, cost limit, tools
+//   .mawf/graph.json             the workflow graph (nodes/edges)
 //
 // Nothing is hardcoded: agents/roles are derived from the plan, and the user
 // can add/remove/edit any file. `mawf add-agent`/`mawf remove-agent` mutate the
@@ -22,11 +22,11 @@ import { graphFromPlan, WorkflowGraph } from "./graph.js";
  * @param {string} projectRoot
  * @param {import("./planner.js").Plan} plan
  * @param {{ modelPricing?: Record<string, any>, currentProviders?: Record<string, any> }} ccSwitch
- * @param {{ outDir?: string }} [opts] override output dir (default <projectRoot>/.maw)
+ * @param {{ outDir?: string }} [opts] override output dir (default <projectRoot>/.mawf)
  * @returns {{ dir: string, files: string[], warnings: string[] }}
  */
 export function generateConfigs(projectRoot, plan, ccSwitch = {}, opts = {}) {
-  const maw = opts.outDir ? path.resolve(opts.outDir) : path.join(projectRoot, ".maw");
+  const maw = opts.outDir ? path.resolve(opts.outDir) : path.join(projectRoot, ".mawf");
   const agentsDir = path.join(maw, "agents");
   const files = [];
   const warnings = [];
@@ -116,7 +116,7 @@ export function generateConfigs(projectRoot, plan, ccSwitch = {}, opts = {}) {
     }
   }
 
-  // .maw/runtime/ dir for concurrency state
+  // .mawf/runtime/ dir for concurrency state
   files.push(writeText(path.join(maw, "runtime", ".keep"), "# concurrency + cost state lives here (gitignored)\n"));
 
   // prune stale agent files for roles that are no longer in the plan
@@ -163,7 +163,7 @@ This agent's model is expensive and its assignment is **paused**: the work will 
 released until a human acts. Thresholds: Input > $${gate.thresholdIn}/1M Tokens OR Output > $${gate.thresholdOut}/1M Tokens.
 
 - **Model**: \`${a.model}\` — ${gate.reason}${gate.estimated ? " (estimated price)" : ""}
-- **Continue**: (a) edit this file's machine config (\`.maw/agents/${slug(a.role)}.json\`) to use a cheaper
+- **Continue**: (a) edit this file's machine config (\`.mawf/agents/${slug(a.role)}.json\`) to use a cheaper
   model, then re-run \`mawf plan\`; or (b) explicitly approve: \`mawf approve-model --role ${a.role} --yes\`.
 `
     : "";
@@ -208,7 +208,7 @@ or use the slash command \`/codex:review\` (review-only). For adversarial review
 - Pass the task verbatim (see the Task section above) and require it to return a compressed summary + file diffs.
 - Cost control for pi is **concurrency-only**: pi is not routed via the cc-switch proxy, so real-spend is not measured. Wrap spawns with \`mawf acquire --role ${a.role}\` / \`mawf release --role ${a.role}\` to enforce concurrency.` : (plan.hostApp === "dsh" || a.agent === "dsh") ? `This agent runs via **dsh's prompt-driven subagent tool**. Spawn it from the orchestrator session (\`dsh web\`, or \`dsh --profile headless "<task>"\` for one-shot runs) — dsh has no named agent-definition files, so the portable spec IS the payload:
 
-- Point the spawn at \`.maw/agents/${slug(a.role)}.md\`: pass the Task section verbatim plus the tool list, and require it to return a compressed summary + file diffs.
+- Point the spawn at \`.mawf/agents/${slug(a.role)}.md\`: pass the Task section verbatim plus the tool list, and require it to return a compressed summary + file diffs.
 - Cost control for dsh is **concurrency-only** (rate): dsh is not routed via the cc-switch proxy, so real-spend rate is not measured. Wrap spawns with \`mawf acquire --role ${a.role}\` / \`mawf release --role ${a.role}\`. Model prices come from cc-switch's synced \`~/.cc-switch/model-pricing.json\` where model ids match; unmatched ids price as unknown.` : `Spawn this agent from the orchestrator as a subagent with the tool list above. Pass the task verbatim and require it to return a compressed summary + file diffs.`}
 `;
 }
@@ -216,7 +216,7 @@ or use the slash command \`/codex:review\` (review-only). For adversarial review
 /**
  * Render the native pi agent file (`.pi/agents/maw-<role>.md`) for pi hosts.
  * Frontmatter mirrors the pi agent format (name/description/tools); the body
- * points at the portable `.maw/agents/<role>.md` spec.
+ * points at the portable `.mawf/agents/<role>.md` spec.
  * @param {import("./planner.js").AgentSpec} a
  * @param {import("./planner.js").Plan} plan
  */
@@ -233,7 +233,7 @@ function piAgentFileMd(a, plan) {
 
 This is the pi-native spawn target for the MAW agent \`${a.role}\`. The full
 spec (model, model-selection, cost control, task) lives in the portable files
-\`.maw/agents/${slug(a.role)}.md\` / \`${slug(a.role)}.json\` — read those for the
+\`.mawf/agents/${slug(a.role)}.md\` / \`${slug(a.role)}.json\` — read those for the
 verbatim task and tool list.
 
 - Role: ${a.role}
@@ -288,7 +288,7 @@ function planMarkdown(plan, ccSwitch) {
   if (plan.hostApp === "dsh") {
     lines.push("## Host notes — DeepSeek Harness (dsh)");
     lines.push("");
-    lines.push("- **Orchestration**: one orchestrator session (`dsh web` or `dsh --profile headless`); workers spawn via the prompt-driven `subagent` tool with `.maw/agents/<role>.md` as the payload — dsh has no named agent files.");
+    lines.push("- **Orchestration**: one orchestrator session (`dsh web` or `dsh --profile headless`); workers spawn via the prompt-driven `subagent` tool with `.mawf/agents/<role>.md` as the payload — dsh has no named agent files.");
     lines.push("- **Skills**: trellis skills live in the shared `.agents/skills/` and dsh-private `.dsh/skills/` roots (rank 100–600 discovery).");
     lines.push("- **Context**: AGENTS.md is loaded by dsh from `$DSH_HOME/AGENTS.md` plus the project root down to the session cwd (64 KiB cap).");
     lines.push("- **Cost**: rate limits degrade to concurrency-only (`mawf acquire` / `mawf release`); model prices come from cc-switch's synced `~/.cc-switch/model-pricing.json` where model ids match.");
@@ -347,7 +347,7 @@ function planMarkdown(plan, ccSwitch) {
       lines.push(`| ${b.role} | ${b.provider ?? "(current)"} | \`${b.model}\` | ${p} |`);
     }
     lines.push("");
-    lines.push("Continue with `mawf approve-model --role <role> --yes` (per role) or edit `.maw/agents/<role>.json` to a cheaper model and re-run `mawf plan`.");
+    lines.push("Continue with `mawf approve-model --role <role> --yes` (per role) or edit `.mawf/agents/<role>.json` to a cheaper model and re-run `mawf plan`.");
   }
   lines.push("");
   lines.push("## Dynamic mutation");
@@ -355,6 +355,6 @@ function planMarkdown(plan, ccSwitch) {
   lines.push("- Remove an agent: `mawf remove-agent --role NAME`");
   lines.push("- Re-plan: `mawf plan --project .`");
   lines.push("");
-  lines.push("Edit any file under `.maw/agents/` directly; the runner reads them at execute time.");
+  lines.push("Edit any file under `.mawf/agents/` directly; the runner reads them at execute time.");
   return lines.join("\n") + "\n";
 }

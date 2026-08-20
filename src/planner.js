@@ -199,7 +199,7 @@ export function planWorkflow(signals, ctx = {}) {
       };
       // Price gate (HITL): resolve the FULL price chain (cc-switch model_pricing
       // + provider cost_multiplier + vendored fallback — the same chain
-      // configgen writes into .maw/agents/*.json) and check the thresholds.
+      // configgen writes into .mawf/agents/*.json) and check the thresholds.
       // A blocked assignment pauses the related work and is reported to a human.
       const price = resolvePrice(sel.model, {
         modelPricing: cc.modelPricing,
@@ -252,7 +252,7 @@ export function planWorkflow(signals, ctx = {}) {
   // --- groups (parallel/serial) ---
   /** @type {Plan["groups"]} */
   const groups = [];
-  groups.push({ label: "plan", parallel: false, agents: ["orchestrator"], steps: [{ role: "orchestrator", agent: hostAgent, task: "Decompose the task; write .maw/plan.md." }] });
+  groups.push({ label: "plan", parallel: false, agents: ["orchestrator"], steps: [{ role: "orchestrator", agent: hostAgent, task: "Decompose the task; write .mawf/plan.md." }] });
   if (selected.includes("multi-agent") || selected.includes("orchestrator-workers") || selected.includes("dynamic")) {
     groups.push({
       label: "execute-parallel",

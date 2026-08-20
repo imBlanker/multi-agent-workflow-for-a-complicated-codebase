@@ -85,7 +85,7 @@ function npmGlobalPrefix() {
  */
 function manifestHostHint() {
   try {
-    const m = readJson(path.join(os.homedir(), ".maw", "installed.json"), null);
+    const m = readJson(path.join(os.homedir(), ".mawf", "installed.json"), null);
     const app = m?.host?.app;
     return ["pi", "dsh", "claude-code", "codex"].includes(app) ? app : undefined;
   } catch { return undefined; }

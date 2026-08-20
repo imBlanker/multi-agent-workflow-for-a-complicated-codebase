@@ -1,5 +1,5 @@
 ---
-description: Emit execution guidance for the current .maw/ workflow plan (topological batches, cost-guard checks, codex review points)
+description: Emit execution guidance for the current .mawf/ workflow plan (topological batches, cost-guard checks, codex review points)
 argument-hint: ''
 allowed-tools: Bash, Read
 ---
@@ -7,7 +7,7 @@ allowed-tools: Bash, Read
 1. Run `node ${CLAUDE_PLUGIN_ROOT}/../bin/mawf.js run --project $PWD` and show the batched execution plan.
 2. For each batch:
    a. Run `mawf guard --project $PWD`. If DENY, stop and report why (cost-rate limit or concurrency cap reached) — do NOT spawn agents.
-   b. If ALLOW, spawn the batch's agents as subagents (Claude Code Task tool). Pass each agent the verbatim task from its `.maw/agents/<role>.md`.
+   b. If ALLOW, spawn the batch's agents as subagents (Claude Code Task tool). Pass each agent the verbatim task from its `.mawf/agents/<role>.md`.
    c. For each spawned agent, call `mawf acquire --id <id> --role <role> --app claude` before it starts and `mawf release --id <id>` when it returns.
 3. At each review gate listed in the plan, run `/mawf:review --after <label>` to invoke Codex (via codex-plugin-cc) if available; otherwise fall back to a second Claude Code agent reviewer.
 4. Synthesize results from the `synthesize` batch and present to the user.

@@ -78,11 +78,11 @@ function fullFixture() {
   w(path.join(dshHome, "skills", "dsh-skill", "SKILL.md"), "---\ndescription: dsh skill\n---\nx\n");
   w(path.join(dshHome, "AGENTS.md"), "# dsh global");
 
-  // project: AGENTS.md + .maw workflows + project .mcp.json + project .claude/skills
+  // project: AGENTS.md + .mawf workflows + project .mcp.json + project .claude/skills
   w(path.join(projectDir, "AGENTS.md"), "# proj");
   w(path.join(projectDir, ".claude", "skills", "proj-claude-skill", "SKILL.md"), "---\ndescription: project-level claude skill\n---\nx\n");
-  w(path.join(projectDir, ".maw", "workflow.json"), JSON.stringify({ nodes: [] }));
-  w(path.join(projectDir, ".maw", "agents", "orchestrator.md"), "# orch");
+  w(path.join(projectDir, ".mawf", "workflow.json"), JSON.stringify({ nodes: [] }));
+  w(path.join(projectDir, ".mawf", "agents", "orchestrator.md"), "# orch");
   w(path.join(projectDir, ".mcp.json"), JSON.stringify({ mcpServers: { "proj-mcp": {} } }));
 
   return { root, claudeDir, codexDir, piDir, dshHome, claudeJson, projectDir, agentsSkillsDir: path.join(root, "h", ".agents", "skills") };
@@ -228,7 +228,7 @@ test("renderDigest: structure + hard cap 200 lines with truncation marker", () =
   const digest = renderDigest(r);
   const lineCount = digest.split("\n").length;
   assert.ok(lineCount <= 202, `digest lines ${lineCount}`); // cap + final truncation marker line(s)
-  assert.ok(/\(\+\d+ more — see \.maw\/inventory\.json\)/.test(digest), "truncation marker present");
+  assert.ok(/\(\+\d+ more — see \.mawf\/inventory\.json\)/.test(digest), "truncation marker present");
   assert.ok(digest.includes("## claude-code — caps:"));
   assert.ok(digest.includes("- mcp ("));
   assert.ok(digest.includes("- marketplaces ("));
@@ -245,7 +245,7 @@ test("renderDigest: per-host sections with capabilities/skills/mcp/models", () =
   assert.ok(digest.includes("glm-4.5-air"));
 });
 
-test("writeInventoryArtifacts: writes .maw/inventory.json + digest", () => {
+test("writeInventoryArtifacts: writes .mawf/inventory.json + digest", () => {
   const fx = fullFixture();
   const r = scanOf(fx);
   const paths = writeInventoryArtifacts(fx.projectDir, r);

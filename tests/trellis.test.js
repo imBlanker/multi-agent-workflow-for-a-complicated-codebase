@@ -7,11 +7,11 @@ import { detectTrellis, mawManagedFiles, snapshotFiles, detectConflicts, applyCo
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "maw-tr-"));
 const project = path.join(tmp, "proj");
-fs.mkdirSync(path.join(project, ".maw", "agents"), { recursive: true });
-fs.mkdirSync(path.join(project, ".maw", "runtime"), { recursive: true });
-fs.writeFileSync(path.join(project, ".maw", "plan.md"), "v1\n");
-fs.writeFileSync(path.join(project, ".maw", "agents", "orchestrator.md"), "v1\n");
-fs.writeFileSync(path.join(project, ".maw", "runtime", "state.json"), "{}"); // runtime excluded
+fs.mkdirSync(path.join(project, ".mawf", "agents"), { recursive: true });
+fs.mkdirSync(path.join(project, ".mawf", "runtime"), { recursive: true });
+fs.writeFileSync(path.join(project, ".mawf", "plan.md"), "v1\n");
+fs.writeFileSync(path.join(project, ".mawf", "agents", "orchestrator.md"), "v1\n");
+fs.writeFileSync(path.join(project, ".mawf", "runtime", "state.json"), "{}"); // runtime excluded
 
 test("detectTrellis returns a usable invocation", () => {
   const det = detectTrellis();
@@ -19,7 +19,7 @@ test("detectTrellis returns a usable invocation", () => {
   if (det.via === "npx") assert.ok(det.args.includes("@mindfoldhq/trellis@latest"));
 });
 
-test("mawManagedFiles lists .maw files but excludes runtime/logs", () => {
+test("mawManagedFiles lists .mawf files but excludes runtime/logs", () => {
   const files = mawManagedFiles(project);
   assert.ok(files.some((f) => f.endsWith("plan.md")));
   assert.ok(files.some((f) => f.endsWith("orchestrator.md")));
@@ -28,8 +28,8 @@ test("mawManagedFiles lists .maw files but excludes runtime/logs", () => {
 
 test("snapshotFiles hashes MAW files", () => {
   const snap = snapshotFiles(project);
-  assert.ok(snap[path.join(project, ".maw", "plan.md")]);
-  assert.equal(typeof snap[path.join(project, ".maw", "plan.md")], "string");
+  assert.ok(snap[path.join(project, ".mawf", "plan.md")]);
+  assert.equal(typeof snap[path.join(project, ".mawf", "plan.md")], "string");
 });
 
 test("detectConflicts: no change -> empty", () => {
@@ -40,7 +40,7 @@ test("detectConflicts: no change -> empty", () => {
 
 test("detectConflicts: modified file detected", () => {
   const before = snapshotFiles(project);
-  fs.writeFileSync(path.join(project, ".maw", "plan.md"), "v2-changed-by-trellis\n");
+  fs.writeFileSync(path.join(project, ".mawf", "plan.md"), "v2-changed-by-trellis\n");
   const after = snapshotFiles(project);
   const c = detectConflicts(before, after);
   assert.equal(c.length, 1);
@@ -49,7 +49,7 @@ test("detectConflicts: modified file detected", () => {
 });
 
 test("detectConflicts: removed file detected", () => {
-  const f = path.join(project, ".maw", "agents", "orchestrator.md");
+  const f = path.join(project, ".mawf", "agents", "orchestrator.md");
   const before = snapshotFiles(project);
   fs.unlinkSync(f);
   const after = snapshotFiles(project);

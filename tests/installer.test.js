@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { install, uninstall, update } from "../src/installer.js";
+import { install, uninstall, update, migrateLegacyMawDirs } from "../src/installer.js";
 
 const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), "maw-inst-"));
 const claudeDir = path.join(tmpHome, ".claude");
@@ -22,7 +22,7 @@ test("install copies commands/agents/skills into the host and writes a manifest"
   assert.ok(fs.existsSync(path.join(claudeDir, "commands", "mawf-plan.md")));
   assert.ok(fs.existsSync(path.join(claudeDir, "agents", "orchestrator.md")));
   assert.ok(fs.existsSync(path.join(claudeDir, "skills", "mawf-orchestration", "SKILL.md")));
-  assert.ok(fs.existsSync(path.join(tmpHome, ".maw", "installed.json")));
+  assert.ok(fs.existsSync(path.join(tmpHome, ".mawf", "installed.json")));
 });
 
 test("update overwrites templates but preserves user-added files", () => {
@@ -55,7 +55,7 @@ test("install on a pi host copies skills+prompts into the pi home and records pi
     assert.ok(r.copied.some((c) => c.includes("pi prompts")), `pi prompts missing`);
     assert.ok(fs.existsSync(path.join(piHome, "skills", "mawf-orchestration", "SKILL.md")));
     assert.ok(fs.existsSync(path.join(piHome, "prompts", "mawf-plan.md")));
-    const m = JSON.parse(fs.readFileSync(path.join(tmpHome, ".maw", "installed.json"), "utf8"));
+    const m = JSON.parse(fs.readFileSync(path.join(tmpHome, ".mawf", "installed.json"), "utf8"));
     assert.equal(m.dirs.piDir, piHome);
   } finally { delete process.env.MAW_HOST; }
 });
@@ -72,7 +72,7 @@ test("install on a dsh host copies skills into $DSH_HOME/skills and records dshD
     // no prompts surface for dsh
     assert.ok(!r.copied.some((c) => c.includes("dsh prompts")), "dsh has no prompts surface");
     assert.ok(fs.existsSync(path.join(dshHome, "skills", "mawf-orchestration", "SKILL.md")));
-    const m = JSON.parse(fs.readFileSync(path.join(tmpHome, ".maw", "installed.json"), "utf8"));
+    const m = JSON.parse(fs.readFileSync(path.join(tmpHome, ".mawf", "installed.json"), "utf8"));
     assert.equal(m.dirs.dshDir, dshHome);
     // a non-maw dsh skill must survive uninstall
     fs.mkdirSync(path.join(dshHome, "skills", "user-skill"), { recursive: true });
@@ -91,7 +91,7 @@ test("manifest v2 records every written file; uninstall removes ALL (incl. non-p
   assert.ok(fs.existsSync(path.join(claudeDir, "agents", "orchestrator.md")));
   assert.ok(fs.existsSync(path.join(claudeDir, "hooks", "hooks.json")));
   // …and ARE recorded in the v2 manifest
-  const m = JSON.parse(fs.readFileSync(path.join(tmpHome, ".maw", "installed.json"), "utf8"));
+  const m = JSON.parse(fs.readFileSync(path.join(tmpHome, ".mawf", "installed.json"), "utf8"));
   assert.ok(Array.isArray(m.files) && m.files.length >= 15, `manifest.files must record every write, got ${m.files?.length}`);
   assert.ok(m.files.some((f) => f.endsWith(path.join("agents", "orchestrator.md"))));
   assert.ok(m.files.some((f) => f.endsWith(path.join("hooks", "hooks.json"))));
@@ -103,12 +103,12 @@ test("manifest v2 records every written file; uninstall removes ALL (incl. non-p
   assert.ok(!fs.existsSync(path.join(claudeDir, "hooks", "hooks.json")), "hooks.json must be removed");
   assert.ok(fs.existsSync(path.join(claudeDir, "agents", "user-own.md")), "user file preserved");
   assert.ok(!fs.existsSync(path.join(claudeDir, "hooks")), "empty hooks dir pruned");
-  assert.ok(!fs.existsSync(path.join(tmpHome, ".maw", "installed.json")), "manifest removed");
+  assert.ok(!fs.existsSync(path.join(tmpHome, ".mawf", "installed.json")), "manifest removed");
 });
 
 test("legacy manifest (dirs only) still uninstalls via the prefix fallback", () => {
   install({ claudeDir });
-  const mp = path.join(tmpHome, ".maw", "installed.json");
+  const mp = path.join(tmpHome, ".mawf", "installed.json");
   const m = JSON.parse(fs.readFileSync(mp, "utf8"));
   delete m.files; // pre-v2 shape
   fs.writeFileSync(mp, JSON.stringify(m));
@@ -119,22 +119,22 @@ test("legacy manifest (dirs only) still uninstalls via the prefix fallback", () 
   assert.ok(fs.existsSync(path.join(claudeDir, "commands", "user-own.md")), "user file preserved by fallback");
 });
 
-test("uninstall keeps configs by default; --purge-config removes .maw and .pi/agents/maw-* (never trellis-*)", () => {
+test("uninstall keeps configs by default; --purge-config removes .mawf and .pi/agents/maw-* (never trellis-*)", () => {
   const proj = path.join(tmpHome, "proj-x");
-  fs.mkdirSync(path.join(proj, ".maw", "agents"), { recursive: true });
-  fs.writeFileSync(path.join(proj, ".maw", "workflow.json"), "{}");
+  fs.mkdirSync(path.join(proj, ".mawf", "agents"), { recursive: true });
+  fs.writeFileSync(path.join(proj, ".mawf", "workflow.json"), "{}");
   fs.mkdirSync(path.join(proj, ".pi", "agents"), { recursive: true });
   fs.writeFileSync(path.join(proj, ".pi", "agents", "maw-worker.md"), "#");
   fs.writeFileSync(path.join(proj, ".pi", "agents", "trellis-implement.md"), "#");
   install({ claudeDir });
   const keep = uninstall({ project: proj });
-  assert.ok(fs.existsSync(path.join(proj, ".maw", "workflow.json")), "default keeps configs");
-  assert.ok(keep.kept.some((p) => p === path.join(proj, ".maw")));
+  assert.ok(fs.existsSync(path.join(proj, ".mawf", "workflow.json")), "default keeps configs");
+  assert.ok(keep.kept.some((p) => p === path.join(proj, ".mawf")));
   const purge = uninstall({ project: proj, purgeConfig: true });
-  assert.ok(!fs.existsSync(path.join(proj, ".maw")), ".maw purged");
+  assert.ok(!fs.existsSync(path.join(proj, ".mawf")), ".mawf purged");
   assert.ok(!fs.existsSync(path.join(proj, ".pi", "agents", "maw-worker.md")), "maw-* pi agent purged");
   assert.ok(fs.existsSync(path.join(proj, ".pi", "agents", "trellis-implement.md")), "trellis-* pi agent preserved");
-  assert.ok(purge.purged.some((p) => p === path.join(proj, ".maw")));
+  assert.ok(purge.purged.some((p) => p === path.join(proj, ".mawf")));
 });
 
 test("uninstall removes maw-* leftovers from an OLDER install even when the current manifest does not list them", () => {
@@ -143,7 +143,7 @@ test("uninstall removes maw-* leftovers from an OLDER install even when the curr
   // absent from the freshly written manifest
   fs.mkdirSync(path.join(claudeDir, "skills", "maw-retired-skill"), { recursive: true });
   fs.writeFileSync(path.join(claudeDir, "skills", "maw-retired-skill", "SKILL.md"), "# old\n");
-  const mp = path.join(tmpHome, ".maw", "installed.json");
+  const mp = path.join(tmpHome, ".mawf", "installed.json");
   const m = JSON.parse(fs.readFileSync(mp, "utf8"));
   assert.ok(!m.files.some((f) => f.includes("maw-retired-skill")), "fixture premise: not in manifest");
   const u = uninstall({ project: tmpHome });
@@ -161,8 +161,8 @@ test("install cleans stale assets recorded by an older v2 manifest (maw-* → ma
   const staleSkill = path.join(claudeDir, "skills", "maw-planner", "SKILL.md");
   const staleCmd = path.join(claudeDir, "commands", "maw-plan.md");
   const hookPath = path.join(claudeDir, "hooks", "hooks.json");
-  fs.mkdirSync(path.join(tmpHome, ".maw"), { recursive: true });
-  fs.writeFileSync(path.join(tmpHome, ".maw", "installed.json"), JSON.stringify({
+  fs.mkdirSync(path.join(tmpHome, ".mawf"), { recursive: true });
+  fs.writeFileSync(path.join(tmpHome, ".mawf", "installed.json"), JSON.stringify({
     version: "0.1.0", installedAt: "2026-08-18T02:27:47.187Z",
     host: { app: "dsh" }, dirs: { claudeDir, codexDir: path.join(tmpHome, ".codex") },
     files: [staleSkill, staleCmd, hookPath],
@@ -186,7 +186,7 @@ test("install stale-cleanup never touches files absent from the old manifest (no
   fs.writeFileSync(path.join(claudeDir, "skills", "my-own-skill", "SKILL.md"), "# mine\n");
   fs.writeFileSync(path.join(claudeDir, "commands", "maw-user-custom.md"), "# user-made with maw- prefix\n");
   fs.writeFileSync(path.join(claudeDir, "commands", "maw-gone.md"), "# stale (recorded)\n");
-  fs.writeFileSync(path.join(tmpHome, ".maw", "installed.json"), JSON.stringify({
+  fs.writeFileSync(path.join(tmpHome, ".mawf", "installed.json"), JSON.stringify({
     version: "0.4.0", dirs: { claudeDir },
     files: [path.join(claudeDir, "commands", "maw-gone.md")],
   }));
@@ -200,7 +200,7 @@ test("install stale-cleanup never touches files absent from the old manifest (no
 test("install skips stale-cleanup for a legacy manifest without files[]", () => {
   const stale = path.join(claudeDir, "commands", "maw-legacy.md");
   fs.writeFileSync(stale, "# old\n");
-  fs.writeFileSync(path.join(tmpHome, ".maw", "installed.json"), JSON.stringify({ version: "0.1.0", dirs: { claudeDir } }));
+  fs.writeFileSync(path.join(tmpHome, ".mawf", "installed.json"), JSON.stringify({ version: "0.1.0", dirs: { claudeDir } }));
   const r = install({ claudeDir });
   assert.equal(r.ok, true);
   assert.deepEqual(r.removedStale, []);
@@ -211,7 +211,7 @@ test("install ADDS a second special host without purging the first (0.4.2 union)
   const dshHome = path.join(tmpHome, ".dsh");
   fs.mkdirSync(path.join(dshHome, "skills"), { recursive: true });
   const dshSkill = path.join(dshHome, "skills", "mawf-planner", "SKILL.md");
-  fs.writeFileSync(path.join(tmpHome, ".maw", "installed.json"), JSON.stringify({
+  fs.writeFileSync(path.join(tmpHome, ".mawf", "installed.json"), JSON.stringify({
     version: "0.4.1", host: { app: "dsh" },
     dirs: { claudeDir, dshDir: dshHome },
     files: [dshSkill],
@@ -226,7 +226,7 @@ test("install ADDS a second special host without purging the first (0.4.2 union)
     assert.ok(fs.existsSync(path.join(piHome, "prompts", "mawf-plan.md")), "pi prompts shipped");
     assert.ok(fs.existsSync(dshSkill), "dsh assets of the FIRST host survive the second host's install");
     assert.deepEqual(r.removedStale, [], "union install must not treat the other host's files as stale");
-    const m = JSON.parse(fs.readFileSync(path.join(tmpHome, ".maw", "installed.json"), "utf8"));
+    const m = JSON.parse(fs.readFileSync(path.join(tmpHome, ".mawf", "installed.json"), "utf8"));
     assert.equal(m.dirs.piDir, piHome, "manifest records the added pi dir");
     assert.equal(m.dirs.dshDir, dshHome, "manifest keeps the dsh dir");
     assert.equal(m.host.app, "pi", "primary host = the explicitly requested one");
@@ -237,7 +237,7 @@ test("bare install (claude detected) on a dsh-install machine keeps dsh assets (
   const dshHome = path.join(tmpHome, ".dsh");
   fs.mkdirSync(path.join(dshHome, "skills"), { recursive: true });
   fs.writeFileSync(path.join(dshHome, "settings.yaml"), "llm-pi-ai:\n  providers: {}\n");
-  fs.writeFileSync(path.join(tmpHome, ".maw", "installed.json"), JSON.stringify({
+  fs.writeFileSync(path.join(tmpHome, ".mawf", "installed.json"), JSON.stringify({
     version: "0.4.1", host: { app: "dsh" }, dirs: { claudeDir, dshDir: dshHome }, files: [],
   }));
   delete process.env.MAW_HOST; // bare — detection must not drop the recorded dsh host
@@ -245,24 +245,52 @@ test("bare install (claude detected) on a dsh-install machine keeps dsh assets (
   assert.equal(r.ok, true);
   assert.ok(fs.existsSync(path.join(dshHome, "skills", "mawf-planner", "SKILL.md")), "dsh skills kept on a bare claude-detected install");
   assert.deepEqual(r.removedStale, []);
-  const m = JSON.parse(fs.readFileSync(path.join(tmpHome, ".maw", "installed.json"), "utf8"));
+  const m = JSON.parse(fs.readFileSync(path.join(tmpHome, ".mawf", "installed.json"), "utf8"));
   assert.equal(m.dirs.dshDir, dshHome, "dsh dir still recorded");
 });
 
 test("union targets the OLD manifest's recorded dir, not a fresh detection path", () => {
   const piAlt = path.join(tmpHome, ".pi-alt");
-  fs.writeFileSync(path.join(tmpHome, ".maw", "installed.json"), JSON.stringify({
+  fs.writeFileSync(path.join(tmpHome, ".mawf", "installed.json"), JSON.stringify({
     version: "0.4.1", host: { app: "dsh" }, dirs: { claudeDir, piDir: piAlt }, files: [],
   }));
   delete process.env.MAW_HOST;
   const r = install({ claudeDir });
   assert.equal(r.ok, true);
   assert.ok(fs.existsSync(path.join(piAlt, "skills", "mawf-planner", "SKILL.md")), "union shipped to the recorded pi dir");
-  const m = JSON.parse(fs.readFileSync(path.join(tmpHome, ".maw", "installed.json"), "utf8"));
+  const m = JSON.parse(fs.readFileSync(path.join(tmpHome, ".mawf", "installed.json"), "utf8"));
   assert.equal(m.dirs.piDir, piAlt);
 });
 
 test.after(() => {
   process.env.HOME = os.homedir();
   try { fs.rmSync(tmpHome, { recursive: true, force: true }); } catch {}
+});
+
+test("migrateLegacyMawDirs: renames legacy .maw -> .mawf (project + global), idempotent", () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "maw-mig-home-"));
+  const prevHome = process.env.HOME;
+  process.env.HOME = home;
+  try {
+    const proj = fs.mkdtempSync(path.join(os.tmpdir(), "maw-mig-proj-"));
+    fs.mkdirSync(path.join(home, ".maw", "skills", "mawf-cost-guard"), { recursive: true });
+    fs.writeFileSync(path.join(home, ".maw", "installed.json"), "{}");
+    fs.mkdirSync(path.join(proj, ".maw", "runtime"), { recursive: true });
+    fs.writeFileSync(path.join(proj, ".maw", "config.yaml"), "workflow: {}\n");
+    const notes = migrateLegacyMawDirs({ project: proj });
+    assert.equal(notes.length, 2);
+    assert.ok(fs.existsSync(path.join(home, ".mawf", "installed.json")));
+    assert.ok(fs.existsSync(path.join(proj, ".mawf", "runtime")));
+    assert.ok(!fs.existsSync(path.join(home, ".maw")));
+    assert.ok(!fs.existsSync(path.join(proj, ".maw")));
+    // idempotent: second run is a no-op
+    assert.deepEqual(migrateLegacyMawDirs({ project: proj }), []);
+    // pre-existing .mawf wins: legacy dir left untouched (no merge)
+    fs.mkdirSync(path.join(proj, ".maw"), { recursive: true });
+    fs.writeFileSync(path.join(proj, ".maw", "stale.txt"), "x");
+    assert.deepEqual(migrateLegacyMawDirs({ project: proj }), []);
+    assert.ok(fs.existsSync(path.join(proj, ".maw", "stale.txt")));
+  } finally {
+    process.env.HOME = prevHome;
+  }
 });
