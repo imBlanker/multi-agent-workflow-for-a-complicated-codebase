@@ -21,5 +21,5 @@ These are combined, not exclusive: e.g. `ultracode` = `graph` + `loop` + codex r
 ```bash
 mawf plan --project . --task-type coding --risk high --parallel 6
 ```
-Read `.maw/plan.md` for the chosen architecture, rationale, agent roster, and review gates.
-Edit `.maw/config.yaml` to change cost limits, concurrency, and pricing sources, then re-run `mawf plan`.
+Read `.mawf/plan.md` for the chosen architecture, rationale, agent roster, and review gates.
+Edit `.mawf/config.yaml` to change cost limits, concurrency, and pricing sources, then re-run `mawf plan`.

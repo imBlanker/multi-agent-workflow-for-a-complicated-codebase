@@ -68,11 +68,11 @@ function defaultCurrentHost() {
 }
 
 /**
- * Read `.maw/config.yaml` → advise overrides {weights?, stayBonus?, margin?}.
+ * Read `.mawf/config.yaml` → advise overrides {weights?, stayBonus?, margin?}.
  * @param {string} projectDir
  */
 function readAdviseConfig(projectDir) {
-  const file = path.join(projectDir, ".maw", "config.yaml");
+  const file = path.join(projectDir, ".mawf", "config.yaml");
   if (!isFile(file)) return {};
   try {
     const parsed = parseYamlSubset(readText(file));
@@ -89,7 +89,7 @@ function readAdviseConfig(projectDir) {
 export function deriveTaskProfile(projectDir) {
   let text = "";
   let difficulty = 3;
-  const wf = readJson(path.join(projectDir, ".maw", "workflow.json"), null);
+  const wf = readJson(path.join(projectDir, ".mawf", "workflow.json"), null);
   if (wf) {
     const parts = [wf.name, wf.primary, ...(Array.isArray(wf.rationale) ? wf.rationale : [])].filter(Boolean);
     text = parts.join(". ");
@@ -249,7 +249,7 @@ function launchFor(targetHost, pidResolver) {
  * @param {string} [opts.currentHost] default MAW_HOST | detectHost().app
  * @param {string} [opts.projectDir] default cwd
  * @param {any} [opts.inventory] InventoryReport | null → auto-scan
- * @param {any} [opts.config] advise config overrides (else read .maw/config.yaml)
+ * @param {any} [opts.config] advise config overrides (else read .mawf/config.yaml)
  * @param {() => (Date|number)} [opts.clock] injectable clock
  * @param {() => string|null} [opts.pidResolver] injectable dsh PID resolver
  * @param {boolean} [opts.updateState] default true
@@ -347,11 +347,11 @@ export function adviseTask(opts = {}) {
 }
 
 /**
- * Write `.maw/handoff/<ts>-<from>-<to>.md` (UTC+8 stamp); keep newest 10.
+ * Write `.mawf/handoff/<ts>-<from>-<to>.md` (UTC+8 stamp); keep newest 10.
  * @param {{ projectDir: string, from: string, to: string, profile: any, clock?: any }} o
  */
 function writeHandoffBrief(o) {
-  const dir = path.join(o.projectDir, ".maw", "handoff");
+  const dir = path.join(o.projectDir, ".mawf", "handoff");
   ensureDir(dir);
   const ts = utc8Stamp(o.clock);
   const file = path.join(dir, `${ts}-${o.from}-to-${o.to}.md`);
@@ -386,7 +386,7 @@ ${suggestedRole(o.projectDir)}
  * @param {string} projectDir
  */
 function suggestedRole(projectDir) {
-  const wf = readJson(path.join(projectDir, ".maw", "workflow.json"), null);
+  const wf = readJson(path.join(projectDir, ".mawf", "workflow.json"), null);
   const agents = Array.isArray(wf?.agents) ? wf.agents : [];
   const orch = agents.find((a) => /orchestrat/i.test(String(a?.role || a?.name || "")));
   if (orch) return String(orch.role || orch.name);
@@ -394,14 +394,14 @@ function suggestedRole(projectDir) {
 }
 
 /**
- * Update `.maw/runtime/advise-state.json`.
+ * Update `.mawf/runtime/advise-state.json`.
  * @param {string} projectDir
  * @param {{ recommendation: string, target: string|null }} last
  * @param {any} [clock]
  */
 function updateAdviseState(projectDir, last, clock) {
   try {
-    const dir = path.join(projectDir, ".maw", "runtime");
+    const dir = path.join(projectDir, ".mawf", "runtime");
     ensureDir(dir);
     const file = path.join(dir, "advise-state.json");
     const day = utc8Day(clock);
@@ -468,7 +468,7 @@ export function renderAdvise(r) {
     if (best && best.host !== r.currentHost) lines.push(`  (best alternative ${best.host} at margin ${r.margin} < ${DEFAULTS.margin} needed to suggest switching)`);
   }
   lines.push("");
-  lines.push(`full machine picture: .maw/inventory-digest.md (skills/plugins/MCP/models per host)`);
+  lines.push(`full machine picture: .mawf/inventory-digest.md (skills/plugins/MCP/models per host)`);
   lines.push(`ADVISE-DONE recommendation=${r.recommendation} target=${r.target || "-"} margin=${r.margin ?? "-"} handoff=${r.handoffPath || "-"}`);
   return lines.join("\n");
 }

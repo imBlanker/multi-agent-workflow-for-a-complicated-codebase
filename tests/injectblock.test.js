@@ -34,7 +34,7 @@ test("writeManagedBlocks: create-if-absent writes both files + record", () => {
     assert.ok(fs.existsSync(f), f);
     assert.equal(countBlocks(f), 1);
   }
-  const rec = JSON.parse(fs.readFileSync(path.join(p, ".maw", "managed-blocks.json"), "utf8"));
+  const rec = JSON.parse(fs.readFileSync(path.join(p, ".mawf", "managed-blocks.json"), "utf8"));
   assert.equal(rec.created.length, 2);
 });
 
@@ -101,7 +101,7 @@ test("removeManagedBlocks: user content preserved; created header-only files del
   const claude = fs.readFileSync(path.join(p, "CLAUDE.md"), "utf8");
   assert.ok(claude.includes("User body."));
   assert.ok(!claude.includes(BLOCK_BEGIN));
-  assert.ok(!fs.existsSync(path.join(p, ".maw", "managed-blocks.json")));
+  assert.ok(!fs.existsSync(path.join(p, ".mawf", "managed-blocks.json")));
 });
 
 test("uninstall --purge-config strips blocks + deletes created files; keep keeps them", () => {
@@ -115,7 +115,7 @@ test("uninstall --purge-config strips blocks + deletes created files; keep keeps
     uninstall({ project: keep, purgeConfig: false });
     assert.equal(countBlocks(path.join(keep, "AGENTS.md")), 1);
 
-    // purge: spans stripped, created files deleted, .maw gone
+    // purge: spans stripped, created files deleted, .mawf gone
     const purge = tmpProject();
     fs.writeFileSync(path.join(purge, "CLAUDE.md"), "# Title\n\nUser body.\n");
     writeManagedBlocks(purge);
@@ -124,7 +124,7 @@ test("uninstall --purge-config strips blocks + deletes created files; keep keeps
     const claude = fs.readFileSync(path.join(purge, "CLAUDE.md"), "utf8");
     assert.ok(claude.includes("User body."));
     assert.ok(!claude.includes(BLOCK_BEGIN));
-    assert.ok(!fs.existsSync(path.join(purge, ".maw")));
+    assert.ok(!fs.existsSync(path.join(purge, ".mawf")));
     assert.ok(r.purged.some((x) => x.endsWith("AGENTS.md")));
   } finally {
     process.env.HOME = prevHome;

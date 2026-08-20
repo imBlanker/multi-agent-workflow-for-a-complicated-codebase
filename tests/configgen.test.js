@@ -26,13 +26,13 @@ test("generateConfigs writes per-agent .md and .json for every role", () => {
   const plan = planWorkflow({ files: 30, parallelizableSubtasks: 4, risk: "high", contextNeed: "large", valuePerRun: "high", taskType: "coding" }, { host, ccSwitch: cc });
   const gen = generateConfigs(proj, plan, cc);
   assert.ok(gen.files.length >= 4);
-  assert.ok(exists(path.join(proj, ".maw", "workflow.json")));
-  assert.ok(exists(path.join(proj, ".maw", "config.yaml")));
-  assert.ok(exists(path.join(proj, ".maw", "plan.md")));
-  assert.ok(exists(path.join(proj, ".maw", "graph.json")));
+  assert.ok(exists(path.join(proj, ".mawf", "workflow.json")));
+  assert.ok(exists(path.join(proj, ".mawf", "config.yaml")));
+  assert.ok(exists(path.join(proj, ".mawf", "plan.md")));
+  assert.ok(exists(path.join(proj, ".mawf", "graph.json")));
   for (const a of plan.agents) {
-    assert.ok(exists(path.join(proj, ".maw", "agents", `${a.role}.md`)), `missing ${a.role}.md`);
-    assert.ok(exists(path.join(proj, ".maw", "agents", `${a.role}.json`)), `missing ${a.role}.json`);
+    assert.ok(exists(path.join(proj, ".mawf", "agents", `${a.role}.md`)), `missing ${a.role}.md`);
+    assert.ok(exists(path.join(proj, ".mawf", "agents", `${a.role}.json`)), `missing ${a.role}.json`);
   }
   fs.rmSync(proj, { recursive: true, force: true });
 });
@@ -41,7 +41,7 @@ test("per-agent json carries model, cost limit, tools, and price source", () => 
   const proj = mkTmpProject();
   const plan = planWorkflow({ files: 30, parallelizableSubtasks: 4, risk: "high", contextNeed: "large", valuePerRun: "high", taskType: "coding" }, { host, ccSwitch: cc });
   generateConfigs(proj, plan, cc);
-  const reviewer = readJson(path.join(proj, ".maw", "agents", "reviewer.json"));
+  const reviewer = readJson(path.join(proj, ".mawf", "agents", "reviewer.json"));
   assert.equal(reviewer.role, "reviewer");
   assert.equal(reviewer.agent, "codex");
   assert.equal(reviewer.model, "gpt-5.2-codex");
@@ -55,7 +55,7 @@ test("config.yaml contains editable cost knobs", () => {
   const proj = mkTmpProject();
   const plan = planWorkflow({ files: 30, parallelizableSubtasks: 4, risk: "high", contextNeed: "large", valuePerRun: "high", taskType: "coding" }, { host, ccSwitch: cc, cost: { perAgent: 1.5, total: 7, maxConcurrency: 3 } });
   generateConfigs(proj, plan, cc);
-  const yaml = fs.readFileSync(path.join(proj, ".maw", "config.yaml"), "utf8");
+  const yaml = fs.readFileSync(path.join(proj, ".mawf", "config.yaml"), "utf8");
   assert.match(yaml, /per_agent_limit_usd_per_min: 1\.5/);
   assert.match(yaml, /total_limit_usd_per_min: 7/);
   assert.match(yaml, /max_concurrency: 3/);
@@ -80,7 +80,7 @@ test("regenerating with fewer agents prunes stale agent files", () => {
   const proj = mkTmpProject();
   const big = planWorkflow({ files: 40, parallelizableSubtasks: 5, risk: "medium", contextNeed: "medium", taskType: "coding" }, { host, ccSwitch: cc });
   generateConfigs(proj, big, cc);
-  const agentsDir = path.join(proj, ".maw", "agents");
+  const agentsDir = path.join(proj, ".mawf", "agents");
   const before = fs.readdirSync(agentsDir).filter((f) => f.endsWith(".json")).length;
   assert.ok(before >= 4, `expected several agents, got ${before}`);
   const small = planWorkflow({ files: 5, parallelizableSubtasks: 1, risk: "low", contextNeed: "small", taskType: "coding" }, { host, ccSwitch: cc });
@@ -104,10 +104,10 @@ test("pi host materializes .pi/agents/maw-*.md and advertises pi-subagents invoc
     assert.match(md, /^---\nname: maw-/m);
     assert.match(md, /^description: /m);
     assert.match(md, /^tools: /m);
-    assert.match(md, /\.maw\/agents/);
+    assert.match(md, /\.mawf\/agents/);
   }
   // the portable markdown points non-codex roles at pi-subagents
-  const impl = fs.readFileSync(path.join(proj, ".maw", "agents", "implementer.md"), "utf8");
+  const impl = fs.readFileSync(path.join(proj, ".mawf", "agents", "implementer.md"), "utf8");
   assert.match(impl, /pi-subagents/);
   fs.rmSync(proj, { recursive: true, force: true });
 });
@@ -138,16 +138,16 @@ test("dsh host: portable specs are the payload, nothing materialized under .dsh/
   assert.ok(!gen.files.some((f) => f.includes(path.join(proj, ".dsh"))), "no files may be written under .dsh/");
   assert.ok(!exists(path.join(proj, ".dsh")) || fs.readdirSync(path.join(proj, ".dsh")).length === 0, "no .dsh materialization");
   // agent markdown points at the prompt-driven subagent tool + portable spec + guards
-  const impl = fs.readFileSync(path.join(proj, ".maw", "agents", "implementer.md"), "utf8");
+  const impl = fs.readFileSync(path.join(proj, ".mawf", "agents", "implementer.md"), "utf8");
   assert.match(impl, /prompt-driven subagent tool/);
-  assert.match(impl, new RegExp("\\.maw/agents/implementer\\.md"));
+  assert.match(impl, new RegExp("\\.mawf/agents/implementer\\.md"));
   assert.match(impl, /mawf acquire --role implementer/);
   assert.match(impl, /model-pricing\.json/);
   // machine config carries app_type dsh
-  const spec = readJson(path.join(proj, ".maw", "agents", "implementer.json"));
+  const spec = readJson(path.join(proj, ".mawf", "agents", "implementer.json"));
   assert.equal(spec.app_type, "dsh");
   // plan.md gains the dsh host notes section
-  const planMd = fs.readFileSync(path.join(proj, ".maw", "plan.md"), "utf8");
+  const planMd = fs.readFileSync(path.join(proj, ".mawf", "plan.md"), "utf8");
   assert.match(planMd, /Host notes — DeepSeek Harness \(dsh\)/);
   assert.match(planMd, /\.agents\/skills\//);
   fs.rmSync(proj, { recursive: true, force: true });

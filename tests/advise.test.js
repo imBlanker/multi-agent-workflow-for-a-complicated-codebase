@@ -167,7 +167,7 @@ test("adviseTask: state file updated (UTC+8 day, runsToday) and --check-fresh fl
   const clock = () => fake;
   const r1 = adviseTask(OPTS({ projectDir, updateState: true, task: "research", difficulty: 3 }));
   assert.equal(r1.stateUpdated, true);
-  const statePath = path.join(projectDir, ".maw", "runtime", "advise-state.json");
+  const statePath = path.join(projectDir, ".mawf", "runtime", "advise-state.json");
   assert.equal(checkFreshness(statePath, clock), "ADVISED_TODAY");
   fake = new Date("2026-08-20T16:01:00Z").getTime(); // 00:01 next day UTC+8
   assert.equal(checkFreshness(statePath, clock), "STALE");

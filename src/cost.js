@@ -8,7 +8,7 @@ import { readJson, writeJson, ensureDir, nowSec, round } from "./util.js";
 import { costRate, perSessionRate } from "./ccswitch.js";
 
 /**
- * @param {string} stateDir  the .maw/runtime/ dir
+ * @param {string} stateDir  the .mawf/runtime/ dir
  */
 function stateFile(stateDir) {
   return path.join(stateDir, "concurrency.json");

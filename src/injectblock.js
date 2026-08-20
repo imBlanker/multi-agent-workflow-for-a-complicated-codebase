@@ -5,9 +5,9 @@
 // scope only, global prompt files are NEVER touched).
 //
 // Reversibility (08-17 uninstall policy parity):
-//   - keep-config (default): blocks stay (consistent with keeping .maw/)
+//   - keep-config (default): blocks stay (consistent with keeping .mawf/)
 //   - --purge-config: spans stripped from both files; files mawf CREATED are
-//     deleted (recorded in .maw/managed-blocks.json, read BEFORE .maw removal).
+//     deleted (recorded in .mawf/managed-blocks.json, read BEFORE .mawf removal).
 // Project file paths are NEVER added to the installer manifest files[] — that
 // invariant records whole files and would delete user project files.
 import fs from "node:fs";
@@ -16,7 +16,7 @@ import { exists, isFile, readText, writeText, readJson, writeJson, ensureDir } f
 
 export const BLOCK_BEGIN = "<!-- mawf:cross-host-advise BEGIN -->";
 export const BLOCK_END = "<!-- mawf:cross-host-advise END -->";
-const RECORD_FILE = path.join(".maw", "managed-blocks.json");
+const RECORD_FILE = path.join(".mawf", "managed-blocks.json");
 const TARGETS = ["AGENTS.md", "CLAUDE.md"];
 
 /**
@@ -40,8 +40,8 @@ export function blockText() {
     "3. On `switch`: fill the pre-created handoff brief (path from handoff=), then present the",
     "   recommendation + reasons and the exact launch command (dsh: `kill -9 $(lsof -ti tcp:3080) && dsh web`).",
     "   NEVER execute the launch command yourself — the human runs it.",
-    "4. Session start: if `.maw/handoff/` has a brief newer than 48h, offer to continue it.",
-    "5. Before claiming a tool/model/skill is missing on this machine, check `.maw/inventory-digest.md`",
+    "4. Session start: if `.mawf/handoff/` has a brief newer than 48h, offer to continue it.",
+    "5. Before claiming a tool/model/skill is missing on this machine, check `.mawf/inventory-digest.md`",
     "   (another host may have it; `mawf inventory --verify` refreshes live MCP/plugin status).",
     "",
     "Advice is advisory — you propose, the human decides. Removed by `mawf uninstall --purge-config`.",
@@ -140,7 +140,7 @@ export function writeManagedBlocks(projectDir) {
 }
 
 /**
- * Merge newly created files into .maw/managed-blocks.json (project-scope
+ * Merge newly created files into .mawf/managed-blocks.json (project-scope
  * record; never the installer manifest — files[] must stay whole-file).
  * @param {string} project
  * @param {string[]} created absolute paths

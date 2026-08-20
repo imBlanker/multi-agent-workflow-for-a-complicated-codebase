@@ -63,7 +63,7 @@ export function priceGateReport(blocks) {
     lines.push(`  - role "${b.role}" → ${b.provider ? `${b.provider} / ` : ""}\`${b.model}\``);
     lines.push(`      ${b.check.reason}${b.check.estimated ? " (estimated price)" : ""}${b.check.source ? ` [source: ${b.check.source}]` : ""}`);
   }
-  lines.push(`  to continue: (a) edit .maw/agents/<role>.json and set a cheaper model, then re-run \`mawf plan\`;`);
+  lines.push(`  to continue: (a) edit .mawf/agents/<role>.json and set a cheaper model, then re-run \`mawf plan\`;`);
   lines.push(`                (b) explicitly approve: \`mawf approve-model --role <role> --yes\`;`);
   lines.push(`                (c) override for one run: re-run with \`--allow-pricey\`.`);
   return lines.join("\n");

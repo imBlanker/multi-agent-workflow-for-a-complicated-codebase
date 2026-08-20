@@ -8,7 +8,7 @@ const CODE_EXT = new Set([
   ".php",".c",".h",".cc",".cpp",".hpp",".cs",".swift",".scala",".sh",".vue",".svelte",".lua",".dart",".ex",".exs",".heex",".clj",".cljs"
 ]);
 const IGNORE = new Set([
-  "node_modules",".git","dist","build","out","target",".next",".turbo","venv",".venv","__pycache__",".cache","coverage",".maw"
+  "node_modules",".git","dist","build","out","target",".next",".turbo","venv",".venv","__pycache__",".cache","coverage",".mawf"
 ]);
 
 /**

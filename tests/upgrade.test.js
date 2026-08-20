@@ -208,8 +208,8 @@ test("npm mode: --no-apply-templates skips the spawn entirely", () => {
 test("npm mode: refresh spawns update with MAW_HOST inherited from the installed manifest (0.4.2)", () => {
   const { pkgRoot, npmPrefix } = mkNpmPkg();
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "maw-host-hint-"));
-  fs.mkdirSync(path.join(home, ".maw"), { recursive: true });
-  fs.writeFileSync(path.join(home, ".maw", "installed.json"), JSON.stringify({ version: "0.4.1", host: { app: "dsh" }, dirs: {}, files: [] }));
+  fs.mkdirSync(path.join(home, ".mawf"), { recursive: true });
+  fs.writeFileSync(path.join(home, ".mawf", "installed.json"), JSON.stringify({ version: "0.4.1", host: { app: "dsh" }, dirs: {}, files: [] }));
   const prevHome = process.env.HOME;
   process.env.HOME = home;
   try {
@@ -231,7 +231,7 @@ test("npm mode: no manifest → no MAW_HOST injection into the spawned update", 
   const { pkgRoot, npmPrefix } = mkNpmPkg();
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "maw-no-hint-"));
   const prevHome = process.env.HOME;
-  process.env.HOME = home; // no ~/.maw here
+  process.env.HOME = home; // no ~/.mawf here
   try {
     /** @type {any} */
     let captured;

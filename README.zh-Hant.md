@@ -103,7 +103,7 @@ curl -fsSL https://raw.githubusercontent.com/imBlanker/multi-agents-workflow/mai
 - **成本有界。** 來自 cc-switch 日誌的真實推理消費，而非權杖估計。預設：**每智慧體 $5/分鐘**、**總計 $10/分鐘**、最大並發 16 —— 皆可編輯。
 - **能力感知的模型選擇。** 模型在**同一榜單內**也有差異（有些 agentic 模型是全多模態；有些僅限推理／對話；有些多模態模型根本不具 agentic 能力），因此每個智慧體／子智慧體會先依能力適配過濾可用的供應商模型，再依剩餘額度／餘額與花銷速率挑選 provider（API key）＋模型。
 - **Codex 審查，依風險設關卡。** 當 [`codex-plugin-cc`](https://github.com/openai/codex-plugin-cc) 可用時，Codex 在基於風險的關卡擔任獨立審查者 —— 而非每一步。
-- **cc-switch 安全＋專案脫鉤。** 既有 cc-switch 資料皆為唯讀；MAW 的**專案**功能與 cc-switch 不完整的 `profiles` 功能**暫時脫鉤**（程式碼保留、預設停用；`MAW_CC_PROJECT_SYNC=1` 可臨時重開）。MAW 仍對專案級各 agents/subagents 的模型設定握有強力權限（`.maw/agents/*.json`），只從 cc-switch **唯讀同步供應商設定資訊**——各供應商 `config.toml`／`config.json` 中的高價值設定（base_url、model、auth_mode、failover……）。另有（可選）路由豁免。
+- **cc-switch 安全＋專案脫鉤。** 既有 cc-switch 資料皆為唯讀；MAW 的**專案**功能與 cc-switch 不完整的 `profiles` 功能**暫時脫鉤**（程式碼保留、預設停用；`MAW_CC_PROJECT_SYNC=1` 可臨時重開）。MAW 仍對專案級各 agents/subagents 的模型設定握有強力權限（`.mawf/agents/*.json`），只從 cc-switch **唯讀同步供應商設定資訊**——各供應商 `config.toml`／`config.json` 中的高價值設定（base_url、model、auth_mode、failover……）。另有（可選）路由豁免。
 
 ## 2. 何時使用
 **全新的複雜專案**：`mawf init -u <user>` → `mawf plan`。當單一智慧體不敷使用（檔案繁多、多種語言、高風險、上下文超出單一視窗）且你需要有成本上限的多智慧體執行與 Codex 審查關卡時使用。**不要**用於微小的固定任務（單一迴圈工程智慧體更便宜）。
@@ -112,7 +112,7 @@ curl -fsSL https://raw.githubusercontent.com/imBlanker/multi-agents-workflow/mai
 
 ## 3. 系統架構
 ```
-   user/project → mawf plan: probe → score architectures → select → generate per-agent configs (.maw/)
+   user/project → mawf plan: probe → score architectures → select → generate per-agent configs (.mawf/)
         │
    ┌────┴───────────────────────────────────────────────────────┐
    ▼              ▼                                            ▼
@@ -132,7 +132,7 @@ curl -fsSL https://raw.githubusercontent.com/imBlanker/multi-agents-workflow/mai
 | **[Claude Code](https://docs.claude.com/en/docs/claude-code)** | ✅ 完整 | 指令、智慧體、hook、技能；原生 `Task`/delegate 支援子智慧體與多智慧體；**本地路由＋自動故障轉移恆為開啟**。 |
 | **[Codex](https://github.com/openai/codex)** | ✅ 支援 | 智慧體定義＋透過 [`codex-plugin-cc`](https://github.com/openai/codex-plugin-cc) 的審查者；除非 OpenAI OAuth 登入，否則本地路由為開啟。 |
 | **Pi Agent** | ✅ 支援 | 設定位於 `~/.pi/agent/`（不經 cc-switch）；智慧體 → `.pi/agents/maw-*.md`、prompts → pi prompts、技能 → `.agents/skills`；透過原生子智慧體工具呼叫；花費不可測（僅並發的成本控制）。 |
-| **DeepSeek Harness (dsh)** | ✅ 支援 | 設定位於 `~/.dsh/settings.yaml`（`llm-pi-ai.providers`；不經 cc-switch）；無命名智慧體檔案——可攜的 `.maw/agents/<role>.md` 即是透過 dsh 提示驅動的子智慧體工具 spawn 的載荷；技能 → `$DSH_HOME/skills` + `.agents/skills`；花費速率不可測（僅並發），價格從 cc-switch 同步的 `model-pricing.json` 按 id 匹配；MCP 由 dsh patch 層管理。 |
+| **DeepSeek Harness (dsh)** | ✅ 支援 | 設定位於 `~/.dsh/settings.yaml`（`llm-pi-ai.providers`；不經 cc-switch）；無命名智慧體檔案——可攜的 `.mawf/agents/<role>.md` 即是透過 dsh 提示驅動的子智慧體工具 spawn 的載荷；技能 → `$DSH_HOME/skills` + `.agents/skills`；花費速率不可測（僅並發），價格從 cc-switch 同步的 `model-pricing.json` 按 id 匹配；MCP 由 dsh patch 層管理。 |
 | Gemini CLI / opencode / 其他 | ❌ 不支援 | （其 cc-switch 定價仍可能被讀取用於成本估計。） |
 
 `mawf doctor` 回報宿主＋路由策略合規性。
@@ -151,7 +151,7 @@ curl -fsSL https://raw.githubusercontent.com/imBlanker/multi-agents-workflow/mai
 架構可**組合**（例如 `ultracode` = `graph` + `loop` + 一個 Codex 審查關卡）。完整評分表：[`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md)。
 
 ## 6. 智慧體與子智慧體設定
-`mawf plan` 在 `.maw/` 下為每個角色寫入**可獨立編輯**的設定（`workflow.json`、`config.yaml`、`plan.md`、`graph.json`、`agents/<role>.md`+`.json`、`runtime/`）。動態新增／移除：`mawf add-agent --role <r> ...`／`mawf remove-agent --role <r>`。直接編輯任一檔案 —— 執行器會在執行時重新讀取。
+`mawf plan` 在 `.mawf/` 下為每個角色寫入**可獨立編輯**的設定（`workflow.json`、`config.yaml`、`plan.md`、`graph.json`、`agents/<role>.md`+`.json`、`runtime/`）。動態新增／移除：`mawf add-agent --role <r> ...`／`mawf remove-agent --role <r>`。直接編輯任一檔案 —— 執行器會在執行時重新讀取。
 
 **能力感知的模型選擇**（[`src/modelcap.js`](./src/modelcap.js)，靈感來自 [Artificial Analysis](https://artificialanalysis.ai) 的約 10 個分能力模型榜單 —— intelligence／coding／math／agentic／multimodal-vision／image／image-edit／video／tts／stt）。對每個角色，MAW 會：① 將 cc-switch 中**每個可用的供應商模型**依能力分類（全多模態的 agentic 模型、僅推理／對話的 agentic 模型、多模態但非 agentic 的模型是三種不同的東西）；② 剔除不適合該角色的模型（例如圖像生成模型絕不可能成為實現者）；③ 將其餘模型依**能力適配 → 供應商剩餘額度／餘額 → 花銷速率**排序（額度 = `limit_daily/monthly_usd` − `usage_daily_rollups` 中的消費；未設定上限時額度為未知）。精選目錄一律標記為估算值（`estimated:true`）。即時檢視：
 
@@ -160,20 +160,20 @@ mawf models                # capability view of all provider models + per-role a
 mawf models --app codex    # same for the codex app_type
 ```
 
-每個智慧體的 `.json`／`.md` 都帶有完整的 `model_selection` 記錄（所選 provider＋模型、能力適配、剩餘額度、價格、理由、備選）—— 見 [`examples/.maw-sample/agents/orchestrator.json`](./examples/.maw-sample/agents/orchestrator.json)。
+每個智慧體的 `.json`／`.md` 都帶有完整的 `model_selection` 記錄（所選 provider＋模型、能力適配、剩餘額度、價格、理由、備選）—— 見 [`examples/.mawf-sample/agents/orchestrator.json`](./examples/.mawf-sample/agents/orchestrator.json)。
 
 **模型價格閘門（HITL，強制）。** 每當 MAW 要配用單價較高的模型——**Input > $2/1M Tokens 或 Output > $10/1M Tokens**（[`src/pricegate.js`](./src/pricegate.js)，唯一事實來源）——都會**暫停相關工作並先向人工報告**：
 
-- `mawf plan`／`mawf init`／`mawf add-agent` 列印 ⚠ PRICE GATE 報告（角色、供應商、模型、價格、閾值）並**以退出碼 3 暫停**；生成的 `.maw/` 檔案保留在磁碟上供人工審查。
+- `mawf plan`／`mawf init`／`mawf add-agent` 列印 ⚠ PRICE GATE 報告（角色、供應商、模型、價格、閾值）並**以退出碼 3 暫停**；生成的 `.mawf/` 檔案保留在磁碟上供人工審查。
 - `mawf guard`／`mawf acquire` 對尚未獲人工批准的昂貴模型角色**拒絕放行**，暫停狀態得以維持。
-- 人工可透過三種方式恢復：改用更便宜的模型（編輯 `.maw/agents/<role>.json` 後重跑 `mawf plan`）、按角色明確批准（`mawf approve-model --role <role> --yes`——重跑 plan 後仍然有效）、或單次執行覆蓋（`--allow-pricey`）。
+- 人工可透過三種方式恢復：改用更便宜的模型（編輯 `.mawf/agents/<role>.json` 後重跑 `mawf plan`）、按角色明確批准（`mawf approve-model --role <role> --yes`——重跑 plan 後仍然有效）、或單次執行覆蓋（`--allow-pricey`）。
 
 ## 7. cc-switch 整合與路由策略
 MAW 預設將你的 cc-switch 視為**唯讀**。以下規則在程式碼中強制執行（[`src/ccswitch.js`](./src/ccswitch.js)、`guardSql`）：
 
 - **每次 init 前先做快照。** `mawf init` **首先**將**所有** cc-switch 設定檔打包為帶時間戳的歸檔，位於 `~/.cc-switch/maw-backups/cc-switch-snapshot-<timestamp>.tar.gz`（在無 `tar` 可用的環境退為目錄複製＋sha256 清單）——早於 MAW 觸碰任何其他內容之前。只讀取既有檔案；只在 `maw-backups/` 下寫入**新**檔案。
 - **既有 cc-switch 資料皆為唯讀。** 讀取使用唯讀 SQLite 連線（`node:sqlite` `readOnly:true`）。
-- **專案功能預設脫鉤。** cc-switch 的「專案」功能（`profiles` 表）不完整，MAW 不再讀寫 profiles：MAW 自己在 `.maw/agents/*.json` 管理專案級 agents/subagents 模型設定，只**唯讀同步供應商設定資訊**（各供應商 `config.toml`／`config.json` 的高價值設定——base_url、model、auth_mode、failover 佇列……）。profile 相關程式碼模組保留在 `src/ccswitch.js`（含測試）但已停用；設 `MAW_CC_PROJECT_SYNC=1` 可臨時重開舊的建立／重用 `MAW: <project> (<user>)` profile 行為。
+- **專案功能預設脫鉤。** cc-switch 的「專案」功能（`profiles` 表）不完整，MAW 不再讀寫 profiles：MAW 自己在 `.mawf/agents/*.json` 管理專案級 agents/subagents 模型設定，只**唯讀同步供應商設定資訊**（各供應商 `config.toml`／`config.json` 的高價值設定——base_url、model、auth_mode、failover 佇列……）。profile 相關程式碼模組保留在 `src/ccswitch.js`（含測試）但已停用；設 `MAW_CC_PROJECT_SYNC=1` 可臨時重開舊的建立／重用 `MAW: <project> (<user>)` profile 行為。
 - **絕不碰 `默认` 設定檔。** 任何名稱含 `默认`（例如 `Claude Code 默认`、`Codex 默认`）的設定檔**絕不**被寫入、更新或刪除 —— 一道硬性護欄會予以拒絕（即使重開舊同步也仍然生效）。
 - **路由規則**（`mawf routing`／`mawf doctor` 檢查；`mawf routing --fix` 套用豁免，**只**寫入 claude/codex 的 `proxy_config`）：
   - **Claude Code：** 本地路由**恆為開啟**＋自動故障轉移**恆為開啟**。
@@ -183,8 +183,8 @@ MAW 預設將你的 cc-switch 視為**唯讀**。以下規則在程式碼中強�
 **務必在 `mawf init` 之後立即執行 `trellis init -u <user-name>`。** MAW 會自動為你完成（它呼叫 [`@mindfoldhq/trellis`](https://github.com/mindfoldhq/trellis) —— 一個更強大、更嚴謹的工作流框架）。使用 `mawf init --no-trellis` 跳過。
 
 由於 trellis 與 MAW 都能管理檔案，發生衝突時 MAW 會**暫停** trellis init：
-1. **快照** MAW 管理的檔案（`.maw/*`，排除 `runtime/`／`logs/`）。
-2. **執行** `trellis init -u <user> -y --claude --codex`，將輸出串流至 `.maw/logs/trellis-init-<timestamp>.log`。
+1. **快照** MAW 管理的檔案（`.mawf/*`，排除 `runtime/`／`logs/`）。
+2. **執行** `trellis init -u <user> -y --claude --codex`，將輸出串流至 `.mawf/logs/trellis-init-<timestamp>.log`。
 3. **偵測** trellis 動過的任何 MAW 管理檔案 → **暫停**，在終端機印出衝突詳情＋概覽＋日誌路徑。
 4. **你逐項選擇**：`[m]` 保留 MAW（透過 `mawf plan` 重新產生）· `[t]` 保留 trellis · `[r]` 重新執行 trellis init 以**恢復進度**。
 5. MAW 套用你的選擇並繼續。
@@ -194,7 +194,7 @@ MAW 預設將你的 cc-switch 視為**唯讀**。以下規則在程式碼中強�
 **Trellis 更新追蹤器。** 本倉庫的 GitHub Actions 工作流程 [`trellis-update-tracker`](./.github/workflows/trellis-tracker.yml) 會自動追蹤 `@mindfoldhq/trellis` 的更新（每週＋手動觸發）：出現新 npm 版本時，它會開啟一個 `[trellis-tracker]` issue（含版本與連結）並推進 `.github/trellis-tracker/state.json`。唯一例外：**如果 trellis 刪庫**（上游 404），追蹤器會開啟一條 notice issue、暫停追蹤，且工作流程仍然成功——上游恢復後自動恢復追蹤。MAW 透過 `@latest` 呼叫 trellis，因此 MAW 本身無需升級動作；issue 只是提醒人工審閱變更日誌。
 
 ## 9. 成本控制機制
-來自 cc-switch `proxy_request_logs` 的真實推理消費 → USD/分鐘。**每智慧體** $5/分鐘、**總計** $10/分鐘（獨立）、**最大並發** 16 —— 可在 `.maw/config.yaml` 或透過旗標編輯。定價來源鏈：cc-switch `model_pricing` → 供應商 `cost_multiplier` → 內建**估計值**（標記 `estimated:true`）→ `null`（絕不偽造）。不經 cc-switch 代理路由的宿主（pi、dsh）沒有可測的消費速率 → 速率限額降級為僅並發；dsh 上的**價格門**仍透過 cc-switch 自動同步的 `~/.cc-switch/model-pricing.json` 生效（命中的模型 id 獲得真實價格，未命中保持未知）。
+來自 cc-switch `proxy_request_logs` 的真實推理消費 → USD/分鐘。**每智慧體** $5/分鐘、**總計** $10/分鐘（獨立）、**最大並發** 16 —— 可在 `.mawf/config.yaml` 或透過旗標編輯。定價來源鏈：cc-switch `model_pricing` → 供應商 `cost_multiplier` → 內建**估計值**（標記 `estimated:true`）→ `null`（絕不偽造）。不經 cc-switch 代理路由的宿主（pi、dsh）沒有可測的消費速率 → 速率限額降級為僅並發；dsh 上的**價格門**仍透過 cc-switch 自動同步的 `~/.cc-switch/model-pricing.json` 生效（命中的模型 id 獲得真實價格，未命中保持未知）。
 
 ```bash
 mawf cost      # current rate + top sessions + used% vs limit
@@ -211,13 +211,13 @@ git clone https://github.com/<you>/multi-agents-workflow.git
 cd multi-agents-workflow
 npx . install          # or node bin/mawf.js install
 ```
-`install` 將指令／智慧體／hook／技能複製進 Claude Code（並盡力處理 Codex），並在 `~/.maw/installed.json` 清單記錄**每一個寫入的檔案**，且為非破壞性（解除安裝會跨全部宿主精確移除這些檔案——包括不帶 `maw-*` 前綴的外掛 agents/hooks——並清理因此變空的目錄）。**install 在特殊宿主間是疊加式的**（0.4.2）：在 dsh 安裝上 `MAW_HOST=pi install` 會同時分發兩個宿主的資產並記錄兩個目錄——install 絕不靜默丟棄另一宿主的資產；明確移除用 `uninstall`。專案 `.maw/` 設定預設**保留**，傳 `--purge-config` 才刪除；`--restore-routing` 可將 cc-switch `proxy_config` 回滾到 init 前的快照。`update` 重新複製模板、保留你的編輯，並**清理舊版安裝殘留的資產**（按 v2 清單精確差異——絕不碰使用者自建檔案）。`upgrade` 自升級**且預設自動重新整理已安裝範本**：checkout 安裝走 `git fetch` + ff-only 拉取，npm 安裝走 `npm i -g`（`--dry-run`/`--remote`；絕不 stash/rebase/force），隨後 spawn 新版 `bin/mawf.js update`，並**繼承已安裝宿主**（用 `--no-apply-templates` 跳過；重新整理失敗僅降級為警告）。
+`install` 將指令／智慧體／hook／技能複製進 Claude Code（並盡力處理 Codex），並在 `~/.mawf/installed.json` 清單記錄**每一個寫入的檔案**，且為非破壞性（解除安裝會跨全部宿主精確移除這些檔案——包括不帶 `maw-*` 前綴的外掛 agents/hooks——並清理因此變空的目錄）。**install 在特殊宿主間是疊加式的**（0.4.2）：在 dsh 安裝上 `MAW_HOST=pi install` 會同時分發兩個宿主的資產並記錄兩個目錄——install 絕不靜默丟棄另一宿主的資產；明確移除用 `uninstall`。專案 `.mawf/` 設定預設**保留**，傳 `--purge-config` 才刪除；`--restore-routing` 可將 cc-switch `proxy_config` 回滾到 init 前的快照。`update` 重新複製模板、保留你的編輯，並**清理舊版安裝殘留的資產**（按 v2 清單精確差異——絕不碰使用者自建檔案）。`upgrade` 自升級**且預設自動重新整理已安裝範本**：checkout 安裝走 `git fetch` + ff-only 拉取，npm 安裝走 `npm i -g`（`--dry-run`/`--remote`；絕不 stash/rebase/force），隨後 spawn 新版 `bin/mawf.js update`，並**繼承已安裝宿主**（用 `--no-apply-templates` 跳過；重新整理失敗僅降級為警告）。
 
 ## 11. 使用範例
 **最小：** `mawf init -u alice`（先對 cc-switch 做快照）→ `mawf plan --project .` → `mawf run` → `mawf cost`。
 **模型選擇：** `mawf models` —— 檢視每個角色分得哪個 provider（API key）＋模型，以及原因（能力適配 → 剩餘額度 → 花銷速率）。
 **完整：** `mawf plan --project . --task-type coding --risk high --parallel 6 --value high --context large` → 每次產生前執行 `mawf guard` → `mawf acquire/release` → `mawf review --after post-implementation`。
-見 [`examples/complex-project-workflow.md`](./examples/complex-project-workflow.md) 與產生的 [`examples/.maw-sample/`](./examples/.maw-sample/)。
+見 [`examples/complex-project-workflow.md`](./examples/complex-project-workflow.md) 與產生的 [`examples/.mawf-sample/`](./examples/.mawf-sample/)。
 
 **常見錯誤：** `cc-switch database not found` → `mawf doctor`；`DENY spawn ... per-agent limit` → 降低並發或調高 `--per-agent`；`codex not ready` → 安裝 codex＋codex-plugin-cc（MAW 在風險 ≥ 中等時降級為第二個 Claude 審查者）；`routing NOT compliant` → `mawf routing --fix`。
 

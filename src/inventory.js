@@ -582,14 +582,14 @@ function projectPromptSurfaces(projectDir, relevant) {
 }
 
 /**
- * MAW workflows/harnesses living in the project's .maw/.
+ * MAW workflows/harnesses living in the project's .mawf/.
  * @param {string} projectDir
  */
 function projectWorkflows(projectDir) {
   const out = [];
-  const wf = path.join(projectDir, ".maw", "workflow.json");
+  const wf = path.join(projectDir, ".mawf", "workflow.json");
   if (isFile(wf)) out.push({ name: "workflow.json", path: wf });
-  const agents = path.join(projectDir, ".maw", "agents");
+  const agents = path.join(projectDir, ".mawf", "agents");
   if (exists(agents)) {
     try {
       for (const e of fs.readdirSync(agents)) {
@@ -604,7 +604,7 @@ const DIGEST_MAX_LINES = 200;
 
 /**
  * Render the compact agent-readable digest. Hard cap 200 lines; over budget
- * truncates name lists with "(+N more — see .maw/inventory.json)".
+ * truncates name lists with "(+N more — see .mawf/inventory.json)".
  * @param {InventoryReport} report
  * @returns {string}
  */
@@ -636,30 +636,30 @@ export function renderDigest(report) {
   }
   if (lines.length > DIGEST_MAX_LINES) {
     lines.length = DIGEST_MAX_LINES;
-    lines.push(`… truncated at ${DIGEST_MAX_LINES} lines — see .maw/inventory.json for the full report`);
+    lines.push(`… truncated at ${DIGEST_MAX_LINES} lines — see .mawf/inventory.json for the full report`);
   }
   return lines.join("\n") + "\n";
 }
 
 /**
- * Comma-joined name list that yields "(+N more — see .maw/inventory.json)"
+ * Comma-joined name list that yields "(+N more — see .mawf/inventory.json)"
  * when it would blow the line budget (rough heuristic: ~110 names visible).
  * @param {string[]} names
  */
 function nameList(names) {
   const visible = names.slice(0, 110);
   const rest = names.length - visible.length;
-  return visible.join(", ") + (rest > 0 ? ` (+${rest} more — see .maw/inventory.json)` : "");
+  return visible.join(", ") + (rest > 0 ? ` (+${rest} more — see .mawf/inventory.json)` : "");
 }
 
 /**
- * Write .maw/inventory.json + .maw/inventory-digest.md.
+ * Write .mawf/inventory.json + .mawf/inventory-digest.md.
  * @param {string} projectDir
  * @param {InventoryReport} report
  * @returns {{ jsonPath: string, digestPath: string }}
  */
 export function writeInventoryArtifacts(projectDir, report) {
-  const mawDir = path.join(projectDir, ".maw");
+  const mawDir = path.join(projectDir, ".mawf");
   ensureDir(mawDir);
   const jsonPath = path.join(mawDir, "inventory.json");
   const digestPath = path.join(mawDir, "inventory-digest.md");

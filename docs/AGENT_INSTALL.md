@@ -41,9 +41,9 @@ Prerequisites: Node ≥ 20.17, `npm i -g @deepseek-ai/dsh` (verify `dsh --versio
    ```
 
    Keys live in `~/.dsh/.credentials.yaml` (write-only; referenced by `apiKeyEnv`). Renaming a provider id is not supported — add a new one and delete the old.
-2. **Install MAW assets**: `npx . install` on a dsh host copies MAW skills into `$DSH_HOME/skills` (rank-400 user root). No prompts/commands surface exists on dsh — role specs stay portable under `.maw/agents/`.
-3. **Init**: `MAW_HOST=dsh mawf init -u <user>` (or set the env before any maw command) — writes `.maw/`, skips cc-switch profile creation for dsh, and chains `trellis init --dsh` (shared `.agents/skills/` + dsh-private `.dsh/skills/` entry skills + `.dsh/DSH.md`).
-4. **Plan/run**: `mawf plan --project .` then run one orchestrator session via `dsh web` (choose the project workspace) or `dsh --profile headless "<task>"`; spawn workers with dsh's subagent tool using `.maw/agents/<role>.md` as the payload.
+2. **Install MAW assets**: `npx . install` on a dsh host copies MAW skills into `$DSH_HOME/skills` (rank-400 user root). No prompts/commands surface exists on dsh — role specs stay portable under `.mawf/agents/`.
+3. **Init**: `MAW_HOST=dsh mawf init -u <user>` (or set the env before any maw command) — writes `.mawf/`, skips cc-switch profile creation for dsh, and chains `trellis init --dsh` (shared `.agents/skills/` + dsh-private `.dsh/skills/` entry skills + `.dsh/DSH.md`).
+4. **Plan/run**: `mawf plan --project .` then run one orchestrator session via `dsh web` (choose the project workspace) or `dsh --profile headless "<task>"`; spawn workers with dsh's subagent tool using `.mawf/agents/<role>.md` as the payload.
 5. **Troubleshooting**: `MISSING_CREDENTIAL` → store the key via the Models page or export the `apiKeyEnv` variable; `UNKNOWN_MODEL` → select a configured model or add it to the custom provider's `models` list.
 
 ## 3. Doctor (environment + policy check)
@@ -55,7 +55,7 @@ Verify: Node ≥ 20, git, **host = claude-code | codex | pi | dsh**, cc-switch D
 ## 4. cc-switch policy (HARD RULES — do not violate)
 - All existing cc-switch data is **read-only**.
 - **Before every `mawf init`, a packaged snapshot of ALL cc-switch config files is taken** → `~/.cc-switch/maw-backups/cc-switch-snapshot-<timestamp>.tar.gz` (directory copy + sha256 manifest if `tar` is unavailable). Mention the snapshot path to the user.
-- **Project functionality is DECOUPLED by default** (2026-08-12): cc-switch's "project" feature (`profiles`) is incomplete, so MAW no longer reads/writes profiles. MAW manages project-level agent/subagent model configs itself in `.maw/agents/*.json` and only **syncs provider config info read-only** (the high-value settings in each provider's `config.toml`/`config.json`: base_url, model, auth_mode, failover …). The legacy `MAW: <project> (<user>)` profile create/reuse is disabled unless `MAW_CC_PROJECT_SYNC=1` is set — then it creates a **NEW** profile only (never modifies existing ones).
+- **Project functionality is DECOUPLED by default** (2026-08-12): cc-switch's "project" feature (`profiles`) is incomplete, so MAW no longer reads/writes profiles. MAW manages project-level agent/subagent model configs itself in `.mawf/agents/*.json` and only **syncs provider config info read-only** (the high-value settings in each provider's `config.toml`/`config.json`: base_url, model, auth_mode, failover …). The legacy `MAW: <project> (<user>)` profile create/reuse is disabled unless `MAW_CC_PROJECT_SYNC=1` is set — then it creates a **NEW** profile only (never modifies existing ones).
 - **NEVER** touch any profile whose name contains `默认` (e.g. `Claude Code 默认`, `Codex 默认`). The engine hard-refuses this; you must not bypass it.
 - Routing (checked by `mawf doctor` / `mawf routing`; applied by `mawf routing --fix`, writing ONLY `proxy_config` for claude/codex):
   - **Claude Code:** local routing **always ON** + auto-failover **always ON**.
@@ -70,9 +70,9 @@ If `mawf routing` reports violations, run `mawf routing --fix` (after the user c
 ```bash
 mawf init -u <user-name>
 ```
-This: (a) **snapshots all cc-switch config** to `~/.cc-switch/maw-backups/`, (b) writes `.maw/` configs (paused with a ⚠ PRICE GATE report + exit 3 if any model assignment is expensive — resolve via `mawf approve-model --role <role> --yes` or a cheaper model, then re-run), (c) notes that cc-switch project-profile sync is DECOUPLED by default (`MAW_CC_PROJECT_SYNC=1` re-enables), (d) checks the routing policy, (e) **automatically runs `trellis init -u <user-name>`** as the mandatory next step.
+This: (a) **snapshots all cc-switch config** to `~/.cc-switch/maw-backups/`, (b) writes `.mawf/` configs (paused with a ⚠ PRICE GATE report + exit 3 if any model assignment is expensive — resolve via `mawf approve-model --role <role> --yes` or a cheaper model, then re-run), (c) notes that cc-switch project-profile sync is DECOUPLED by default (`MAW_CC_PROJECT_SYNC=1` re-enables), (d) checks the routing policy, (e) **automatically runs `trellis init -u <user-name>`** as the mandatory next step.
 
-**trellis conflict handling** (see README §8): if trellis touches a MAW-managed file, MAW pauses, prints the conflict + overview + log path (`.maw/logs/trellis-init-*.log`), and asks the user to choose `[m]` keep MAW / `[t]` keep trellis / `[r]` re-run trellis. Apply the user's choice and resume. In a non-interactive context, surface the conflicts + log and let the user decide.
+**trellis conflict handling** (see README §8): if trellis touches a MAW-managed file, MAW pauses, prints the conflict + overview + log path (`.mawf/logs/trellis-init-*.log`), and asks the user to choose `[m]` keep MAW / `[t]` keep trellis / `[r]` re-run trellis. Apply the user's choice and resume. In a non-interactive context, surface the conflicts + log and let the user decide.
 
 Use `mawf init -u <user> --no-trellis` only when you must skip the trellis chain (e.g. CI/automated).
 
@@ -82,7 +82,7 @@ mawf plan --project .
 # with explicit signals:
 mawf plan --project . --task-type coding --risk high --parallel 6 --value high --context large
 ```
-Reads `.maw/workflow.json` + `plan.md` + `agents/*.json`. Report the chosen **primary architecture**, the **agents** (role→model), **cost limits**, and **review gates** back to the user.
+Reads `.mawf/workflow.json` + `plan.md` + `agents/*.json`. Report the chosen **primary architecture**, the **agents** (role→model), **cost limits**, and **review gates** back to the user.
 
 ### 5b. Explain the model choices (capability-aware)
 ```bash
@@ -101,21 +101,21 @@ The host (Claude Code) reads the batches, and **before each spawn** checks `mawf
 mawf cost        # real USD/min from cc-switch logs
 mawf guard       # ALLOW/DENY a new spawn
 ```
-Defaults: $5/min per agent, $10/min total, max concurrency 16. Edit `.maw/config.yaml` to change.
+Defaults: $5/min per agent, $10/min total, max concurrency 16. Edit `.mawf/config.yaml` to change.
 
 ## 9. Graceful degradation
 - No codex/codex-plugin-cc → MAW uses a **second Claude Code agent** as reviewer for risk ≥ medium.
 - No cc-switch DB → pricing unavailable, cost guard uses concurrency-only limiting.
 - trellis not installed → MAW prints the exact command to install/run it.
-- **dsh host specifics** → providers/models from `~/.dsh/settings.yaml` (never cc-switch); spend rate not measured (no proxy) → cost guard is concurrency-only, but the price gate uses cc-switch's auto-synced `~/.cc-switch/model-pricing.json` where model ids match (unmatched ids price as unknown → human approval). No named agent files: spawn workers via dsh's subagent tool with `.maw/agents/<role>.md` as the payload. `MISSING_CREDENTIAL`/`UNKNOWN_MODEL` errors come from dsh itself — fix the provider in `dsh web` → Settings → Models (or edit settings.yaml), not in cc-switch.
+- **dsh host specifics** → providers/models from `~/.dsh/settings.yaml` (never cc-switch); spend rate not measured (no proxy) → cost guard is concurrency-only, but the price gate uses cc-switch's auto-synced `~/.cc-switch/model-pricing.json` where model ids match (unmatched ids price as unknown → human approval). No named agent files: spawn workers via dsh's subagent tool with `.mawf/agents/<role>.md` as the payload. `MISSING_CREDENTIAL`/`UNKNOWN_MODEL` errors come from dsh itself — fix the provider in `dsh web` → Settings → Models (or edit settings.yaml), not in cc-switch.
 
 ## 10. Uninstall / update
 ```bash
 npx . uninstall     # removes EXACTLY what install wrote (manifest-driven, all
                     # hosts — incl. the non-maw-* plugin agents/hooks), prunes
-                    # dirs it emptied; project .maw/ configs are KEPT
+                    # dirs it emptied; project .mawf/ configs are KEPT
 npx . uninstall --purge-config [--project <dir>]
-                    # also deletes <dir>/.maw/ and .pi/agents/maw-*
+                    # also deletes <dir>/.mawf/ and .pi/agents/maw-*
                     # (never trellis-*); --keep-config is the explicit default
 npx . uninstall --restore-routing
                     # rolls cc-switch proxy_config (claude/codex) back to the
@@ -134,4 +134,4 @@ npx . upgrade       # self-upgrade + template refresh BY DEFAULT (0.4.1):
 Uninstall never removes trellis-owned files (`.trellis/`, trellis entries in `.agents/skills` / `.dsh/skills`) — mention them for manual removal. Snapshots under `~/.cc-switch/maw-backups/` are the user's audit trail and are kept.
 
 ## 11. Report back to the user
-After install+plan, tell the user: the architecture chosen, the agents, the cost limits, the routing compliance, and whether the trellis chain succeeded (or what conflict needs resolving). Link the log: `.maw/logs/trellis-init-*.log`.
+After install+plan, tell the user: the architecture chosen, the agents, the cost limits, the routing compliance, and whether the trellis chain succeeded (or what conflict needs resolving). Link the log: `.mawf/logs/trellis-init-*.log`.
