@@ -91,13 +91,14 @@ Minimal agent prompt: *"Install and configure MAW by following `docs/AGENT_INSTA
 7. [cc-switch Integration & Routing Policy](#7-cc-switch-integration--routing-policy)
 8. [trellis init as the Mandatory Next Step](#8-trellis-init-as-the-mandatory-next-step)
 9. [Cost Control Mechanism](#9-cost-control-mechanism)
-10. [Installation](#10-installation)
-11. [Usage Examples](#11-usage-examples)
-12. [Directory Structure](#12-directory-structure)
-13. [Security Notes](#13-security-notes)
-14. [Known Limitations](#14-known-limitations)
-15. [Contributors](#15-contributors)
-16. [Contact](#16-contact)
+10. [Cross-host Awareness & Advising](#10-cross-host-awareness--advising)
+11. [Installation](#11-installation)
+12. [Usage Examples](#12-usage-examples)
+13. [Directory Structure](#13-directory-structure)
+14. [Security Notes](#14-security-notes)
+15. [Known Limitations](#15-known-limitations)
+16. [Contributors](#16-contributors)
+17. [Contact](#17-contact)
 
 ## 1. Project Goals
 - **Dynamic, not fixed.** MAW scores six architectures against real project signals + host capabilities, and selects the best fit — or a combination. See [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md).
@@ -205,7 +206,17 @@ mawf acquire --id <id> --role <r>   # take a slot
 mawf release --id <id>             # release a slot
 ```
 
-## 10. Installation
+## 10. Cross-host Awareness & Advising
+
+Every supported host session in a MAW project knows the whole machine. Three pieces:
+
+**`mawf inventory`** scans ALL installed supported hosts (claude-code / codex / pi / dsh) + the project into `.mawf/inventory.json` (full detail) and `.mawf/inventory-digest.md` (compact, ≤200 lines): skills (origin-tagged, symlink-deduped), plugins, marketplaces, MCP servers, prompt surfaces, and the full switchable model pool (pi merges `models-store.json` catalogs). **`--verify`** probes each host's own CLI (`claude mcp list`, `codex mcp list --json`, dsh `--dump-config`) and attaches live statuses — connected ✓ / failed ✗ / pending-approval ⏸ / unsupported ⚠; dsh reports its everything-as-a-plugin component table. Honest gaps stay explicit: claude plugin enable-state, dsh's full plugin/skill list, and codex_apps remain UI-only truths (see [`docs/ROADMAP.md`](./docs/ROADMAP.md)).
+
+**`mawf advise [--task "<text>"] [--difficulty 1-5] [--json]`** scores every host against the task deterministically — capabilityFit (≤30), skillMatch (≤30; failed/pending MCPs and disabled plugins never match), modelFit (≤25), costFit (≤15) + a +8 stayBonus on the current host; switching is recommended only when the winner leads by ≥10 (hysteresis). On `switch` it pre-creates a `.mawf/handoff/<ts>-<from>-<to>.md` brief and prints the exact launch command — dsh's is `kill -9 $(lsof -ti tcp:3080) && dsh web` (a live old instance holds port 3080). **Advise never executes anything**; the human runs the command.
+
+**Proactive injection (project scope only — global prompt files are never touched).** `init/plan/install/update/upgrade` write an idempotent managed block (≤20 lines, `<!-- mawf:cross-host-advise BEGIN/END -->`) into the project root `AGENTS.md` + `CLAUDE.md` — surfaces every supported host loads. The block tells any session agent to: re-run the stay/switch analysis at session start and on the first prompt of each day (UTC+8, freshness state in `.mawf/runtime/advise-state.json`); surface the recommendation with reasons; on switch, fill the handoff brief and show the command verbatim; pick up fresh (<48h) handoff briefs; consult the digest before claiming anything is "missing" on this machine. `mawf uninstall` keeps blocks by default; `--purge-config` strips them.
+
+## 11. Installation
 **From npm:** `npx multi-agents-workflow@latest install`.
 **From a fork/clone (now):**
 ```bash
@@ -215,7 +226,7 @@ npx . install          # or node bin/mawf.js install
 ```
 `install` copies commands/agents/hooks/skills into Claude Code (and Codex, best-effort), records **every written file** in the `~/.mawf/installed.json` manifest, and is non-destructive (`uninstall` removes exactly those files across all hosts — including the non-`maw-*` plugin agents/hooks — then prunes dirs it emptied). **Install is additive across special hosts** (0.4.2): `MAW_HOST=pi install` on a dsh install ships both hosts' assets and records both dirs — install never silently drops another host's assets; explicit removal is `uninstall`. Project configs in `.mawf/` are **kept** unless you pass `--purge-config`; `--restore-routing` rolls cc-switch `proxy_config` back to the pre-init snapshot. `update` re-copies templates, preserving your edits, and **removes stale assets** an older install left behind (exact v2-manifest diff — user files are never touched). `upgrade` self-upgrades **and refreshes installed templates by default**: `git fetch` + ff-only pull for checkout installs, `npm i -g` for npm installs (`--dry-run`, `--remote`; never stashes/rebases/forces) — then spawns the new `bin/mawf.js update` **with the installed host inherited** (skip with `--no-apply-templates`; a refresh failure degrades to a warning).
 
-## 11. Usage Examples
+## 12. Usage Examples
 **Minimal:** `mawf init -u alice` (snapshots cc-switch first) → `mawf plan --project .` → `mawf run` → `mawf cost`.
 **Model choice:** `mawf models` — see which provider(api key)+model each role gets and why (capability fit → remaining quota → cost rate).
 **Full:** `mawf plan --project . --task-type coding --risk high --parallel 6 --value high --context large` → `mawf guard` before each spawn → `mawf acquire/release` → `mawf review --after post-implementation`.
@@ -223,27 +234,27 @@ See [`examples/complex-project-workflow.md`](./examples/complex-project-workflow
 
 **Common errors:** `cc-switch database not found` → `mawf doctor`; `DENY spawn ... per-agent limit` → lower concurrency or raise `--per-agent`; `codex not ready` → install codex + codex-plugin-cc (MAW degrades to a second Claude reviewer for risk ≥ medium); `routing NOT compliant` → `mawf routing --fix`.
 
-## 12. Directory Structure
+## 13. Directory Structure
 ```
 bin/mawf.js  src/  plugin/  skills/  defaults/  examples/  tests/  docs/
 .github/workflows/ci.yml  README.{md,zh-Hans,zh-Hant}  LICENSE(MIT)
 ```
 
-## 13. Security Notes
+## 14. Security Notes
 cc-switch is read-only by default; the only writes are (a) the DECOUPLED project-profile sync — **disabled by default**, re-enabled only via `MAW_CC_PROJECT_SYNC=1` (creates a NEW profile only, never touches `默认`) — and (b) the opt-in `proxy_config` carve-out for claude/codex — both hard-guarded (no `DELETE`/`DROP`, no `UPDATE` on profiles/providers/skills, never on `默认`). The price gate pauses expensive model assignments until a human acts. The `PreToolUse` hook only **blocks** over-budget spawns. External code was reviewed (license + no hidden network/credential-harvesting) before reuse — see [`NOTICE.md`](./NOTICE.md), [`ACKNOWLEDGEMENTS.md`](./ACKNOWLEDGEMENTS.md).
 
-## 14. Known Limitations
+## 15. Known Limitations
 - Not yet on npm (use `npx . install`).
 - The cost guard measures **past** spend; a burst can briefly exceed the limit.
 - Codex review depends on codex-plugin-cc; without it, MAW substitutes a second Claude reviewer.
 - The routing carve-out writes cc-switch's SQLite directly; the cc-switch GUI may need a restart to reflect it.
 - Cross-process graph crash recovery is on the roadmap.
 
-## 15. Contributors
+## 16. Contributors
 - **imBlanker** — initial implementation.
 > Contributions welcome — see [`CONTRIBUTING.md`](./CONTRIBUTING.md) and [`docs/GOVERNANCE.md`](./docs/GOVERNANCE.md). *(No other contributors are fabricated.)*
 
-## 16. Contact
+## 17. Contact
 - Issues: <https://github.com/imBlanker/multi-agents-workflow/issues>
 - Author: **imBlanker** (GitHub). *(Contact details to be added; none fabricated.)*
 

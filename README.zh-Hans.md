@@ -89,13 +89,14 @@ curl -fsSL https://raw.githubusercontent.com/imBlanker/multi-agents-workflow/mai
 7. [cc-switch 集成与路由策略](#7-cc-switch-集成与路由策略)
 8. [trellis init 作为强制性的下一步](#8-trellis-init-作为强制性的下一步)
 9. [成本控制机制](#9-成本控制机制)
-10. [安装](#10-安装)
-11. [用法示例](#11-用法示例)
-12. [目录结构](#12-目录结构)
-13. [安全说明](#13-安全说明)
-14. [已知限制](#14-已知限制)
-15. [贡献者](#15-贡献者)
-16. [联系方式](#16-联系方式)
+10. [跨宿主感知与建议](#10-跨宿主感知与建议)
+11. [安装](#11-安装)
+12. [用法示例](#12-用法示例)
+13. [目录结构](#13-目录结构)
+14. [安全说明](#14-安全说明)
+15. [已知限制](#15-已知限制)
+16. [贡献者](#16-贡献者)
+17. [联系方式](#17-联系方式)
 
 ## 1. 项目目标
 - **动态，而非固定。** MAW 依据真实的项目信号 + 宿主能力对六种架构打分，并选择最合适的——或一个组合。见 [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md)。
@@ -203,7 +204,17 @@ mawf acquire --id <id> --role <r>   # take a slot
 mawf release --id <id>             # release a slot
 ```
 
-## 10. 安装
+## 10. 跨宿主感知与建议
+
+MAW 项目中任一受支持宿主的会话都掌握整机的全貌。三个组成部分：
+
+**`mawf inventory`** 扫描本机所有已安装的受支持宿主（claude-code / codex / pi / dsh）+ 当前项目，产出 `.mawf/inventory.json`（全量）与 `.mawf/inventory-digest.md`（紧凑摘要，≤200 行）：技能（带来源标签、symlink 去重）、插件、marketplaces、MCP 服务器、提示词面、完整可切换模型池（pi 合并 `models-store.json` 目录）。**`--verify`** 探测各宿主自己的 CLI（`claude mcp list`、`codex mcp list --json`、dsh `--dump-config`）并附实时状态——connected ✓ / failed ✗ / pending-approval ⏸ / unsupported ⚠；dsh 输出其 everything-as-a-plugin 组件表。诚实缺口保持显式标注：claude 插件启用态、dsh 全量插件/技能清单、codex_apps 仅 UI 可见（见 [`docs/ROADMAP.md`](./docs/ROADMAP.md)）。
+
+**`mawf advise [--task "<文本>"] [--difficulty 1-5] [--json]`** 用纯确定性规则为每个宿主打分——capabilityFit（≤30）、skillMatch（≤30；失败/待批准的 MCP 与已禁用插件永不参与匹配）、modelFit（≤25）、costFit（≤15），另对当前宿主 +8 留守加分；仅当领先者超出 ≥10 分才建议切换（滞回，防反复横跳）。判定为 `switch` 时预生成 `.mawf/handoff/<时间戳>-<from>-<to>.md` 交接简报，并打印确切的启动命令——dsh 的命令是 `kill -9 $(lsof -ti tcp:3080) && dsh web`（旧实例占用 3080 端口）。**advise 绝不执行任何命令**，由人类自己运行。
+
+**主动注入（仅项目级——绝不碰全局提示词文件）。** `init/plan/install/update/upgrade` 会向项目根 `AGENTS.md` + `CLAUDE.md`（所有受支持宿主都会加载的面）写入幂等管理块（≤20 行，`<!-- mawf:cross-host-advise BEGIN/END -->`）。该块指示任何会话中的 agent：在会话开始及每天（UTC+8）第一个提示词时重新运行留守/切换分析（新鲜度状态存于 `.mawf/runtime/advise-state.json`）；主动向人类呈现建议与理由；切换时填好交接简报并原样展示命令；接续 48 小时内的交接简报；在声称本机"缺少"某能力之前先查摘要。`mawf uninstall` 默认保留管理块；`--purge-config` 将其移除。
+
+## 11. 安装
 **从 npm：** `npx multi-agents-workflow@latest install`。
 **从 fork/clone（现在）：**
 ```bash
@@ -213,7 +224,7 @@ npx . install          # or node bin/mawf.js install
 ```
 `install` 把 commands/agents/hooks/skills 拷贝到 Claude Code（以及 Codex，尽力而为），并在 `~/.mawf/installed.json` 清单中记录**每一个写入的文件**，且是非破坏性的（卸载会跨全部宿主精确移除这些文件——包括不带 `maw-*` 前缀的插件 agents/hooks——并清理因此变空的目录）。**install 在特殊宿主间是叠加式的**（0.4.2）：在 dsh 安装上 `MAW_HOST=pi install` 会同时分发两个宿主的资产并记录两个目录——install 绝不静默丢弃另一宿主的资产；显式移除用 `uninstall`。项目 `.mawf/` 配置默认**保留**，传 `--purge-config` 才删除；`--restore-routing` 可将 cc-switch `proxy_config` 回滚到 init 前的快照。`update` 重新拷贝模板、保留你的编辑，并**清理旧版安装残留的资产**（按 v2 清单精确差异——绝不触碰用户自建文件）。`upgrade` 自升级**且默认自动刷新已装模板**：checkout 安装走 `git fetch` + ff-only 拉取，npm 安装走 `npm i -g`（`--dry-run`/`--remote`；绝不 stash/rebase/force），随后 spawn 新版 `bin/mawf.js update`，并**继承已安装宿主**（用 `--no-apply-templates` 跳过；刷新失败仅降级为警告）。
 
-## 11. 用法示例
+## 12. 用法示例
 **最简：** `mawf init -u alice`（先对 cc-switch 做快照）→ `mawf plan --project .` → `mawf run` → `mawf cost`。
 **模型选择：** `mawf models`——查看每个角色分到哪个 provider（api key）+模型，以及为什么（能力适配 → 剩余额度 → 花销速率）。
 **完整：** `mawf plan --project . --task-type coding --risk high --parallel 6 --value high --context large` → 每次 spawn 前执行 `mawf guard` → `mawf acquire/release` → `mawf review --after post-implementation`。
@@ -221,27 +232,27 @@ npx . install          # or node bin/mawf.js install
 
 **常见错误：** `cc-switch database not found` → `mawf doctor`；`DENY spawn ... per-agent limit` → 降低并发或调高 `--per-agent`；`codex not ready` → 安装 codex + codex-plugin-cc（MAW 对 risk ≥ medium 降级为第二个 Claude 审查者）；`routing NOT compliant` → `mawf routing --fix`。
 
-## 12. 目录结构
+## 13. 目录结构
 ```
 bin/mawf.js  src/  plugin/  skills/  defaults/  examples/  tests/  docs/
 .github/workflows/ci.yml  README.{md,zh-Hans,zh-Hant}  LICENSE(MIT)
 ```
 
-## 13. 安全说明
+## 14. 安全说明
 cc-switch 默认只读；仅有的写入是 (a) 已脱钩的项目 profile 同步——**默认停用**，仅当 `MAW_CC_PROJECT_SYNC=1` 时重开（只创建新 profile，绝不触碰 `默认`）——与 (b) 为 claude/codex 写入的可选 `proxy_config` carve-out——两者都有硬护栏（无 `DELETE`/`DROP`，对 profiles/providers/skills 无 `UPDATE`，绝不动 `默认`）。价格门禁会暂停昂贵的模型配用直到人工处理。`PreToolUse` hook 只**阻止**超预算的 spawn。外部代码在复用前已审查（许可证 + 无隐藏的网络/凭据窃取）——见 [`NOTICE.md`](./NOTICE.md)、[`ACKNOWLEDGEMENTS.md`](./ACKNOWLEDGEMENTS.md)。
 
-## 14. 已知限制
+## 15. 已知限制
 - 尚未发布到 npm（使用 `npx . install`）。
 - 成本护栏度量的是**过去**的花费；突发流量可能短暂超过限制。
 - Codex 审查依赖 codex-plugin-cc；缺少它时，MAW 以第二个 Claude 审查者替代。
 - 路由 carve-out 直接写入 cc-switch 的 SQLite；cc-switch GUI 可能需要重启才能反映。
 - 跨进程的图工作流崩溃恢复已列入路线图。
 
-## 15. 贡献者
+## 16. 贡献者
 - **imBlanker** —— 初始实现。
 > 欢迎贡献——见 [`CONTRIBUTING.md`](./CONTRIBUTING.md) 与 [`docs/GOVERNANCE.md`](./docs/GOVERNANCE.md)。*（不捏造其他贡献者。）*
 
-## 16. 联系方式
+## 17. 联系方式
 - Issues：<https://github.com/imBlanker/multi-agents-workflow/issues>
 - 作者：**imBlanker**（GitHub）。*（联系方式待补充；不捏造。）*
 

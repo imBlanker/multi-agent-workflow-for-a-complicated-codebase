@@ -260,6 +260,50 @@ original (see `NOTICE.md` in the repo for what was borrowed and why).
 - [`openai/codex-plugin-cc`](https://github.com/openai/codex-plugin-cc) — the Codex review integration target.
 - [star-history](https://github.com/star-history/star-history) — the GitHub Stars trend chart used in the README.
 
+## 10. Cross-host Awareness & Advising (proactive orchestration)
+
+### Data flow
+
+```
+src/inventory.js ──scan──▶ ~/.claude ~/.codex ~/.pi/agent $DSH_HOME + project
+        │  InventoryReport → .mawf/inventory.json + inventory-digest.md (≤200 lines)
+        ▼
+src/advise.js ── deterministic scoring (caps/skills/models/prices) ──▶ AdviseResult
+        │  .mawf/runtime/advise-state.json (UTC+8 freshness)  ·  .mawf/handoff/<ts>-<from>-<to>.md
+        ▼  text output ends with the stable `ADVISE-DONE …` footer
+src/injectblock.js ── managed block in project AGENTS.md + CLAUDE.md
+        (mawf:cross-host-advise BEGIN/END · idempotent · ≤20 lines)
+```
+
+### InventoryReport (per host)
+
+`{ generatedAt, projectDir, hosts[] }`; each host: `{ app, homeDir, detected[], capabilities[], skills[{name,path,realPath,description,origin}], plugins[{name,source,status?}], marketplaces[], mcps[{name,source,status?}], prompts{global,project[]}, models[{id,provider,source,isCurrent,family,tags[],price}], workflowsHarnesses[], error?, mcpNote?, harnessNote? }`. Skill `origin`: user-global | agents-global | project | project-ancestor | npm-package. Symlinked skills dedupe by realPath. Missing host → skipped; per-host failure → `{app, error}`; broken JSON tolerated.
+
+Truth sources (verified against each host's own introspection): claude MCP = `~/.claude.json` global + ALL `projects[*].mcpServers` + project `.mcp.json`; claude plugins = `installed_plugins.json` keys (marketplaces are their own category; plugin enable-state is UI-only); codex MCP = `config.toml [mcp_servers.*]` (quoted names, env sub-sections filtered; `codex_apps` builtin is UI-only); codex plugins = `config.toml [plugins."name@marketplace"]`; pi MCP = `~/.pi/agent/mcp.json`; pi skills = `~/.pi/agent/skills` + `~/.agents/skills` + project `.pi/skills`/`.agents/skills` (+ ancestors to git root) + npm package `skills/`; pi models = `models.json` providers + `models-store.json` cached catalogs (switchable via `/model`); dsh plugins = `--dump-config` everything-as-a-plugin component table (full plugin/skill list is web-UI-only); dsh MCP = `settings.yaml` `mcp-client:` (report-only). `inventory --verify` probes host CLIs for live statuses (claude connected/failed/pending-approval; codex auth unsupported/…; injectable runner, hermetic tests).
+
+### AdviseResult
+
+`{ currentHost, task{text,domain,difficulty}, tokens[], recommendation: stay|switch, target, margin, scores[{host,total,breakdown{capabilityFit,skillMatch,modelFit,costFit},stayBonus,matched{skills,plugins,mcps,models},reasons[]}], launch{command,note}|null, handoffPath|null, stateUpdated }`. Weights/stayBonus/margin overridable in `.mawf/config.yaml` `advise:`. Output contract: text mode ends with `ADVISE-DONE recommendation=… target=… margin=… handoff=…` for the injected block to parse.
+
+### Scoring rules (defaults)
+
+| dimension | max | rule |
+|---|---|---|
+| capabilityFit | 30 | difficulty tier (1-2: 5/15/18/20, 3: 5/20/25/27, 4-5: 5/22/30/30 base +subagents +multi-agent +dynamic-workflow) — capped at 30 |
+| skillMatch | 30 | task tokens (ASCII words + CJK bigrams, stopwords dropped) vs skills/plugins/MCP names+descriptions: exact name 3 / name-substring 2 / description 1; raw × 2 capped; usable surfaces only (no-status or connected/active) |
+| modelFit | 25 | 0 models → 0; no suitable → 5; else 15 + min(10, 3×suitable); no agentic/coding model at difficulty ≥4 → capped 12 |
+| costFit | 15 | cheapest-suitable ratio across hosts; estimated prices capped at 70%; no price data → 55% neutral |
+| stayBonus | +8 | current host only |
+| switch | — | winner ≠ current AND margin ≥ 10 |
+
+### Launch resolution
+
+claude → `claude`; codex → `codex`; pi → `pi` (run in the project directory). dsh → resolve the PID holding 127.0.0.1:3080 (`lsof -ti tcp:3080` → `ss` pid= parse → null): resolved → `kill -9 <PID> && dsh web`; unresolved → template `kill -9 $(lsof -ti tcp:3080) && dsh web` + note. **Advise only prints; it never executes.** Port-kill is a user-environment quirk (old dsh instance holds the web port), documented here and in README §10.
+
+### Injection & reversibility
+
+Managed block written to project `AGENTS.md` + `CLAUDE.md` (create-if-absent; CLAUDE.md stub references AGENTS.md) at init/plan/install/update/upgrade. Foreign managed spans (e.g. Trellis) stay contiguous; corrupt single-marker spans are repaired non-destructively. Reversibility: keep-config keeps blocks; `--purge-config` strips spans and deletes mawf-created files recorded in `.mawf/managed-blocks.json` (project scope — NEVER the installer manifest `files[]`, which means whole-file removal).
+
 ---
 
 *License: MIT. This document is architecture-level prose grounded in the

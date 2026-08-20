@@ -2,7 +2,20 @@
 
 **multi-agents-workflow (MAW)** 的所有重要變更記錄於此。
 格式：[Keep a Changelog](https://keepachangelog.com/)；版本遵循
-[SemVer](https://semver.org/)。面向 AI 智慧體的摘要：[`docs/AGENT_CHANGELOG.md`](docs/AGENT_CHANGELOG.md)。
+[SemVer](https://semver.org/)。
+
+## [未發布]
+
+### 變更
+
+- **`.maw` → `.mawf`**：專案工作區、全域清單目錄 `~/.mawf`、範例目錄與全部文件統一改名。CLI 入口做一次性自動遷移：僅當新目錄不存在時改命名舊目錄（已存在的 `.mawf` 永遠優先；絕不合併）。
+- 主動跨宿主編排（inventory / advise / 注入管理塊）詳見 README §10 與 `docs/ARCHITECTURE.md` §10。
+
+### 新增
+
+- `docs/ROADMAP.md`：下一版改進項，逐條帶教訓出處（uninstall --dry-run、插件啟用態探測、dsh 全量真相、codex_apps、庫存漂移自檢、探測重試、目錄模型定價、捕獲真實輸出的 smoke、堆疊 PR 衛生）。
+
+面向 AI 智慧體的摘要：[`docs/AGENT_CHANGELOG.md`](docs/AGENT_CHANGELOG.md)。
 
 ## [0.4.2] — 2026-08-18
 

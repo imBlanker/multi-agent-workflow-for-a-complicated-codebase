@@ -135,3 +135,9 @@ Uninstall never removes trellis-owned files (`.trellis/`, trellis entries in `.a
 
 ## 11. Report back to the user
 After install+plan, tell the user: the architecture chosen, the agents, the cost limits, the routing compliance, and whether the trellis chain succeeded (or what conflict needs resolving). Link the log: `.mawf/logs/trellis-init-*.log`.
+
+## 12. Cross-host advising blocks (since the proactive-orchestration release)
+
+`init` / `plan` / `install` / `update` / `upgrade` write an idempotent managed block (`<!-- mawf:cross-host-advise BEGIN/END -->`, ≤20 lines) into the project root `AGENTS.md` **and** `CLAUDE.md` (create-if-absent; the CLAUDE.md stub references AGENTS.md). The block makes any host session re-run `mawf advise` at session start + the first prompt of each day (UTC+8), parse the `ADVISE-DONE` footer, and offer switch/handoff actions. Never report these files as "modified user files" — they are managed; user edits outside the markers survive every re-run.
+
+Uninstall semantics: keep-config (default) keeps the blocks and `.mawf/`; `--purge-config` strips the spans, deletes files mawf created (recorded in `.mawf/managed-blocks.json`), and removes `.mawf/` (incl. `handoff/`, `inventory*`, `runtime/advise-state.json`). The installer manifest is never involved for these files.
