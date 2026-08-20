@@ -24,6 +24,7 @@ import { checkPriceGate, priceGateReport } from "./pricegate.js";
 import { readDshAsCc } from "./dshprovider.js";
 import { scanInventory, writeInventoryArtifacts } from "./inventory.js";
 import { adviseTask, checkFreshness, renderAdvise } from "./advise.js";
+import { writeManagedBlocks, removeManagedBlocks } from "./injectblock.js";
 
 /**
  * Load cc-switch + host context once.
@@ -216,6 +217,10 @@ function cmdInit(f, flags) {
   );
   generateConfigs(project, plan, ctx.cc);
   writeText(path.join(project, ".maw", "AGENTS.md"), AGENTS_INIT);
+  try {
+    const inj = writeManagedBlocks(project);
+    out(`  cross-host advise block: ${inj.created.length ? `${inj.created.length} created, ` : ""}${inj.written.length} ensured (AGENTS.md/CLAUDE.md)`);
+  } catch (e) { out(`  cross-host advise block: skipped — ${e?.message ?? e}`); }
   out(`  host: ${ctx.host.app} (caps: ${hostCapabilities(ctx.host).join(", ") || "none"}); supported: Claude Code + Codex + Pi + DeepSeek Harness (dsh)`);
   out(`  cc-switch: ${ctx.cc.dbPath ? "ok (read-only)" : "not found"}; user: ${user}`);
   out(`  primary architecture: ${plan.primary}`);
@@ -436,6 +441,9 @@ function cmdPlan(f, flags) {
     const invPaths = writeInventoryArtifacts(project, inv);
     out(`  inventory: ${inv.hosts.length} host(s) → ${path.relative(project, invPaths.digestPath)}`);
   } catch (e) { out(`  inventory: skipped — ${e?.message ?? e}`); }
+  try {
+    writeManagedBlocks(project);
+  } catch {}
 
   // Price gate (HITL): a model assignment with Input > $2/1M or Output >
   // $10/1M pauses the plan and reports to a human. --allow-pricey records the
@@ -698,6 +706,7 @@ function cmdGraph(f, flags) {
 // --- install/uninstall/update ---
 function cmdInstall(f, flags) {
   const r = install({ force: flags.force });
+  try { writeManagedBlocks(flags.project ? path.resolve(flags.project) : process.cwd()); } catch {}
   out(`installed mawf ${pkgVersion()}`);
   for (const c of r.copied) out(`  copied -> ${c}`);
   if (r.removedStale?.length) {
@@ -737,6 +746,7 @@ function cmdUninstall(f, flags) {
 }
 function cmdUpdate(f, flags) {
   const r = update({ force: flags.force });
+  try { writeManagedBlocks(flags.project ? path.resolve(flags.project) : process.cwd()); } catch {}
   out(`updated mawf ${pkgVersion()}`);
   for (const c of r.copied) out(`  copied -> ${c}`);
   if (r.removedStale?.length) {
@@ -757,6 +767,7 @@ function cmdUpgrade(f, flags) {
   if (!r.ok) { out(`upgrade failed: ${r.error}`, false); process.exitCode = 1; return; }
   if (flags["dry-run"] === true) { out(`upgrade dry-run ok (mode: ${r.mode}; nothing changed)`); return; }
   out(`upgraded mawf${r.from && r.to ? ` ${r.from} -> ${r.to}` : ""} (mode: ${r.mode}; templates: ${r.appliedTemplates === true ? "refreshed" : r.appliedTemplates === false ? "not refreshed" : "n/a"})`);
+  try { writeManagedBlocks(flags.project ? path.resolve(flags.project) : process.cwd()); } catch {}
 }
 
 // --- doctor ---

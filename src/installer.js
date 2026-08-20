@@ -8,6 +8,7 @@ import path from "node:path";
 import os from "node:os";
 import { exists, isFile, ensureDir, writeJson, readJson, writeText } from "./util.js";
 import { detectHost, hostCapabilities } from "./host.js";
+import { removeManagedBlocks } from "./injectblock.js";
 
 const PKG_ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
 
@@ -283,6 +284,13 @@ export function uninstall(opts = {}) {
   const project = opts.project ? path.resolve(opts.project) : process.cwd();
   const mawDir = path.join(project, ".maw");
   if (opts.purgeConfig) {
+    // managed advise blocks first (reads .maw/managed-blocks.json BEFORE the
+    // .maw removal below): strip spans; delete files mawf created that are now
+    // header-only. NEVER touches the installer manifest files[].
+    try {
+      const inj = removeManagedBlocks(project);
+      for (const f of inj.emptied) purged.push(f);
+    } catch {}
     if (exists(mawDir)) { fs.rmSync(mawDir, { recursive: true, force: true }); purged.push(mawDir); }
     const piAgents = path.join(project, ".pi", "agents");
     if (exists(piAgents)) {
