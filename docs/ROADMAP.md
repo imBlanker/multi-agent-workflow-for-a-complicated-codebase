@@ -90,6 +90,18 @@
   prints the current child-task branch mapping (Trellis task → git branch) to
   reduce mis-targeted commits in deep stacks.
 
+
+### R10. `mawf install --all-hosts` (post-uninstall multi-host recovery)
+
+- **Lesson:** after a real-HOME uninstall, a plain `mawf install` restored only
+  the primary host's assets (the manifest was gone); pi/dsh/codex skill copies
+  required per-host `MAW_HOST=<host> mawf install` runs, discovered manually.
+  Also: legacy `codex-rescue` assets from older versions are removed by the
+  uninstall prefix-scan and never re-shipped (by design, but surprising).
+- **Item:** `--all-hosts` fans out installs for every detected host; document
+  the recovery runbook (uninstall → which hosts need which re-install) in
+  AGENT_INSTALL.md.
+
 ## Done in 0.4.x (kept for provenance)
 
 - `.maw` → `.mawf` rename with one-time auto-migration (project + global
