@@ -16,7 +16,7 @@ import { readJson, writeJson, ensureDir } from "../util.js";
 
 /** @param {string} [registryFile] */
 export function registryPath(registryFile) {
-  return registryFile ?? path.join(os.homedir(), ".mawf", "projects.json");
+  return registryFile ?? process.env.MAW_WATCHDOG_REGISTRY ?? path.join(os.homedir(), ".mawf", "projects.json");
 }
 
 /**

@@ -24,6 +24,8 @@ import { checkPriceGate, priceGateReport } from "./pricegate.js";
 import { readDshAsCc } from "./dshprovider.js";
 import { readPiAsCc, mergePiIntoCc, enrichPiDbRowsWithModelsJson } from "./piprovider.js";
 import { scanInventory, writeInventoryArtifacts } from "./inventory.js";
+import { scanOnce } from "./watchdog/scan.js";
+import { registerProject } from "./watchdog/registry.js";
 import { adviseTask, checkFreshness, renderAdvise } from "./advise.js";
 import { writeManagedBlocks, removeManagedBlocks } from "./injectblock.js";
 
@@ -118,6 +120,7 @@ export function main(argv = process.argv.slice(2)) {
     case "review": return cmdReview(f, flags);
     case "models": return cmdModels(f, flags);
     case "inventory": return cmdInventory(f, flags);
+    case "watchdog": return cmdWatchdog(f, flags);
     case "advise": return cmdAdvise(f, flags);
     case "routing": return cmdRouting(f, flags);
     case "install": return cmdInstall(f, flags);
@@ -162,6 +165,11 @@ Commands:
                 command; switch pre-creates a .mawf/handoff brief). Never
                 executes anything. --check-fresh prints STALE/ADVISED_TODAY
                 (UTC+8 day gate for proactive re-advising)
+  watchdog      Scan mawf-initialized projects for alarm-blocked agent/
+                subagent sessions (signals d>c>a>b) and record incidents
+                (.mawf/watchdog/). --once = single cycle for cron/systemd;
+                default is a resident loop every --interval min (15). Opt-in:
+                nothing runs until you invoke it
   models        Show capability-aware model/provider selection per role
   config        Print the effective .mawf/config.yaml
   cost          Report current cost rate (USD/min) from cc-switch logs
@@ -243,6 +251,13 @@ function cmdInit(f, flags) {
     const invPaths = writeInventoryArtifacts(project, inv);
     out(`  inventory: ${inv.hosts.length} host(s) → ${path.relative(project, invPaths.digestPath)}`);
   } catch (e) { out(`  inventory: skipped — ${e?.message ?? e}`); }
+  // watchdog registry (opt-out: --no-watchdog): machine-level projects.json;
+  // nothing ever auto-runs — this only makes the project VISIBLE to `mawf
+  // watchdog` when the user invokes it
+  try {
+    const reg = registerProject(project, { excluded: flags["no-watchdog"] === true });
+    out(`  watchdog registry: ${reg.added ? "project registered (~/.mawf/projects.json)" : "already registered"}${flags["no-watchdog"] === true ? " — EXCLUDED (--no-watchdog)" : ""}`);
+  } catch (e) { out(`  watchdog registry: skipped — ${e?.message ?? e}`); }
   out(`  host: ${ctx.host.app} (caps: ${hostCapabilities(ctx.host).join(", ") || "none"}); supported: Claude Code + Codex + Pi + DeepSeek Harness (dsh)`);
   out(`  cc-switch: ${ctx.cc.dbPath ? "ok (read-only)" : "not found"}; user: ${user}`);
   out(`  primary architecture: ${plan.primary}`);
@@ -328,6 +343,31 @@ function capLine(caps) {
   const mark = (v) => (v === true ? "✓" : v === false ? "✗" : "?");
   return `agentic${mark(caps.agentic)} reasoning${mark(caps.reasoning)} coding${mark(caps.coding)} vision${mark(caps.visionIn)}`;
 }
+function cmdWatchdog(f, flags) {
+  const single = flags.once === true;
+  const intervalMin = Number(flags.interval) || 15;
+  const runOnce = () => {
+    const r = scanOnce({
+      projectDir: flags.project ? path.resolve(flags.project) : undefined,
+      dbPath: flags.db || undefined,
+    });
+    if (flags.json) { out(JSON.stringify(r, null, 2)); return 0; }
+    out(`watchdog scan @ ${r.at}: ${r.projects.length} project(s), ${r.blockedTotal} blocked session(s)`);
+    for (const p of r.projects) {
+      out(`  ${p.projectDir}: scanned ${p.sessionsScanned}, blocked ${p.blocked}, incidents opened ${p.incidentsOpened}, active ${p.activeIncidents.length}`);
+      for (const i of p.activeIncidents) out(`    incident ${i.id} [${i.state}] ${i.host} ${String(i.sessionId).slice(0, 12)}`);
+    }
+    return 0;
+  };
+  if (single) return runOnce();
+  // resident loop: `--once` is the primitive; cron/systemd users own scheduling
+  out(`watchdog resident loop every ${intervalMin} min (ctrl-c to stop; use --once for schedulers)`);
+  const timer = setInterval(() => { try { runOnce(); } catch (err) { out(`watchdog cycle error: ${err?.message ?? err}`, false); } }, intervalMin * 60 * 1000);
+  timer.unref?.();
+  try { runOnce(); } catch (err) { out(`watchdog cycle error: ${err?.message ?? err}`, false); }
+  return 0;
+}
+
 function cmdInventory(f, flags) {
   const project = flags.project ? path.resolve(flags.project) : process.cwd();
   const report = scanInventory({ projectDir: project, dbPath: flags.db, probe: !!flags.verify });

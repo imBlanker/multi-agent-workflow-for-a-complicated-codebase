@@ -26,7 +26,7 @@ function run(args, opts = {}) {
     encoding: "utf8",
     // DSH_HOME points at a nonexistent dir so tests never depend on a real
     // ~/.dsh (the dsh-specific tests override it with a fixture)
-    env: { ...process.env, CC_SWITCH_DB: dbPath, HOME: os.homedir(), DSH_HOME: path.join(tmp, "no-dsh"), ...(envOver ?? {}) },
+    env: { ...process.env, CC_SWITCH_DB: dbPath, HOME: os.homedir(), DSH_HOME: path.join(tmp, "no-dsh"), MAW_WATCHDOG_REGISTRY: path.join(tmp, "projects.json"), ...(envOver ?? {}) },
     maxBuffer: 8 * 1024 * 1024,
     ...rest,
   });

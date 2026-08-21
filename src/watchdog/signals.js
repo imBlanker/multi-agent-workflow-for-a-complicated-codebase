@@ -64,14 +64,16 @@ function extractTs(obj) {
 }
 
 /**
- * Longest run of consecutive error-ish tail entries (signal a) + a
- * permission-pending flag (signal b). Host-tolerant: recognizes each host's
- * error shapes and ignores everything else.
+ * Trailing run of consecutive error-ish entries at the END of the tail
+ * (signal a) + a permission-pending flag (signal b). Trailing — not
+ * window-max — because recovery means later healthy entries break the run;
+ * a historical error burst must not keep an incident open forever.
+ * Host-tolerant: recognizes each host's error shapes, ignores the rest.
  * @param {{ ts: number, obj: any, line: string }[]} entries
  * @returns {{ consecutiveErrors: number, lastErrorAt: number, permissionPendingSince: number }}
  */
 export function classifyTail(entries) {
-  let run = 0, max = 0, lastErrorAt = 0, permSince = 0;
+  let trailing = 0, lastErrorAt = 0, permSince = 0;
   for (const e of entries) {
     const o = e.obj;
     let isErr = false, isPerm = false;
@@ -93,11 +95,11 @@ export function classifyTail(entries) {
     const blob = e.line.slice(0, 600);
     if (/pending approval|permission (request|denied|pending)|requires approval|waiting for approval|approve this (tool|action)/i.test(blob)) isPerm = true;
 
-    if (isErr) { run++; max = Math.max(max, run); lastErrorAt = e.ts; }
-    else if (isPerm && !permSince) { permSince = e.ts; }
-    else if (!isErr) { run = 0; }
+    if (isErr) { trailing++; lastErrorAt = e.ts; }
+    else if (isPerm && !permSince) { permSince = e.ts; trailing = 0; }
+    else { trailing = 0; }
   }
-  return { consecutiveErrors: max, lastErrorAt, permissionPendingSince: permSince };
+  return { consecutiveErrors: trailing, lastErrorAt, permissionPendingSince: permSince };
 }
 
 /**
