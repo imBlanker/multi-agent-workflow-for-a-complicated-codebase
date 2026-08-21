@@ -16,6 +16,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/); versions follow
   - Fixture `make-db.mjs` v17/v17NoPi variants: `session_usage_dedup` ledger (modeled shape), pi provider row, OpenModel provider row, pi-session usage rows (modeled placement in `proxy_request_logs`).
   - Vendored fallback prices refreshed from the cc-switch v3.20 catalog (claude-sonnet-5 2/10, deepseek-v4-pro 0.435/0.87, deepseek-v4-flash 0.14/0.28, kimi-k3 3/15) — still tagged as estimates.
 
+### Added (2)
+
+- **Watchdog: stall detection + cross-host rescue (opt-in)** — `mawf watchdog [--once] [--interval 15] [--project P] [--dry-run] [--json]`. Signals d→c→a→b (log error/interrupted counts incl. Pi (Session) import → transcript stall → trailing consecutive errors → permission pending); active sessions only (60-min recency). Two-phase rescue: Phase A lossless-only (read-only + config-class fixes), Phase B takeover on the next host after the 15-min window (transcript handoff, trellis context, codex native resume/fork first-try). Fixed rotation claude→pi→dsh→codex, each host once; exhaustion → human-alert. Dedicated rescue workspace `~/.mawf/watchdog/workspace/` (never watched itself); price-valve model picks; three budget layers (default cost-guard + per-incident $10 cap + price valve, window-attributed spend); knowledge-base reuse (signature → case files, failed fixes never retried as-is); git snapshot before Phase B writes (non-git → diagnose-only); original process NEVER killed (recovery closes incidents); full audit trail + ALERTS.md + optional webhook. `mawf init` registers projects in `~/.mawf/projects.json` (`--no-watchdog` opts out). Doctor: registry/alerts/scheduling checks. Tests 275/275.
+
 ### Verified
 
 - Real-machine db (schema v17, pi managed: deep-worker + openai-codex, no pi-session rows yet → graceful degradation) and **trellis `@mindfoldhq/trellis` 0.6.15**: scratch `trellis init -u <u> --claude --yes` clean; MAW's platform flags (`--claude/--codex/--pi/--dsh`) still valid; tracker state matches npm latest.

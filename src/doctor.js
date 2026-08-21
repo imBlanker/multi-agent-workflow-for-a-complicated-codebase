@@ -114,6 +114,20 @@ export function doctor() {
     checks.push({ name: "Pi Agent config", status: "warn", detail: "~/.pi/agent not found (not installed)" });
   }
 
+  // watchdog (opt-in rescue layer)
+  {
+    const regPath = process.env.MAW_WATCHDOG_REGISTRY || path.join(os.homedir(), ".mawf", "projects.json");
+    const reg = exists(regPath) ? readJson(regPath, { projects: [] }) : null;
+    const watched = reg ? (reg.projects || []).filter((p) => !p.excluded).length : 0;
+    checks.push({ name: "watchdog registry", status: reg ? "ok" : "warn", detail: reg ? `${watched} project(s) watched (~/.mawf/projects.json; mawf init registers, --no-watchdog excludes)` : "no projects registered yet — mawf init adds them" });
+    const alerts = path.join(process.cwd(), ".mawf", "watchdog", "ALERTS.md");
+    if (exists(alerts)) {
+      const n = readText(alerts).split("\n").filter((l) => l.startsWith("- ")).length;
+      checks.push({ name: "watchdog alerts", status: n > 0 ? "warn" : "ok", detail: n > 0 ? `${n} alert(s) in .mawf/watchdog/ALERTS.md — review before they age out` : "no alerts recorded" });
+    }
+    checks.push({ name: "watchdog scheduling", status: "ok", detail: "runs ONLY when invoked — resident `mawf watchdog` or cron `*/15 * * * * mawf watchdog --once` (opt-in by design; spends real money when dispatching)" });
+  }
+
   // DeepSeek Harness (dsh) — config lives in $DSH_HOME (~/.dsh), NOT
   // cc-switch-managed. Providers come from settings.yaml
   // (llm-pi-ai.providers); prices cross-ref cc-switch's auto-synced

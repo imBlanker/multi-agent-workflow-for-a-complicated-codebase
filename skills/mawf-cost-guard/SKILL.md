@@ -27,3 +27,7 @@ When the price is an estimate, configs and the `mawf cost`/`doctor` output say s
 
 ## Degradation
 If cc-switch is unavailable, the guard degrades to concurrency-only limiting (no spend tracking) and `mawf doctor` reports the gap. Codex reviewer availability is independent: if codex is missing, the planner substitutes a second Claude Code agent reviewer for risk >= medium.
+
+## Watchdog interaction
+
+`mawf watchdog` dispatches rescue agents through THIS guard's world: the rescue workspace (`~/.mawf/watchdog/workspace/`) runs under default settings, so per-agent $5/min, workflow $10/min and concurrency 16 all apply; on top sits a per-incident cap (default $10, `watchdog.incidentBudgetUsd`) and the price valve on rescue model picks. Rescue spend is window-attributed from cc-switch logs (pi/dsh untelemetered spend stays bounded by the guard layer only).
