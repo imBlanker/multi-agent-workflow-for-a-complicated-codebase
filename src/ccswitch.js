@@ -158,6 +158,38 @@ export function readCcSwitch(opts = {}) {
 }
 
 /**
+ * cc-switch (GUI v3.20+ / CLI v5.10+) repo-backed skills management: rows in
+ * the `skills` table with name LIKE 'mawf-%' mean cc-switch can update those
+ * installations (`cc-switch skills update`) — coexistence with mawf's own
+ * installer. Read-only; feature-detected (older schemas lack the table → null).
+ * @param {object} [opts]
+ * @param {string} [opts.dbPath]
+ * @returns {{ rows: { name: string, directory: string, enabledApps: string[] }[] } | null}
+ */
+export function mawfSkillsUnderCcSwitch(opts = {}) {
+  const dbPath = opts.dbPath ?? findDb();
+  if (!dbPath) return null;
+  try {
+    const r = makeReader(dbPath);
+    // feature-detect the table (readers swallow SQL errors → empty arrays,
+    // so try/catch alone cannot distinguish "no table" from "no rows")
+    const has = r.all("SELECT name FROM sqlite_master WHERE type='table' AND name='skills'");
+    if (!has || !has.length) { r.close(); return null; }
+    const rows = r.all(
+      "SELECT name, directory, enabled_claude, enabled_codex, enabled_gemini, enabled_opencode, enabled_hermes, enabled_grokbuild FROM skills WHERE name LIKE 'mawf-%'"
+    );
+    r.close();
+    return {
+      rows: rows.map((row) => ({
+        name: row.name,
+        directory: row.directory,
+        enabledApps: ["claude", "codex", "gemini", "opencode", "hermes", "grokbuild"].filter((a) => Number(row["enabled_" + a]) === 1),
+      })),
+    };
+  } catch { return null; }
+}
+
+/**
  * cc-switch v3.20.0+ manages pi as its 9th app: providers rows with
  * app_type='pi' appear (schema v17) and cc-switch writes `~/.pi/agent/
  * models.json` additively. When this returns true, the cc-switch db is the

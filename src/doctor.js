@@ -3,7 +3,7 @@
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import { exists, readJson } from "./util.js";
-import { readCcSwitch, findDb, readRouting, routingPolicy, SUPPORTED_CC_SCHEMA, piManagedByCcSwitch } from "./ccswitch.js";
+import { readCcSwitch, findDb, readRouting, routingPolicy, SUPPORTED_CC_SCHEMA, piManagedByCcSwitch, mawfSkillsUnderCcSwitch } from "./ccswitch.js";
 import { detectHost, hostCapabilities } from "./host.js";
 import { status as codexStatus } from "./codex.js";
 import { detectTrellis } from "./trellis.js";
@@ -71,6 +71,13 @@ export function doctor() {
       ? { name: "cc-switch schema", status: "ok", detail: `v${cc.schemaVersion} (supported ≤ v${SUPPORTED_CC_SCHEMA})` }
       : { name: "cc-switch schema", status: "warn", detail: `v${cc.schemaVersion} is newer than supported v${SUPPORTED_CC_SCHEMA} — reads may miss new semantics; upgrade mawf` });
     checks.push({ name: "cc-switch model pricing", status: "ok", detail: `${Object.keys(cc.modelPricing).length} models priced` });
+    // cc-switch repo-backed skills coexistence (GUI v3.20+/CLI v5.10+): if any
+    // mawf-* skills are managed there, `cc-switch skills update` may overwrite
+    // them — informational; mawf's installer stays the version source of truth.
+    const mawfSkills = mawfSkillsUnderCcSwitch({ dbPath: db });
+    if (mawfSkills && mawfSkills.rows.length) {
+      checks.push({ name: "mawf skills under cc-switch management", status: "ok", detail: `${mawfSkills.rows.map((s) => s.name).join(", ")} — cc-switch 'skills update' may overwrite them; re-run mawf install/upgrade to restore (mawf is the version source of truth)` });
+    }
 
     // routing policy (claude always on+failover; codex on except OAuth)
     try {

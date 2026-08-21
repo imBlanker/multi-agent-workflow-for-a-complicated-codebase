@@ -6,6 +6,22 @@ coding agents operating this repo). Human narrative: [`../CHANGELOG.md`](../CHAN
 
 Package: `multi-agents-workflow` · CLI: `mawf` · Node ≥ 20.17 · zero runtime deps.
 
+```yaml
+version: unreleased
+semver_impact: minor
+added:
+  - "cc-switch v3.20/cli v5.10.2 (schema v17) follow-up: readCcSwitch surfaces schemaVersion+schemaSupported (doctor schema check; >supported degrades to warn); piManagedByCcSwitch() worldview — managed: db-exact providers/pricing, models.json mirror, no merge on top (no-double-count invariant tested); unmanaged: mergePiIntoCc() fills pi candidates (also fixes empty 'mawf models --app pi'); pi real-spend metering via piSessionUsagePresent() + report() caveats (cache-write may be incomplete) + perSessionRate().errorCount (watchdog signal-d source); mawfSkillsUnderCcSwitch() doctor coexistence check (cc-switch 'skills update'); v17 fixtures (dedup ledger + pi/OpenModel rows + pi-session usage, shapes modeled); vendored fallback prices refreshed from v3.20 catalog"
+verified:
+  - "real db schema v17 pi-managed (deep-worker, openai-codex; no pi-session rows -> graceful degradation)"
+  - "trellis @mindfoldhq/trellis 0.6.15: scratch init --claude --yes clean; platform flags valid; tracker == npm latest"
+fixed:
+  - "advise.test.js UTC+8-day flake (state write missed clock injection; red on clean main)"
+upgrade:
+  npm: "npm i -g multi-agents-workflow@<next>"
+  checkout: "mawf upgrade"
+smoke: "mawf doctor && mawf --version && mawf inventory --verify"
+```
+
 ## 0.5.1 (2026-08-20)
 
 ```yaml

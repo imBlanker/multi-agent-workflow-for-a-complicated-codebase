@@ -12,7 +12,7 @@
 
 > 一個可攜、**動態**的多智慧體工作流系統。面對全新的複雜專案，MAW 會讀取你的 [cc-switch](https://github.com/farion1231/cc-switch) 設定，探測程式碼庫，並挑選合適的智慧體架構 —— *迴圈工程*、*編排者-工人*（子智慧體）、*多智慧體*、*圖工作流*、*動態工作流* 或 *ultracode* —— 或其組合。它為每個智慧體產生可獨立編輯的設定，強制執行**真實消費的成本速率限制**，並透過 [`codex-plugin-cc`](https://github.com/openai/codex-plugin-cc) 整合 **Codex 審查**。
 
-> **支援的宿主：Claude Code、Codex、Pi Agent 與 DeepSeek Harness (dsh)。** 其他智慧體軟體（Gemini CLI、opencode……）刻意**不予**支援。注意：Pi Agent 與 dsh **不**經 cc-switch 管理——pi 的設定位於 `~/.pi/agent/`，dsh 的供應商/模型位於 `~/.dsh/settings.yaml`。二者的花費速率不可測（不經代理），速率限額降級為僅並發；dsh 的模型價格仍可從 cc-switch 自動同步的 `~/.cc-switch/model-pricing.json` 按模型 id 匹配。
+> **支援的宿主：Claude Code、Codex、Pi Agent 與 DeepSeek Harness (dsh)。** 其他智慧體軟體（Gemini CLI、opencode……）刻意**不予**支援。注意：dsh **不**經 cc-switch 管理——其供應商/模型位於 `~/.dsh/settings.yaml`，價格按 id 交叉引用 cc-switch 自動同步的 `~/.cc-switch/model-pricing.json`。自 **cc-switch v3.20（資料庫 schema v17）起 pi 可能由 cc-switch 管理**：當 cc-switch 資料庫出現 pi 供應商列時，供應商/定價來自 cc-switch 資料庫（精確），`~/.pi/agent/models.json` 鏡像 cc-switch 寫入的內容；無 pi 列時，pi 供應商仍來自 `models.json`（同既有行為）。僅當 cc-switch 的 Pi (Session) 匯入有資料時 pi 花費可測（快取寫計帳可能不完整）；dsh 花費速率不可測（不經代理），速率限額降級為僅並發。
 
 ---
 

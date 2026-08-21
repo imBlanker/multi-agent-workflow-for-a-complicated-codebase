@@ -129,4 +129,27 @@ test("mergePiIntoCc: providers merged once, pricing fills gaps only, pure", () =
   assert.equal(mergePiIntoCc(null, piAsCc), null);
 });
 
+test("OpenModel provider row: no misclassification, candidates include it (R6)", async () => {
+  const { candidatesForAppType, classifyModel } = await import("../src/modelcap.js");
+  const cc = readCcSwitch({ dbPath: dbV17 });
+  const cands = candidatesForAppType(cc, "claude");
+  const om = cands.find((c) => c.providerName === "OpenModel");
+  assert.ok(om, "OpenModel provider present in claude candidates");
+  assert.ok(!om.isCurrent, "not current (fixture is_current=0)");
+  const cls = classifyModel("openmodel-x");
+  assert.ok(cls && typeof cls.family === "string", "classifyModel handles unknown OpenModel id without throwing");
+});
+
+test("mawfSkillsUnderCcSwitch: detects repo-managed mawf-* skills rows", async () => {
+  const { mawfSkillsUnderCcSwitch } = await import("../src/ccswitch.js");
+  const res = mawfSkillsUnderCcSwitch({ dbPath: dbV17 });
+  assert.ok(res, "skills table present on v17");
+  assert.equal(res.rows.length, 1);
+  assert.equal(res.rows[0].name, "mawf-cost-guard");
+  assert.deepEqual(res.rows[0].enabledApps, ["claude"]);
+  // v16 fixture has no skills table → null (feature-detect degrades)
+  assert.equal(mawfSkillsUnderCcSwitch({ dbPath: dbV16 }), null);
+  assert.equal(mawfSkillsUnderCcSwitch({ dbPath: path.join(tmp, "nope.db") }), null);
+});
+
 test.after(() => { try { fs.rmSync(tmp, { recursive: true, force: true }); } catch {} });

@@ -4,6 +4,26 @@ All notable changes to **multi-agents-workflow (MAW)** are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com/); versions follow
 [SemVer](https://semver.org/). Agent-oriented summary: [`docs/AGENT_CHANGELOG.md`](docs/AGENT_CHANGELOG.md).
 
+## [Unreleased]
+
+### Added
+
+- **cc-switch v3.20.0 / cc-switch-cli v5.10.2 follow-up (schema v16→v17).**
+  - `readCcSwitch()` surfaces `schemaVersion` (`PRAGMA user_version`) + `schemaSupported`; doctor gains a `cc-switch schema` check; a newer-than-supported schema degrades to a warning, never a crash. All read paths verified against a v17-shaped fixture (additive migration — no regression).
+  - **pi managed worldview**: `piManagedByCcSwitch()` — when the cc-switch db (schema ≥17) carries pi provider rows, providers/pricing come from the cc-switch db (exact) and `models.json` mirrors what cc-switch wrote; nothing is merged on top (no double counting — invariant tested). When unmanaged, pi providers from `models.json` join the candidate pool via `mergePiIntoCc()` (pricing fills gaps only, mirroring the dsh merge; also fixes `mawf models --app pi` being empty). `readPiAsCc(piManaged)` keeps cc-switch exact pricing on top when managed. Doctor, `mawf models` note, and README x3 state the conditional.
+  - **pi real-spend metering**: when cc-switch's Pi (Session) import has rows, pi spend is measured (`piSessionUsagePresent()`), aggregates carry the upstream caveat (cache-write accounting may be incomplete), and `perSessionRate()` gains `errorCount` (status ≥400 or error_message — also the watchdog signal-d source). Without rows, the concurrency-only degradation stands.
+  - `mawfSkillsUnderCcSwitch()`: doctor reports mawf-* skills under cc-switch repo management (GUI v3.20+/CLI v5.10+ `skills update` coexistence; informational).
+  - Fixture `make-db.mjs` v17/v17NoPi variants: `session_usage_dedup` ledger (modeled shape), pi provider row, OpenModel provider row, pi-session usage rows (modeled placement in `proxy_request_logs`).
+  - Vendored fallback prices refreshed from the cc-switch v3.20 catalog (claude-sonnet-5 2/10, deepseek-v4-pro 0.435/0.87, deepseek-v4-flash 0.14/0.28, kimi-k3 3/15) — still tagged as estimates.
+
+### Verified
+
+- Real-machine db (schema v17, pi managed: deep-worker + openai-codex, no pi-session rows yet → graceful degradation) and **trellis `@mindfoldhq/trellis` 0.6.15**: scratch `trellis init -u <u> --claude --yes` clean; MAW's platform flags (`--claude/--codex/--pi/--dsh`) still valid; tracker state matches npm latest.
+
+### Fixed
+
+- `tests/advise.test.js` UTC+8-day flake: the state-write call missed its `clock` injection, so the assertion was deterministically red whenever the real date ≠ the hardcoded fake day (failed on clean main).
+
 ## [0.5.1] - 2026-08-20
 
 ### Fixed

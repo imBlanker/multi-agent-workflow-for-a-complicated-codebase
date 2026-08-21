@@ -90,6 +90,15 @@ export function makeFixtureDb(dbPath, opts = {}) {
   // MODELED — upstream's exact DDL is not in the release notes; table presence
   // is the v17 marker and MAW never queries its columns.
   if (opts.v17 || opts.v17NoPi) {
+    sql.push(`CREATE TABLE skills (
+      id TEXT PRIMARY KEY, name TEXT NOT NULL, description TEXT, directory TEXT NOT NULL,
+      repo_owner TEXT, repo_name TEXT, repo_branch TEXT DEFAULT 'main', readme_url TEXT,
+      enabled_claude BOOLEAN NOT NULL DEFAULT 0, enabled_codex BOOLEAN NOT NULL DEFAULT 0,
+      enabled_gemini BOOLEAN NOT NULL DEFAULT 0, installed_at INTEGER NOT NULL DEFAULT 0,
+      content_hash TEXT, updated_at INTEGER NOT NULL DEFAULT 0,
+      enabled_opencode BOOLEAN NOT NULL DEFAULT 0, enabled_hermes BOOLEAN NOT NULL DEFAULT 0,
+      enabled_grokbuild BOOLEAN NOT NULL DEFAULT 0
+    )`);
     sql.push(`CREATE TABLE session_usage_dedup (
       fingerprint TEXT PRIMARY KEY, session_key TEXT, file_path TEXT,
       first_seen_at INTEGER, last_seen_at INTEGER
@@ -127,6 +136,9 @@ export function makeFixtureDb(dbPath, opts = {}) {
     const db = new NODE_SQLITE.DatabaseSync(dbPath);
     for (const s of sql) db.exec(s);
     db.exec(`PRAGMA user_version = ${opts.v17 || opts.v17NoPi ? 17 : 16}`);
+    if (opts.v17 || opts.v17NoPi) {
+      db.prepare(`INSERT INTO skills (id, name, description, directory, enabled_claude, enabled_codex, installed_at) VALUES ('local:mawf-cost-guard','mawf-cost-guard','MAW cost guard','mawf-cost-guard',1,0,1)`).run();
+    }
     const insProv = db.prepare(`INSERT INTO providers (id, app_type, name, settings_config, website_url, category, created_at, sort_index, notes, icon, icon_color, meta, is_current, in_failover_queue, cost_multiplier, limit_daily_usd, limit_monthly_usd, provider_type) VALUES (${PH(18)})`);
     for (const r of rows) if (r.table === "providers") insProv.run(...r.vals);
     const insP = db.prepare(`INSERT INTO model_pricing (model_id, display_name, input_cost_per_million, output_cost_per_million, cache_read_cost_per_million, cache_creation_cost_per_million) VALUES (${PH(6)})`);
