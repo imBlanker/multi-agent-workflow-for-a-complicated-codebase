@@ -4,6 +4,7 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import { exists, readJson } from "./util.js";
 import { readCcSwitch, findDb, readRouting, routingPolicy, SUPPORTED_CC_SCHEMA, piManagedByCcSwitch, mawfSkillsUnderCcSwitch } from "./ccswitch.js";
+import { grillSwapStatus } from "./grillswap.js";
 import { detectHost, hostCapabilities } from "./host.js";
 import { status as codexStatus } from "./codex.js";
 import { detectTrellis } from "./trellis.js";
@@ -112,6 +113,20 @@ export function doctor() {
       : "pi is not routed via the cc-switch proxy — cost-rate is concurrency-only; real spend is not measured" });
   } else {
     checks.push({ name: "Pi Agent config", status: "warn", detail: "~/.pi/agent not found (not installed)" });
+  }
+
+  // grill-brainstorm swap (workspace-level)
+  {
+    const st = grillSwapStatus(process.cwd());
+    if (st.trellisBrainstormPresent) {
+      if (st.wrapperInstalled && st.wrapperCurrent && !st.missing.length) {
+        checks.push({ name: "trellis-brainstorm (grill edition)", status: "ok", detail: `wrapper current in ${st.roots.join(", ")}; vendored: ${st.vendored.join(", ")}${st.origBackup ? "; stock backup: trellis-brainstorm.orig.md" : ""}` });
+      } else if (st.wrapperInstalled && !st.wrapperCurrent) {
+        checks.push({ name: "trellis-brainstorm (grill edition)", status: "warn", detail: "wrapper outdated (mawf asset changed) — run `mawf update` to refresh" });
+      } else {
+        checks.push({ name: "trellis-brainstorm (grill edition)", status: "warn", detail: `stock trellis-brainstorm detected (trellis update clobbered the swap${st.missing.length ? `; missing vendored: ${st.missing.join(", ")}` : ""}) — run \`mawf update\` to repair` });
+      }
+    }
   }
 
   // watchdog (opt-in rescue layer)

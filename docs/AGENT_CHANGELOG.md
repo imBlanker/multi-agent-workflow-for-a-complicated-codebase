@@ -10,6 +10,7 @@ Package: `multi-agents-workflow` · CLI: `mawf` · Node ≥ 20.17 · zero runtim
 version: unreleased
 semver_impact: minor
 added:
+  - "grill-brainstorm swap: trellis-brainstorm -> grill-with-docs wrapper (vendored mattpocock/skills @5b15a47 MIT, 2 mawf format amendments); trellis contract preserved; .orig.md backup; clobber detect + mawf update repair; doctor check"
   - "watchdog: stall detection + cross-host rescue (opt-in): signals d>c>a>b, Phase A lossless / Phase B takeover, fixed rotation claude>pi>dsh>codex, rescue workspace, 3-layer budget ($10/incident cap), knowledge reuse, git snapshot gate, never-kill; mawf watchdog [--once|--interval|--dry-run]; init registers ~/.mawf/projects.json (--no-watchdog)"
   - "cc-switch v3.20/cli v5.10.2 (schema v17) follow-up: readCcSwitch surfaces schemaVersion+schemaSupported (doctor schema check; >supported degrades to warn); piManagedByCcSwitch() worldview — managed: db-exact providers/pricing, models.json mirror, no merge on top (no-double-count invariant tested); unmanaged: mergePiIntoCc() fills pi candidates (also fixes empty 'mawf models --app pi'); pi real-spend metering via piSessionUsagePresent() + report() caveats (cache-write may be incomplete) + perSessionRate().errorCount (watchdog signal-d source); mawfSkillsUnderCcSwitch() doctor coexistence check (cc-switch 'skills update'); v17 fixtures (dedup ledger + pi/OpenModel rows + pi-session usage, shapes modeled); vendored fallback prices refreshed from v3.20 catalog"
 verified:

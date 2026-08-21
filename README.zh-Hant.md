@@ -3,7 +3,7 @@
 [![CI](https://github.com/imBlanker/multi-agents-workflow/actions/workflows/ci.yml/badge.svg)](https://github.com/imBlanker/multi-agents-workflow/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D20.17-green.svg)](https://nodejs.org)
-[![Tests](https://img.shields.io/badge/tests-275%20passing-success.svg)](#testing)
+[![Tests](https://img.shields.io/badge/tests-281%20passing-success.svg)](#testing)
 [![GitHub stars](https://img.shields.io/github/stars/imBlanker/multi-agents-workflow?style=social&label=Stars)](https://github.com/imBlanker/multi-agents-workflow/stargazers)
 
 # MAW — 面向複雜程式碼庫的多智慧體工作流系統
@@ -195,6 +195,8 @@ MAW 預設將你的 cc-switch 視為**唯讀**。以下規則在程式碼中強�
 （黑箱 CLI 無法在寫入途中暫停，因此 MAW 在衝突寫入後立即偵測，再透過重新執行冪等的 `trellis init` 來恢復。）見 [`src/trellis.js`](./src/trellis.js)。
 
 **Trellis 更新追蹤器。** 本倉庫的 GitHub Actions 工作流程 [`trellis-update-tracker`](./.github/workflows/trellis-tracker.yml) 會自動追蹤 `@mindfoldhq/trellis` 的更新（每週＋手動觸發）：出現新 npm 版本時，它會開啟一個 `[trellis-tracker]` issue（含版本與連結）並推進 `.github/trellis-tracker/state.json`。唯一例外：**如果 trellis 刪庫**（上游 404），追蹤器會開啟一條 notice issue、暫停追蹤，且工作流程仍然成功——上游恢復後自動恢復追蹤。MAW 透過 `@latest` 呼叫 trellis，因此 MAW 本身無需升級動作；issue 只是提醒人工審閱變更日誌。
+
+**在 mawf 工作區中，`trellis brainstorm` 執行 grill 版。** `trellis init` 後，mawf 會把 `.agents/skills/trellis-brainstorm/SKILL.md` 換成執行 vendored **grill-with-docs** 面試的包裝器（mattpocock/skills，MIT：`grilling` 輪次/設計樹/frontier + `domain-modeling` 術語表/ADR），同時完整保留 Trellis 規劃契約（任務目錄、PRD 種子、consent 門、`task.py start` 前不寫碼）。術語落入 `CONTEXT.md`，不可逆決策記 ADR，收斂的輪次更新 `prd.md`。逃生門：還原備份於 `.agents/skills/trellis-brainstorm.orig.md` 的原版檔案。`trellis update` 覆寫後 `mawf update` 會重打補丁；`mawf doctor` 標記狀態。
 
 ## 9. 成本控制機制
 來自 cc-switch `proxy_request_logs` 的真實推理消費 → USD/分鐘。**每智慧體** $5/分鐘、**總計** $10/分鐘（獨立）、**最大並發** 16 —— 可在 `.mawf/config.yaml` 或透過旗標編輯。定價來源鏈：cc-switch `model_pricing` → 供應商 `cost_multiplier` → 內建**估計值**（標記 `estimated:true`）→ `null`（絕不偽造）。不經 cc-switch 代理路由的宿主（pi、dsh）沒有可測的消費速率 → 速率限額降級為僅並發；dsh 上的**價格門**仍透過 cc-switch 自動同步的 `~/.cc-switch/model-pricing.json` 生效（命中的模型 id 獲得真實價格，未命中保持未知）。
