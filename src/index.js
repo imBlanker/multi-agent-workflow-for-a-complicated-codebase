@@ -26,6 +26,8 @@ import { readPiAsCc, mergePiIntoCc, enrichPiDbRowsWithModelsJson } from "./pipro
 import { scanInventory, writeInventoryArtifacts } from "./inventory.js";
 import { scanOnce } from "./watchdog/scan.js";
 import { registerProject } from "./watchdog/registry.js";
+import { applyGrillSwap, grillSwapStatus } from "./grillswap.js";
+import { readRegistry, resolveWatchList } from "./watchdog/registry.js";
 import { adviseTask, checkFreshness, renderAdvise } from "./advise.js";
 import { writeManagedBlocks, removeManagedBlocks } from "./injectblock.js";
 
@@ -335,6 +337,12 @@ function cmdInit(f, flags) {
     for (const c of tr.conflicts.slice(0, 10)) out(`    - ${path.relative(project, c.file)} (${c.kind})`);
     out(`    re-run \`mawf plan --project ${project}\` to regenerate MAW's side, or \`trellis init -u ${user}\` to resume trellis`);
   }
+  // grill-brainstorm swap (task 08-21-grill-brainstorm-swap): wrapper +
+  // vendored grilling/grill-with-docs/domain-modeling, trellis contract kept
+  try {
+    const g = applyGrillSwap(project);
+    out(`  trellis-brainstorm: ${g.applied ? `grill edition applied (${g.wrote.join(", ")})` : g.reason}`);
+  } catch (e) { out(`  trellis-brainstorm swap: skipped — ${e?.message ?? e}`); }
 }
 
 // --- models ---
@@ -817,6 +825,20 @@ function cmdUpdate(f, flags) {
   const r = update({ force: flags.force });
   try { writeManagedBlocks(flags.project ? path.resolve(flags.project) : process.cwd()); } catch {}
   out(`updated mawf ${pkgVersion()}`);
+  // grill-swap repair across registered workspaces (a `trellis update` may
+  // have restored the stock trellis-brainstorm; re-apply idempotently)
+  try {
+    const list = resolveWatchList(readRegistry(), {}, { exists: (p) => exists(p) });
+    let repaired = 0;
+    for (const { dir } of list) {
+      const st = grillSwapStatus(dir);
+      if (st.trellisBrainstormPresent && (!st.wrapperCurrent || st.missing.length)) {
+        const g = applyGrillSwap(dir);
+        if (g.applied) repaired++;
+      }
+    }
+    if (repaired) out(`  grill swap: repaired in ${repaired} registered workspace(s)`);
+  } catch {}
   for (const c of r.copied) out(`  copied -> ${c}`);
   if (r.removedStale?.length) {
     out(`  removed ${r.removedStale.length} stale asset(s) from an older install:`);

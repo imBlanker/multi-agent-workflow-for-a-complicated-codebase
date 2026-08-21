@@ -20,6 +20,8 @@
 
 - **Watchdog：停滯偵測 + 跨 host 救援（opt-in）** — `mawf watchdog [--once] [--interval 15] [--project P] [--dry-run] [--json]`。訊號 d→c→a→b（日誌錯誤/中斷計數含 Pi (Session) 匯入 → 轉錄停滯 → 尾部連續錯誤 → 權限掛起）；僅活躍會話（60 分鐘新近性）。兩階段救援：Phase A 僅無損解阻，Phase A 15 分鐘視窗失敗後換 host 接續（轉錄交接、trellis 上下文、codex 原生 resume/fork 先試）。固定輪換 claude→pi→dsh→codex，每 host 一次；遍歷完 → human-alert。專屬救援工作區 `~/.mawf/watchdog/workspace/`（自身絕不被監視）；價格閥門選模；三層預算（預設 cost-guard + 每事故 $10 硬頂 + 價格閥門，視窗歸因記帳）；經驗庫復用（簽名 → 案例，失敗修復不再原樣重試）；Phase B 寫前 git 快照（非 git → 只診斷）；絕不殺原程序（恢復即關事故）；完整審計 + ALERTS.md + 可選 webhook。`mawf init` 登記 `~/.mawf/projects.json`（`--no-watchdog` 退出）。doctor：註冊表/警報/調度檢查。測試 275/275。
 
+- **grill-brainstorm 替換**：mawf 工作區將 `trellis-brainstorm` 換為執行 vendored grill-with-docs 面試的包裝器（mattpocock/skills @5b15a47，MIT —— grilling + domain-modeling，攜帶兩處 mawf 格式修正），同時完整保留 Trellis 規劃契約。原版一次性備份（`.orig.md`）、冪等安裝、`trellis update` 覆寫偵測 + `mawf update` 修復、doctor 狀態檢查。逃生門已寫入文件。
+
 ### 驗證
 
 - 真機資料庫（schema v17、pi 托管：deep-worker + openai-codex、暫無 pi-session 列→優雅降級）與 **trellis `@mindfoldhq/trellis` 0.6.15**：空白專案 `trellis init -u <u> --claude --yes` 干淨通過；MAW 的平台旗標（`--claude/--codex/--pi/--dsh`）仍然有效；tracker 狀態與 npm latest 一致。

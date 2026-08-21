@@ -129,3 +129,12 @@ written from scratch by the MAW authors. From the projects above we adopted
 only *ideas* and *architectural structures*; where an external tool is used at
 runtime (only `codex-plugin-cc`), it is invoked as an out-of-process dependency
 and is not redistributed within this repository.
+
+## Vendored skills — mattpocock/skills (MIT, © 2026 Matt Pocock)
+
+`skills/vendor/{grilling,grill-with-docs,domain-modeling}` are vendored from
+https://github.com/mattpocock/skills at commit 5b15a47. Local modifications:
+grilling SKILL.md carries two mawf format amendments (non-empty recommendation
+line; lettered choices one per line) — see skills/vendor/LICENSE. mawf installs
+them into workspaces alongside the trellis-brainstorm grill-edition wrapper
+(`skills/mawf-grill/`), preserving the full Trellis planning contract.

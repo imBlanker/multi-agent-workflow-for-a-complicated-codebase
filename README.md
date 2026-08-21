@@ -3,7 +3,7 @@
 [![CI](https://github.com/imBlanker/multi-agents-workflow/actions/workflows/ci.yml/badge.svg)](https://github.com/imBlanker/multi-agents-workflow/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D20.17-green.svg)](https://nodejs.org)
-[![Tests](https://img.shields.io/badge/tests-275%20passing-success.svg)](#testing)
+[![Tests](https://img.shields.io/badge/tests-281%20passing-success.svg)](#testing)
 [![GitHub stars](https://img.shields.io/github/stars/imBlanker/multi-agents-workflow?style=social&label=Stars)](https://github.com/imBlanker/multi-agents-workflow/stargazers)
 
 # MAW — Multi-Agent Workflow for Complex Codebases
@@ -197,6 +197,8 @@ Because trellis and MAW can both manage files, on conflict MAW **pauses** trelli
 (A black-box CLI can't be paused mid-write, so MAW detects conflicts immediately after the conflicting write, then resumes by re-running the idempotent `trellis init`.) See [`src/trellis.js`](./src/trellis.js).
 
 **Trellis update tracker.** The repo's GitHub Actions workflow [`trellis-update-tracker`](./.github/workflows/trellis-tracker.yml) automatically tracks `@mindfoldhq/trellis` updates (weekly + manual dispatch): when a new npm version appears it opens an `[trellis-tracker]` issue with version + links and advances `.github/trellis-tracker/state.json`. The only exception: **if trellis deletes its repo** (upstream 404), the tracker opens ONE notice issue, pauses tracking, and the workflow still succeeds — it resumes automatically when the upstream comes back. MAW invokes trellis via `@latest`, so no upgrade action is required in MAW itself; the issue is a heads-up to review the changelog.
+
+**In mawf workspaces, `trellis brainstorm` runs the grill edition.** After `trellis init`, mawf swaps `.agents/skills/trellis-brainstorm/SKILL.md` for a wrapper that runs the vendored **grill-with-docs** interview (mattpocock/skills, MIT: `grilling` rounds/design-tree/frontier + `domain-modeling` glossary/ADRs) while preserving the full Trellis planning contract (task dir, PRD seed, consent gate, no code before `task.py start`). Terms land in `CONTEXT.md`, irreversible decisions as ADRs, settled rounds update `prd.md`. Escape hatch: restore the backed-up stock file at `.agents/skills/trellis-brainstorm.orig.md`. `mawf update` re-applies the swap if a `trellis update` clobbers it; `mawf doctor` flags the state.
 
 ## 9. Cost Control Mechanism
 Real inference spend from cc-switch's `proxy_request_logs` → USD/min. **Per-agent** $5/min, **total** $10/min (independent), **max concurrency** 16 — editable in `.mawf/config.yaml` or via flags. Pricing source chain: cc-switch `model_pricing` → provider `cost_multiplier` → vendored **estimate** (tagged `estimated:true`) → `null` (never faked). Hosts not routed via the cc-switch proxy (pi, dsh) have no measured spend rate → rate limits degrade to concurrency-only; the **price gate** still applies on dsh via cc-switch's auto-synced `~/.cc-switch/model-pricing.json` (matched ids get real prices, unmatched stay unknown).
