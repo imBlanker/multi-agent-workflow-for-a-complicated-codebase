@@ -3,7 +3,7 @@
 [![CI](https://github.com/imBlanker/multi-agents-workflow/actions/workflows/ci.yml/badge.svg)](https://github.com/imBlanker/multi-agents-workflow/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D20.17-green.svg)](https://nodejs.org)
-[![Tests](https://img.shields.io/badge/tests-222%20passing-success.svg)](#testing)
+[![Tests](https://img.shields.io/badge/tests-237%20passing-success.svg)](#testing)
 [![GitHub stars](https://img.shields.io/github/stars/imBlanker/multi-agents-workflow?style=social&label=Stars)](https://github.com/imBlanker/multi-agents-workflow/stargazers)
 
 # MAW — Multi-Agent Workflow for Complex Codebases
@@ -181,6 +181,8 @@ MAW treats your cc-switch as **read-only by default**. The rules below are enfor
 - **Routing rules** (`mawf routing` / `mawf doctor` checks; `mawf routing --fix` applies the carve-out, writing **only** `proxy_config` for claude/codex):
   - **Claude Code:** local routing **always ON** + auto-failover **always ON**.
   - **Codex:** when an **OpenAI OAuth (ChatGPT) login** is in use → local routing **OFF**; otherwise **ON**. (OAuth is detected from `codex_oauth_auth.json` + the provider's `auth.auth_mode === "chatgpt"`.)
+
+- **Skills coexistence (cc-switch v3.20+ / CLI v5.10+).** cc-switch can manage repo-backed skills (`skills` table; `cc-switch skills update`). If your mawf-installed `mawf-*` skills ever end up under cc-switch repo management, `cc-switch skills update` may overwrite them — `mawf doctor` flags this, and re-running `mawf install`/`mawf update` restores mawf's copies. The version source of truth for `mawf-*` skills is the mawf installer.
 
 ## 8. trellis init as the Mandatory Next Step
 **Always run `trellis init -u <user-name>` as the step right after `mawf init`.** MAW does this for you automatically (it invokes [`@mindfoldhq/trellis`](https://github.com/mindfoldhq/trellis) — a more powerful, more rigorous workflow framework). Use `mawf init --no-trellis` to skip.

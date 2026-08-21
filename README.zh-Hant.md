@@ -3,7 +3,7 @@
 [![CI](https://github.com/imBlanker/multi-agents-workflow/actions/workflows/ci.yml/badge.svg)](https://github.com/imBlanker/multi-agents-workflow/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D20.17-green.svg)](https://nodejs.org)
-[![Tests](https://img.shields.io/badge/tests-222%20passing-success.svg)](#testing)
+[![Tests](https://img.shields.io/badge/tests-237%20passing-success.svg)](#testing)
 [![GitHub stars](https://img.shields.io/github/stars/imBlanker/multi-agents-workflow?style=social&label=Stars)](https://github.com/imBlanker/multi-agents-workflow/stargazers)
 
 # MAW — 面向複雜程式碼庫的多智慧體工作流系統
@@ -179,6 +179,8 @@ MAW 預設將你的 cc-switch 視為**唯讀**。以下規則在程式碼中強�
 - **路由規則**（`mawf routing`／`mawf doctor` 檢查；`mawf routing --fix` 套用豁免，**只**寫入 claude/codex 的 `proxy_config`）：
   - **Claude Code：** 本地路由**恆為開啟**＋自動故障轉移**恆為開啟**。
   - **Codex：** 當使用 **OpenAI OAuth（ChatGPT）登入** 時 → 本地路由**關閉**；否則**開啟**。（OAuth 由 `codex_oauth_auth.json`＋供應商的 `auth.auth_mode === "chatgpt"` 偵測。）
+
+- **技能共存（cc-switch v3.20+ / CLI v5.10+）。** cc-switch 可管理倉庫託管的技能（`skills` 表；`cc-switch skills update`）。若你由 mawf 安裝的 `mawf-*` 技能落入 cc-switch 倉庫管理之下，`cc-switch skills update` 可能覆寫它們——`mawf doctor` 會標記這一點，重跑 `mawf install`/`mawf update` 可恢復 mawf 的副本。`mawf-*` 技能的版本權威是 mawf 安裝器。
 
 ## 8. trellis init 作為強制的下一步
 **務必在 `mawf init` 之後立即執行 `trellis init -u <user-name>`。** MAW 會自動為你完成（它呼叫 [`@mindfoldhq/trellis`](https://github.com/mindfoldhq/trellis) —— 一個更強大、更嚴謹的工作流框架）。使用 `mawf init --no-trellis` 跳過。
