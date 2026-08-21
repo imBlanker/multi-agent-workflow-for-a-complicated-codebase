@@ -14,7 +14,9 @@ import { readJson, writeJson, ensureDir, nowSec, readText, parseYamlSubset } fro
 import { perSessionRate } from "../ccswitch.js";
 import { discoverSessionFiles, parseTail, evaluateSignals, DEFAULT_THRESHOLDS } from "./signals.js";
 import { readRegistry, resolveWatchList } from "./registry.js";
-import { listIncidents, openIncident, applyEvent, reconcilePhaseTimeout, watchdogDir } from "./incidents.js";
+import { listIncidents, openIncident, applyEvent, reconcilePhaseTimeout, watchdogDir, loadIncident } from "./incidents.js";
+import { dispatchIncident } from "./dispatch.js";
+import { readCcSwitch } from "../ccswitch.js";
 
 const TAIL_BYTES = 131072; // last 128 KiB of a transcript is plenty for a/b
 
@@ -54,6 +56,7 @@ export function readWatchdogConfig(projectDir) {
     incidentBudgetUsd: Number(w.incidentBudgetUsd) || 10,
     hostOrder: Array.isArray(w.hostOrder) && w.hostOrder.length ? w.hostOrder : ["claude", "pi", "dsh", "codex"],
     intervalMin: Number(w.intervalMin) || 15,
+    recentSessionMin: Number.isFinite(Number(w.recentSessionMin)) ? Number(w.recentSessionMin) : 60,
     exclude: !!w.exclude, extra: w.extra, webhookUrl: w.webhookUrl,
   };
 }
@@ -79,6 +82,16 @@ export function scanOnce(opts = {}) {
   const watchList = resolveWatchList(registry, opts.config || {}, {
     exists: (p) => { try { return fsh.existsSync(p); } catch { return false; } },
   });
+
+  // dispatch is OPT-IN at the scan level: classify+record is the safe default;
+  // the CLI turns it on when the user invokes `mawf watchdog`. Keeps library
+  // consumers (and tests) hermetic unless they pass a runner.
+  const dispatchOn = opts.dispatch === true;
+  let ccInfo = null;
+  if (dispatchOn) ccInfo = readCcSwitch(opts.dbPath ? { dbPath: opts.dbPath } : {});
+  const availableHosts = [
+    ["claude", ".claude"], ["pi", path.join(".pi", "agent")], ["dsh", ".dsh"], ["codex", ".codex"],
+  ].filter(([, d]) => { try { return fsh.existsSync(path.join(home, d)); } catch { return false; } }).map(([h]) => h);
 
   // signal-d source: per-session error counts from cc-switch (proxied hosts +
   // pi when cc-switch imports Pi (Session) rows)
@@ -110,6 +123,12 @@ export function scanOnce(opts = {}) {
     for (const f of files) {
       let st = null;
       try { st = fsh.statSync(f.file); } catch { continue; }
+      // "active" sessions only (PRD R1): a transcript untouched for longer
+      // than recentSessionMin belongs to a dead/finished session — its old
+      // error bursts and permission lines must never open incidents
+      // (real-machine lesson: a 54-day-old `requires approval` line tripped
+      // signal b on first dry-run)
+      if (now - Math.floor(st.mtimeMs / 1000) > cfg.recentSessionMin * 60) continue;
       const prev = state.files[f.file] || {};
       const grew = !prev.size || st.size > prev.size || st.mtimeMs > (prev.mtimeMs || 0);
       const lastGrowthSec = grew ? now : (prev.lastGrowthSec || Math.floor(st.mtimeMs / 1000));
@@ -130,15 +149,17 @@ export function scanOnce(opts = {}) {
       reconcilePhaseTimeout(inc, { nowSec: now, windowSec: 15 * 60 });
     }
     // recompute recovery: any incident still open/rescuing whose session now
-    // shows NO finding → original-recovered
+    // shows NO finding → original-recovered. A session NO LONGER DISCOVERED
+    // (host rotated the file away, or filtered as stale) also closes the
+    // incident — otherwise a dry-run dispatch on a since-vanished session
+    // would sit in rescuing-* forever (real-machine lesson 2026-08-21).
     const activeIncidents = listIncidents(dir).filter((i) => ["open", "rescuing-a", "rescuing-b"].includes(i.state));
     for (const inc of activeIncidents) {
       const sess = sessions.find((s) => s.host === inc.host && s.sessionId === inc.sessionId);
       if (sess && !sess.finding) {
         applyEvent(inc, { type: "original-recovered", nowSec: now, reason: "signals cleared" });
       } else if (!sess) {
-        // session file gone (host rotated it) — keep the incident; dispatch
-        // phases still read the transcript path from the incident record
+        applyEvent(inc, { type: "original-recovered", nowSec: now, reason: "session no longer discovered (rotated/stale)" });
       }
     }
 
@@ -152,11 +173,29 @@ export function scanOnce(opts = {}) {
       opened++;
     }
 
+    // dispatch rescues for OPEN incidents (user-invoked watchdog only)
+    let dispatched = [];
+    if (dispatchOn) {
+      for (const inc of listIncidents(dir).filter((i) => i.state === "open")) {
+        try {
+          const r = dispatchIncident({
+            incident: inc, cc: ccInfo, cfg, available: availableHosts,
+            run: opts.run, dryRun: opts.dryRun, workspace: opts.workspace,
+            ensureSnap: opts.ensureSnap, log: opts.log,
+          });
+          if (r.dispatched) dispatched.push({ id: inc.id, ...r });
+        } catch (e) {
+          (opts.log ?? (() => {}))(`dispatch ${inc.id} error: ${e?.message ?? e}`);
+        }
+      }
+    }
+
     ensureDir(watchdogDir(dir));
     writeJson(stateFile, state);
     projectReports.push({
       projectDir: dir, sessionsScanned: sessions.length,
       blocked: sessions.filter((s) => s.finding).length, incidentsOpened: opened,
+      dispatched,
       activeIncidents: listIncidents(dir).filter((i) => ["open", "rescuing-a", "rescuing-b"].includes(i.state)).map((i) => ({ id: i.id, state: i.state, host: i.host, sessionId: i.sessionId })),
     });
   }

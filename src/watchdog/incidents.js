@@ -102,6 +102,10 @@ export function transition(inc, ev) {
       return S === "open" ? "rescuing-a" : null;
     case "phase-a-timeout":
       return S === "rescuing-a" ? "open" : null; // back to open; scan dispatches Phase B next
+    case "phase-a-failed":
+      return S === "rescuing-a" ? "open" : null; // rescue reported failure (vs window elapsed)
+    case "phase-b-failed":
+      return S === "rescuing-b" ? "open" : null; // next host gets a chance on the next cycle
     case "dispatch-b":
       return S === "open" ? "rescuing-b" : null;
     case "resolved":

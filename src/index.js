@@ -350,11 +350,15 @@ function cmdWatchdog(f, flags) {
     const r = scanOnce({
       projectDir: flags.project ? path.resolve(flags.project) : undefined,
       dbPath: flags.db || undefined,
+      dispatch: true,
+      dryRun: flags["dry-run"] === true,
+      log: (l) => out(l),
     });
     if (flags.json) { out(JSON.stringify(r, null, 2)); return 0; }
     out(`watchdog scan @ ${r.at}: ${r.projects.length} project(s), ${r.blockedTotal} blocked session(s)`);
     for (const p of r.projects) {
-      out(`  ${p.projectDir}: scanned ${p.sessionsScanned}, blocked ${p.blocked}, incidents opened ${p.incidentsOpened}, active ${p.activeIncidents.length}`);
+      out(`  ${p.projectDir}: scanned ${p.sessionsScanned}, blocked ${p.blocked}, incidents opened ${p.incidentsOpened}, active ${p.activeIncidents.length}${p.dispatched.length ? `, dispatched ${p.dispatched.length}` : ""}`);
+      for (const d of p.dispatched) out(`    dispatched ${d.id} → ${d.host} phase ${d.phase}${d.native ? ` (${d.native})` : ""} — ${d.reason}`);
       for (const i of p.activeIncidents) out(`    incident ${i.id} [${i.state}] ${i.host} ${String(i.sessionId).slice(0, 12)}`);
     }
     return 0;
