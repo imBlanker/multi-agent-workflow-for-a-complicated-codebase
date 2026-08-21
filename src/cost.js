@@ -5,7 +5,7 @@
 // runner can enforce both per-agent and total limits + max concurrency.
 import path from "node:path";
 import { readJson, writeJson, ensureDir, nowSec, round } from "./util.js";
-import { costRate, perSessionRate } from "./ccswitch.js";
+import { costRate, perSessionRate, piSessionUsagePresent } from "./ccswitch.js";
 
 /**
  * @param {string} stateDir  the .mawf/runtime/ dir
@@ -149,15 +149,23 @@ export function guard(stateDir, cfg) {
 
 /**
  * Human-readable cost report.
+ * `caveats` carries upstream accounting limits whenever the aggregates
+ * include pi rows (a pi session may mix Anthropic- and OpenAI-API providers →
+ * cache-write accounting may be incomplete — cc-switch upstream caveat).
  * @param {CostConfig} cfg
  */
 export function report(cfg) {
   const total = costRate({ dbPath: cfg.dbPath, windowSeconds: cfg.windowSeconds });
   const per = perSessionRate({ dbPath: cfg.dbPath, windowSeconds: cfg.windowSeconds });
   const top = per.sessions.slice(0, 8);
+  const caveats = [];
+  if (piSessionUsagePresent({ dbPath: cfg.dbPath, windowSeconds: cfg.windowSeconds })) {
+    caveats.push("pi spend via cc-switch Pi (Session) import: cache-write accounting may be incomplete");
+  }
   return {
     windowSeconds: cfg.windowSeconds,
     impl: total.impl,
+    caveats,
     total: { ratePerMin: total.ratePerMin, limitUsdPerMin: cfg.totalLimitUsdPerMin, usedPct: pct(total.ratePerMin, cfg.totalLimitUsdPerMin), totalUsd: total.totalUsd, requestCount: total.requestCount },
     perAgentLimitUsdPerMin: cfg.perAgentLimitUsdPerMin,
     maxConcurrency: cfg.maxConcurrency,

@@ -6,6 +6,37 @@ coding agents operating this repo). Human narrative: [`../CHANGELOG.md`](../CHAN
 
 Package: `multi-agents-workflow` · CLI: `mawf` · Node ≥ 20.17 · zero runtime deps.
 
+```yaml
+version: unreleased
+semver_impact: minor
+added:
+  - "cc-switch v3.20/cli v5.10.2 (schema v17) follow-up: readCcSwitch surfaces schemaVersion+schemaSupported (doctor schema check; >supported degrades to warn); piManagedByCcSwitch() worldview — managed: db-exact providers/pricing, models.json mirror, no merge on top (no-double-count invariant tested); unmanaged: mergePiIntoCc() fills pi candidates (also fixes empty 'mawf models --app pi'); pi real-spend metering via piSessionUsagePresent() + report() caveats (cache-write may be incomplete) + perSessionRate().errorCount (watchdog signal-d source); mawfSkillsUnderCcSwitch() doctor coexistence check (cc-switch 'skills update'); v17 fixtures (dedup ledger + pi/OpenModel rows + pi-session usage, shapes modeled); vendored fallback prices refreshed from v3.20 catalog"
+verified:
+  - "real db schema v17 pi-managed (deep-worker, openai-codex; no pi-session rows -> graceful degradation)"
+  - "trellis @mindfoldhq/trellis 0.6.15: scratch init --claude --yes clean; platform flags valid; tracker == npm latest"
+fixed:
+  - "advise.test.js UTC+8-day flake (state write missed clock injection; red on clean main)"
+upgrade:
+  npm: "npm i -g multi-agents-workflow@<next>"
+  checkout: "mawf upgrade"
+smoke: "mawf doctor && mawf --version && mawf inventory --verify"
+```
+
+## 0.5.1 (2026-08-20)
+
+```yaml
+version: 0.5.1
+semver_impact: patch
+fixed:
+  - "doctor: dsh profile list no longer reports node_modules (pnpm/dsh symlink farm at ~/.dsh/profiles/node_modules) as a profile; new listDshProfiles() in src/dshprovider.js (real dirs only, skips node_modules/dot-entries, missing profiles/ -> []); regression test added"
+verified:
+  - "compat with DeepSeek Harness (dsh) 0.1.0-rc.8: agent-default-model dump row byte-identical to rc.6; settings.yaml llm-pi-ai.providers schema unchanged; inventory --verify clean over the enlarged plugin table (no dupes); advise scoring intact; no dsh session-store reads (rc.8 SQLite format break = non-issue); wording compliant with rc.8 BRAND_GUIDELINES (descriptive use permitted)"
+upgrade:
+  npm: "npm i -g multi-agents-workflow@0.5.1"
+  checkout: "mawf upgrade"
+smoke: "mawf doctor && mawf --version && mawf inventory --verify"
+```
+
 ## 0.5.0 (2026-08-20)
 
 ```yaml

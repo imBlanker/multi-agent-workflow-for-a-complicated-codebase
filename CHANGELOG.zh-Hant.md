@@ -4,6 +4,36 @@
 格式：[Keep a Changelog](https://keepachangelog.com/)；版本遵循
 [SemVer](https://semver.org/)。
 
+## [Unreleased]
+
+### Added
+
+- **cc-switch v3.20.0 / cc-switch-cli v5.10.2 跟進（schema v16→v17）。**
+  - `readCcSwitch()` 暴露 `schemaVersion`（`PRAGMA user_version`）與 `schemaSupported`；doctor 新增 `cc-switch schema` 檢查；高於支援版本的 schema 降級為警告、絕不崩潰。全部讀取路徑在 v17 形狀的 fixture 上驗證通過（加性遷移——無回歸）。
+  - **pi 托管世界觀**：`piManagedByCcSwitch()`——當 cc-switch 資料庫（schema ≥17）存在 pi 供應商列時，供應商/定價來自 cc-switch 資料庫（精確），`models.json` 鏡像 cc-switch 寫入的內容；不再疊加合併（無雙重計——已用不變式測試）。未托管時，來自 `models.json` 的 pi 供應商經 `mergePiIntoCc()` 進入候選池（定價僅填空隙，鏡像 dsh 合併；同時修復 `mawf models --app pi` 為空的問題）。`readPiAsCc(piManaged)` 在托管時保住 cc-switch 精確定價。doctor、`mawf models` 註記與三語 README 均改為條件表述。
+  - **pi 真實計量**：當 cc-switch 的 Pi (Session) 匯入有列時，pi 花費可測（`piSessionUsagePresent()`），聚合攜帶上游告警（快取寫計帳可能不完整），`perSessionRate()` 新增 `errorCount`（狀態 ≥400 或 error_message——亦是 watchdog 訊號 d 源）。無列時維持僅並發降級。
+  - `mawfSkillsUnderCcSwitch()`：doctor 回報處於 cc-switch 倉庫管理下的 mawf-* 技能（GUI v3.20+/CLI v5.10+ `skills update` 共存；資訊性）。
+  - fixture `make-db.mjs` v17/v17NoPi 變體：`session_usage_dedup` 帳本（形狀為建模）、pi 供應商列、OpenModel 供應商列、pi-session 用量列（放置位置為建模）。
+  - vendored 兜底價格按 cc-switch v3.20 目錄刷新（claude-sonnet-5 2/10、deepseek-v4-pro 0.435/0.87、deepseek-v4-flash 0.14/0.28、kimi-k3 3/15）——仍標記為估算。
+
+### 驗證
+
+- 真機資料庫（schema v17、pi 托管：deep-worker + openai-codex、暫無 pi-session 列→優雅降級）與 **trellis `@mindfoldhq/trellis` 0.6.15**：空白專案 `trellis init -u <u> --claude --yes` 干淨通過；MAW 的平台旗標（`--claude/--codex/--pi/--dsh`）仍然有效；tracker 狀態與 npm latest 一致。
+
+### 修復
+
+- `tests/advise.test.js` UTC+8 跨天 flake：狀態寫入呼叫漏注入 `clock`，導致真實日期 ≠ 硬編碼假日期時斷言必然變紅（在乾淨 main 上亦失敗）。
+
+## [0.5.1] - 2026-08-20
+
+### 修復
+
+- **doctor：dsh profile 列表不再把 `node_modules` 誤報為 profile。** 新增專用讀取器 `listDshProfiles()`（`src/dshprovider.js`）：僅枚舉真實 profile 目錄——跳過 `node_modules` 與點前綴目錄，`profiles/` 缺失時安全降級為 `[]`。附回歸測試。
+
+### 驗證
+
+- 與 **DeepSeek Harness (dsh) 0.1.0-rc.8** 相容性驗證通過：`agent-default-model` dump 行與 rc.6 逐位元組一致（provider/model 提取不受影響）；`settings.yaml` `llm-pi-ai.providers` 結構不變；`mawf inventory --verify` 在擴容後的 everything-as-a-plugin 表上無重複、無錯報；`mawf advise` 評分正常；MAW 從不讀取 dsh 會話儲存，rc.8 的 SQLite 格式不相容對 MAW 無影響；措辭符合 rc.8 品牌規範（描述性使用 "DeepSeek Harness (dsh)" 被明確允許）。
+
 ## [0.5.0] - 2026-08-20
 
 ### 新增

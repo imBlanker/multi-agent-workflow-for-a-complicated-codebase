@@ -3,11 +3,11 @@
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import { exists, readJson } from "./util.js";
-import { readCcSwitch, findDb, readRouting, routingPolicy } from "./ccswitch.js";
+import { readCcSwitch, findDb, readRouting, routingPolicy, SUPPORTED_CC_SCHEMA, piManagedByCcSwitch, mawfSkillsUnderCcSwitch } from "./ccswitch.js";
 import { detectHost, hostCapabilities } from "./host.js";
 import { status as codexStatus } from "./codex.js";
 import { detectTrellis } from "./trellis.js";
-import { readDshConfig, readDshAsCc, readCredentialKeys, dshDefaultModel, dshCostRateNote, readCcPricingJson } from "./dshprovider.js";
+import { readDshConfig, readDshAsCc, readCredentialKeys, dshDefaultModel, dshCostRateNote, readCcPricingJson, listDshProfiles } from "./dshprovider.js";
 import { detectInstallMode } from "./upgrade.js";
 import path from "node:path";
 import os from "node:os";
@@ -58,13 +58,26 @@ export function doctor() {
 
   // cc-switch (read-only)
   const db = findDb();
+  /** @type {any} */
+  let ccInfo = null;
   if (!db) {
     checks.push({ name: "cc-switch database", status: "warn", detail: "not found; pricing & cost-rate will be unavailable" });
   } else {
     const cc = readCcSwitch({ dbPath: db });
+    ccInfo = cc;
     const cur = Object.keys(cc.currentProviders);
     checks.push({ name: "cc-switch database (read-only)", status: "ok", detail: `${db} (impl ${cc.impl}); current providers: ${cur.join(", ") || "none"}` });
+    checks.push(cc.schemaSupported
+      ? { name: "cc-switch schema", status: "ok", detail: `v${cc.schemaVersion} (supported ≤ v${SUPPORTED_CC_SCHEMA})` }
+      : { name: "cc-switch schema", status: "warn", detail: `v${cc.schemaVersion} is newer than supported v${SUPPORTED_CC_SCHEMA} — reads may miss new semantics; upgrade mawf` });
     checks.push({ name: "cc-switch model pricing", status: "ok", detail: `${Object.keys(cc.modelPricing).length} models priced` });
+    // cc-switch repo-backed skills coexistence (GUI v3.20+/CLI v5.10+): if any
+    // mawf-* skills are managed there, `cc-switch skills update` may overwrite
+    // them — informational; mawf's installer stays the version source of truth.
+    const mawfSkills = mawfSkillsUnderCcSwitch({ dbPath: db });
+    if (mawfSkills && mawfSkills.rows.length) {
+      checks.push({ name: "mawf skills under cc-switch management", status: "ok", detail: `${mawfSkills.rows.map((s) => s.name).join(", ")} — cc-switch 'skills update' may overwrite them; re-run mawf install/upgrade to restore (mawf is the version source of truth)` });
+    }
 
     // routing policy (claude always on+failover; codex on except OAuth)
     try {
@@ -82,15 +95,21 @@ export function doctor() {
   checks.push({ name: "Codex CLI", status: cs.binary ? "ok" : "warn", detail: cs.binary || "not found" });
   checks.push({ name: "codex-plugin-cc", status: cs.companion ? "ok" : "warn", detail: cs.companion || cs.reason });
 
-  // pi agent — config lives in ~/.pi/agent/ (NOT cc-switch-managed; spend is
-  // not measurable, so cost-rate degrades to concurrency-only)
+  // pi agent — config lives in ~/.pi/agent/. Since cc-switch v3.20.0 (schema
+  // v17) pi MAY be cc-switch-managed: providers/pricing then come from the
+  // cc-switch db (exact) and models.json mirrors what cc-switch wrote. Spend
+  // becomes measurable via cc-switch's Pi (Session) import once data exists
+  // (cache-write accounting may be incomplete — upstream caveat).
   const piHome = path.join(os.homedir(), ".pi", "agent");
+  const piManaged = piManagedByCcSwitch(ccInfo);
   if (exists(piHome)) {
     const settings = readJson(path.join(piHome, "settings.json"), null);
     const models = readJson(path.join(piHome, "models.json"), null);
     checks.push({ name: "Pi Agent config", status: "ok", detail: `${piHome}; default provider/model: ${settings?.defaultProvider || "?"} / ${settings?.defaultModel || "?"}` });
-    checks.push({ name: "Pi models store", status: models ? "ok" : "warn", detail: models ? `${Object.keys(models.providers || {}).length} providers in models.json` : "models.json not found — provider/model view will be empty" });
-    checks.push({ name: "Pi spend tracking", status: "warn", detail: "pi is not routed via the cc-switch proxy — cost-rate is concurrency-only; real spend is not measured" });
+    checks.push({ name: "Pi models store", status: models ? "ok" : "warn", detail: models ? `${Object.keys(models.providers || {}).length} providers in models.json${piManaged ? " (mirrors cc-switch-managed pi providers)" : ""}` : "models.json not found — provider/model view will be empty" });
+    checks.push({ name: "Pi spend tracking", status: piManaged ? "ok" : "warn", detail: piManaged
+      ? "pi is cc-switch-managed (schema v17+); spend measured via cc-switch Pi (Session) import when data exists — cache-write accounting may be incomplete"
+      : "pi is not routed via the cc-switch proxy — cost-rate is concurrency-only; real spend is not measured" });
   } else {
     checks.push({ name: "Pi Agent config", status: "warn", detail: "~/.pi/agent not found (not installed)" });
   }
@@ -108,7 +127,8 @@ export function doctor() {
     const cc = readDshAsCc({ dshHome });
     const provs = cc?.allProviders ?? [];
     const modelIds = provs.flatMap((p) => p.settings_config?._dshModels ?? []);
-    checks.push({ name: "DeepSeek Harness (dsh) config", status: "ok", detail: `${dshHome}${version !== "?" ? `; dsh ${version}` : ""}; profiles: ${(fs.readdirSync(path.join(dshHome, "profiles")).join(", ") || "none")}` });
+    const profiles = listDshProfiles(dshHome);
+    checks.push({ name: "DeepSeek Harness (dsh) config", status: "ok", detail: `${dshHome}${version !== "?" ? `; dsh ${version}` : ""}; profiles: ${profiles.join(", ") || "none"}` });
     checks.push({
       name: "dsh providers (settings.yaml)",
       status: provs.length ? "ok" : "warn",

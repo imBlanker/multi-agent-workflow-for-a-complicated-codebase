@@ -82,6 +82,11 @@ function sqlStr(s) {
   return "'" + String(s).replace(/'/g, "''") + "'";
 }
 
+/** Highest cc-switch db schema version MAW's read layer is verified against.
+ *  v17 (cc-switch v3.20.0 / cli v5.10.2) adds the `session_usage_dedup`
+ *  ledger + pi app management; additive, all MAW read paths verified on it. */
+export const SUPPORTED_CC_SCHEMA = 17;
+
 /**
  * Read everything MAW needs from cc-switch in one shot.
  * @param {object} [opts]
@@ -93,9 +98,16 @@ export function readCcSwitch(opts = {}) {
     return {
       dbPath: "", impl: "none", appTypes: [], currentProviders: {},
       allProviders: [], modelPricing: {}, settings: {},
+      schemaVersion: 0, schemaSupported: true,
     };
   }
   const r = makeReader(dbPath);
+  // Schema-version guard: MAW is read-only and additive upstream migrations
+  // keep parsing, but a NEWER-than-supported schema means unverified semantics
+  // — surface it (doctor) instead of failing silently or crashing.
+  const vRow = (r.all("PRAGMA user_version") || [])[0];
+  const schemaVersion = num(vRow ? vRow.user_version : 0);
+  const schemaSupported = schemaVersion <= SUPPORTED_CC_SCHEMA;
   const allProviders = r.all(
     "SELECT id, app_type, name, is_current, provider_type, cost_multiplier, limit_daily_usd, limit_monthly_usd, website_url, category, sort_index, settings_config FROM providers ORDER BY app_type, is_current DESC, sort_index"
   );
@@ -142,7 +154,55 @@ export function readCcSwitch(opts = {}) {
   for (const s of settingsRows) settings[s.key] = s.value;
 
   r.close();
-  return { dbPath, impl: r.impl, appTypes, currentProviders, allProviders, modelPricing, settings };
+  return { dbPath, impl: r.impl, appTypes, currentProviders, allProviders, modelPricing, settings, schemaVersion, schemaSupported };
+}
+
+/**
+ * cc-switch (GUI v3.20+ / CLI v5.10+) repo-backed skills management: rows in
+ * the `skills` table with name LIKE 'mawf-%' mean cc-switch can update those
+ * installations (`cc-switch skills update`) — coexistence with mawf's own
+ * installer. Read-only; feature-detected (older schemas lack the table → null).
+ * @param {object} [opts]
+ * @param {string} [opts.dbPath]
+ * @returns {{ rows: { name: string, directory: string, enabledApps: string[] }[] } | null}
+ */
+export function mawfSkillsUnderCcSwitch(opts = {}) {
+  const dbPath = opts.dbPath ?? findDb();
+  if (!dbPath) return null;
+  try {
+    const r = makeReader(dbPath);
+    // feature-detect the table (readers swallow SQL errors → empty arrays,
+    // so try/catch alone cannot distinguish "no table" from "no rows")
+    const has = r.all("SELECT name FROM sqlite_master WHERE type='table' AND name='skills'");
+    if (!has || !has.length) { r.close(); return null; }
+    const rows = r.all(
+      "SELECT name, directory, enabled_claude, enabled_codex, enabled_gemini, enabled_opencode, enabled_hermes, enabled_grokbuild FROM skills WHERE name LIKE 'mawf-%'"
+    );
+    r.close();
+    return {
+      rows: rows.map((row) => ({
+        name: row.name,
+        directory: row.directory,
+        enabledApps: ["claude", "codex", "gemini", "opencode", "hermes", "grokbuild"].filter((a) => Number(row["enabled_" + a]) === 1),
+      })),
+    };
+  } catch { return null; }
+}
+
+/**
+ * cc-switch v3.20.0+ manages pi as its 9th app: providers rows with
+ * app_type='pi' appear (schema v17) and cc-switch writes `~/.pi/agent/
+ * models.json` additively. When this returns true, the cc-switch db is the
+ * authoritative (exact) source for pi providers/pricing and MAW must NOT
+ * layer models.json-derived pi info on top of it (no double counting).
+ * Pure; read-only.
+ * @param {{ schemaVersion?: number, allProviders?: any[] }} ccInfo result of readCcSwitch()
+ * @returns {boolean}
+ */
+export function piManagedByCcSwitch(ccInfo) {
+  if (!ccInfo || !ccInfo.dbPath) return false;
+  if ((ccInfo.schemaVersion ?? 0) < 17) return false;
+  return (ccInfo.allProviders || []).some((p) => p.app_type === "pi");
 }
 
 /**
@@ -251,6 +311,9 @@ export function costRate(opts = {}) {
 
 /**
  * Per-session (== per-agent run) spend breakdown.
+ * `errorCount` counts requests with status_code >= 400 or a non-null
+ * error_message in the window — the watchdog's signal-d source (errors /
+ * interrupted turns, incl. cc-switch's Pi (Session) imported rows).
  * @param {object} [opts]
  * @param {string} [opts.dbPath]
  * @param {number} [opts.windowSeconds]
@@ -262,7 +325,7 @@ export function perSessionRate(opts = {}) {
   const r = makeReader(dbPath);
   const since = Math.floor(Date.now() / 1000) - win;
   const rows = r.all(
-    `SELECT session_id, app_type, model, COUNT(*) as cnt, COALESCE(SUM(CAST(total_cost_usd AS REAL)),0) as total, MAX(created_at) as last FROM proxy_request_logs WHERE created_at >= ${since} AND session_id IS NOT NULL GROUP BY session_id, app_type ORDER BY total DESC LIMIT 200`
+    `SELECT session_id, app_type, model, COUNT(*) as cnt, COALESCE(SUM(CAST(total_cost_usd AS REAL)),0) as total, MAX(created_at) as last, SUM(CASE WHEN CAST(status_code AS INTEGER) >= 400 OR error_message IS NOT NULL AND error_message != '' THEN 1 ELSE 0 END) as errs FROM proxy_request_logs WHERE created_at >= ${since} AND session_id IS NOT NULL GROUP BY session_id, app_type ORDER BY total DESC LIMIT 200`
   );
   r.close();
   const minutes = Math.max(win / 60, 1 / 60);
@@ -271,8 +334,33 @@ export function perSessionRate(opts = {}) {
     totalUsd: round(num(row.total), 6),
     ratePerMin: round(num(row.total) / minutes, 4),
     requestCount: num(row.cnt), lastAt: num(row.last),
+    errorCount: num(row.errs),
   }));
   return { sessions, windowSeconds: win };
+}
+
+/**
+ * True when cc-switch's Pi (Session) importer has put pi spend rows in the db
+ * within the window (data_source='pi-session', app_type='pi') — i.e. pi spend
+ * is MEASURED (not concurrency-only). Feature-detected; any error → false.
+ * @param {object} [opts]
+ * @param {string} [opts.dbPath]
+ * @param {number} [opts.windowSeconds]
+ * @returns {boolean}
+ */
+export function piSessionUsagePresent(opts = {}) {
+  const dbPath = opts.dbPath ?? findDb();
+  const win = opts.windowSeconds ?? 3600;
+  if (!dbPath) return false;
+  try {
+    const r = makeReader(dbPath);
+    const since = Math.floor(Date.now() / 1000) - win;
+    const rows = r.all(
+      `SELECT COUNT(*) as n FROM proxy_request_logs WHERE created_at >= ${since} AND app_type='pi' AND data_source='pi-session'`
+    );
+    r.close();
+    return num(rows?.[0]?.n) > 0;
+  } catch { return false; }
 }
 
 // -----------------------------------------------------------------------------
