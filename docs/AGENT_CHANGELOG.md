@@ -6,8 +6,10 @@ coding agents operating this repo). Human narrative: [`../CHANGELOG.md`](../CHAN
 
 Package: `multi-agents-workflow` · CLI: `mawf` · Node ≥ 20.17 · zero runtime deps.
 
+## 0.6.0 (2026-08-21)
+
 ```yaml
-version: unreleased
+version: 0.6.0
 semver_impact: minor
 added:
   - "grill-brainstorm swap: trellis-brainstorm -> grill-with-docs wrapper (vendored mattpocock/skills @5b15a47 MIT, 2 mawf format amendments); trellis contract preserved; .orig.md backup; clobber detect + mawf update repair; doctor check"
@@ -19,7 +21,7 @@ verified:
 fixed:
   - "advise.test.js UTC+8-day flake (state write missed clock injection; red on clean main)"
 upgrade:
-  npm: "npm i -g multi-agents-workflow@<next>"
+  npm: "npm i -g multi-agents-workflow@0.6.0"
   checkout: "mawf upgrade"
 smoke: "mawf doctor && mawf --version && mawf inventory --verify"
 ```
