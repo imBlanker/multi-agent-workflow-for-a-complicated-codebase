@@ -512,6 +512,7 @@ function cmdCost(f, flags) {
   out(`Cost rate over last ${Math.round(r.windowSeconds/60)} min (impl: ${r.impl})`);
   out(`  total: ${r.total.ratePerMin} USD/min  (limit ${r.total.limitUsdPerMin}, ${r.total.usedPct}% used; spend $${r.total.totalUsd} across ${r.total.requestCount} requests)`);
   out(`  per-agent limit: $${r.perAgentLimitUsdPerMin}/min; max concurrency: ${r.maxConcurrency}`);
+  for (const c of r.caveats || []) out(`  caveat: ${c}`);
   if (r.topSessions.length) {
     out(`  top sessions:`);
     for (const s of r.topSessions) out(`    ${s.sessionId?.slice(0,12)} ${s.appType} ${s.model}: ${s.ratePerMin} USD/min, ${s.requestCount} reqs`);

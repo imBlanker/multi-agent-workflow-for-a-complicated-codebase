@@ -46,10 +46,13 @@ export function readPiConfig(piDir) {
 
 /**
  * Cost-rate note shown wherever a pi host has no cc-switch spend telemetry.
+ * @param {boolean} [spendMeasured] true when cc-switch Pi (Session) import rows exist
  * @returns {string}
  */
-export function piCostRateNote() {
-  return "pi not routed via cc-switch proxy; spend not measured — concurrency-only enforcement";
+export function piCostRateNote(spendMeasured) {
+  return spendMeasured
+    ? "pi spend measured via cc-switch Pi (Session) import — cache-write accounting may be incomplete"
+    : "pi not routed via cc-switch proxy; spend not measured — concurrency-only enforcement";
 }
 
 /**
@@ -68,6 +71,8 @@ export function piCostRateNote() {
  * @param {boolean} [opts.piManaged] true when cc-switch v3.20+ (schema v17) manages pi:
  *   cc-switch model_pricing entries are EXACT and pi models.json `cost` fields
  *   only fill gaps instead of overwriting them (prevents double/conflicting pricing).
+ * @param {boolean} [opts.piSpendMeasured] true when cc-switch Pi (Session) rows exist —
+ *   switches the costNote to the measured wording (with the upstream caveat).
  * @returns {any | null}
  */
 export function readPiAsCc(opts = {}) {
@@ -165,7 +170,7 @@ export function readPiAsCc(opts = {}) {
     authPresent: cfg.authPresent,
     mcpServers: Object.keys((cfg.mcp && cfg.mcp.mcpServers) || {}),
     packages: Array.isArray(settings.packages) ? settings.packages : [],
-    costNote: piCostRateNote(),
+    costNote: piCostRateNote(opts.piSpendMeasured),
   };
 }
 

@@ -17,7 +17,7 @@ import os from "node:os";
 import { execSync } from "node:child_process";
 import { exists, isFile, readJson, readText, writeJson, writeText, ensureDir } from "./util.js";
 import { detectHost, hostCapabilities } from "./host.js";
-import { readCcSwitch } from "./ccswitch.js";
+import { readCcSwitch, piManagedByCcSwitch, piSessionUsagePresent } from "./ccswitch.js";
 import { readPiAsCc } from "./piprovider.js";
 import { readDshAsCc } from "./dshprovider.js";
 import { candidatesForAppType, classifyModel } from "./modelcap.js";
@@ -491,7 +491,7 @@ function scanPi(o) {
   // context7, searchcode, zai-mcp-server, web-search-prime, web-reader, zread)
   const mcps = mcpFromJson(path.join(o.piDir, "mcp.json"), "pi-mcp.json");
   const global = isFile(path.join(o.piDir, "AGENTS.md")) ? path.join(o.piDir, "AGENTS.md") : null;
-  const piAsCc = readPiAsCc({ piDir: o.piDir, ccSwitch: { modelPricing: o.cc?.modelPricing } });
+  const piAsCc = readPiAsCc({ piDir: o.piDir, ccSwitch: { modelPricing: o.cc?.modelPricing }, piManaged: piManagedByCcSwitch(o.cc), piSpendMeasured: piSessionUsagePresent({ dbPath: o.cc?.dbPath }) });
   return {
     app, homeDir: o.piDir,
     detected: o.hostInfo.detected.filter((d) => /pi agent/i.test(d)),

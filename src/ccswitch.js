@@ -279,6 +279,9 @@ export function costRate(opts = {}) {
 
 /**
  * Per-session (== per-agent run) spend breakdown.
+ * `errorCount` counts requests with status_code >= 400 or a non-null
+ * error_message in the window — the watchdog's signal-d source (errors /
+ * interrupted turns, incl. cc-switch's Pi (Session) imported rows).
  * @param {object} [opts]
  * @param {string} [opts.dbPath]
  * @param {number} [opts.windowSeconds]
@@ -290,7 +293,7 @@ export function perSessionRate(opts = {}) {
   const r = makeReader(dbPath);
   const since = Math.floor(Date.now() / 1000) - win;
   const rows = r.all(
-    `SELECT session_id, app_type, model, COUNT(*) as cnt, COALESCE(SUM(CAST(total_cost_usd AS REAL)),0) as total, MAX(created_at) as last FROM proxy_request_logs WHERE created_at >= ${since} AND session_id IS NOT NULL GROUP BY session_id, app_type ORDER BY total DESC LIMIT 200`
+    `SELECT session_id, app_type, model, COUNT(*) as cnt, COALESCE(SUM(CAST(total_cost_usd AS REAL)),0) as total, MAX(created_at) as last, SUM(CASE WHEN CAST(status_code AS INTEGER) >= 400 OR error_message IS NOT NULL AND error_message != '' THEN 1 ELSE 0 END) as errs FROM proxy_request_logs WHERE created_at >= ${since} AND session_id IS NOT NULL GROUP BY session_id, app_type ORDER BY total DESC LIMIT 200`
   );
   r.close();
   const minutes = Math.max(win / 60, 1 / 60);
@@ -299,8 +302,33 @@ export function perSessionRate(opts = {}) {
     totalUsd: round(num(row.total), 6),
     ratePerMin: round(num(row.total) / minutes, 4),
     requestCount: num(row.cnt), lastAt: num(row.last),
+    errorCount: num(row.errs),
   }));
   return { sessions, windowSeconds: win };
+}
+
+/**
+ * True when cc-switch's Pi (Session) importer has put pi spend rows in the db
+ * within the window (data_source='pi-session', app_type='pi') — i.e. pi spend
+ * is MEASURED (not concurrency-only). Feature-detected; any error → false.
+ * @param {object} [opts]
+ * @param {string} [opts.dbPath]
+ * @param {number} [opts.windowSeconds]
+ * @returns {boolean}
+ */
+export function piSessionUsagePresent(opts = {}) {
+  const dbPath = opts.dbPath ?? findDb();
+  const win = opts.windowSeconds ?? 3600;
+  if (!dbPath) return false;
+  try {
+    const r = makeReader(dbPath);
+    const since = Math.floor(Date.now() / 1000) - win;
+    const rows = r.all(
+      `SELECT COUNT(*) as n FROM proxy_request_logs WHERE created_at >= ${since} AND app_type='pi' AND data_source='pi-session'`
+    );
+    r.close();
+    return num(rows?.[0]?.n) > 0;
+  } catch { return false; }
 }
 
 // -----------------------------------------------------------------------------
