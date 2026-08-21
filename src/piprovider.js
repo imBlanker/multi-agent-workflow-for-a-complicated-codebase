@@ -65,6 +65,9 @@ export function piCostRateNote() {
  * @param {object} [opts]
  * @param {string} [opts.piDir]
  * @param {{ modelPricing?: Record<string, any> }} [opts.ccSwitch] optional cc-switch data for pricing cross-ref
+ * @param {boolean} [opts.piManaged] true when cc-switch v3.20+ (schema v17) manages pi:
+ *   cc-switch model_pricing entries are EXACT and pi models.json `cost` fields
+ *   only fill gaps instead of overwriting them (prevents double/conflicting pricing).
  * @returns {any | null}
  */
 export function readPiAsCc(opts = {}) {
@@ -100,9 +103,13 @@ export function readPiAsCc(opts = {}) {
     };
     allProviders.push(row);
     if (isCurrent) currentProviders.pi = row;
-    // pricing: pi models.json cost is per-M-token USD, same scale as cc-switch
+    // pricing: pi models.json cost is per-M-token USD, same scale as cc-switch.
+    // piManaged: cc-switch db prices are exact and win; models.json only fills
+    // gaps. Unmanaged: models.json cost is what pi actually pays on its direct
+    // API keys and stays authoritative for pi-configured models.
     for (const m of models) {
       if (!m?.id || !m?.cost) continue;
+      if (opts.piManaged && modelPricing[m.id]) continue;
       modelPricing[m.id] = {
         input_per_m: Number(m.cost.input ?? 0),
         output_per_m: Number(m.cost.output ?? 0),
@@ -160,4 +167,26 @@ export function readPiAsCc(opts = {}) {
     packages: Array.isArray(settings.packages) ? settings.packages : [],
     costNote: piCostRateNote(),
   };
+}
+
+/**
+ * Merge a readPiAsCc() result into a cc-switch ctx (mirrors the dsh merge in
+ * loadCtx). ONLY for pi NOT managed by cc-switch: when cc-switch v3.20+
+ * manages pi, its own db rows already flow through readCcSwitch() and merging
+ * models.json rows on top would double-count providers. Pricing fills gaps
+ * only — shared model ids keep their cc-switch entries so claude/codex views
+ * are never contaminated by pi-specific prices. Pure.
+ * @param {any} cc cc-switch ctx (mutated copy returned)
+ * @param {any | null} piAsCc result of readPiAsCc()
+ * @returns {any}
+ */
+export function mergePiIntoCc(cc, piAsCc) {
+  if (!piAsCc || !cc) return cc;
+  cc.allProviders = [...(cc.allProviders || []), ...piAsCc.allProviders];
+  if (piAsCc.currentProviders.pi) cc.currentProviders.pi = piAsCc.currentProviders.pi;
+  cc.appTypes = [...new Set([...(cc.appTypes || []), "pi"])];
+  const merged = { ...(cc.modelPricing || {}) };
+  for (const [k, v] of Object.entries(piAsCc.modelPricing)) if (!merged[k]) merged[k] = v;
+  cc.modelPricing = merged;
+  return cc;
 }

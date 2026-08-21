@@ -156,6 +156,7 @@ export function detectHost(opts = {}) {
   return {
     app,
     homeDir,
+    piDir: exists(piDir) ? piDir : null,
     hasSubagents,
     hasMultiAgent,
     hasDynamicWorkflow,

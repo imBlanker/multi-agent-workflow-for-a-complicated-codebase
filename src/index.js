@@ -4,7 +4,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { readJson, writeText, writeJson, exists, ensureDir, isoNow, slug } from "./util.js";
-import { readCcSwitch } from "./ccswitch.js";
+import { readCcSwitch, piManagedByCcSwitch } from "./ccswitch.js";
 import { detectHost, hostCapabilities } from "./host.js";
 import { planWorkflow, inferSignals } from "./planner.js";
 import { generateConfigs } from "./configgen.js";
@@ -22,6 +22,7 @@ import { classifyModel, selectModelForRole, candidatesForAppType, baseRole } fro
 import { resolvePrice } from "./pricing.js";
 import { checkPriceGate, priceGateReport } from "./pricegate.js";
 import { readDshAsCc } from "./dshprovider.js";
+import { readPiAsCc, mergePiIntoCc } from "./piprovider.js";
 import { scanInventory, writeInventoryArtifacts } from "./inventory.js";
 import { adviseTask, checkFreshness, renderAdvise } from "./advise.js";
 import { writeManagedBlocks, removeManagedBlocks } from "./injectblock.js";
@@ -35,6 +36,15 @@ function loadCtx(opts = {}) {
   const host = detectHost();
   const cc = readCcSwitch(opts.dbPath ? { dbPath: opts.dbPath } : {});
   if (cc.dbPath) cc.quota = readProviderQuota({ dbPath: cc.dbPath });
+  // pi worldview (cc-switch v3.20.0+, schema v17): when cc-switch manages pi,
+  // its own providers rows (app_type='pi') already flow through readCcSwitch()
+  // with EXACT pricing — do NOT merge models.json rows on top (double count).
+  // When unmanaged, merge models.json-derived providers under app_type "pi"
+  // (pricing fills gaps only, mirroring the dsh merge below).
+  cc.piManaged = piManagedByCcSwitch(cc);
+  if (!cc.piManaged && host.piDir) {
+    mergePiIntoCc(cc, readPiAsCc({ piDir: host.piDir, ccSwitch: { modelPricing: cc.modelPricing } }));
+  }
   // dsh merge (dsh is not cc-switch-managed): when a dsh home is detected,
   // its settings.yaml providers join the candidate pool under app_type
   // "dsh" and the cc-switch-synced model-pricing.json prices fill pricing
@@ -359,7 +369,9 @@ function cmdModels(f, flags) {
   if (!ctx.cc.dbPath && !(ctx.cc.allProviders || []).length) { out(`cc-switch database not found`, false); return; }
   const appType = flags.app || "claude";
   const cands = candidatesForAppType(ctx.cc, appType);
-  if (appType === "pi") out(`  note: pi models come from ~/.pi/agent/models.json (estimated; pi is not cc-switch-managed)`);
+  if (appType === "pi") out(ctx.cc.piManaged
+    ? `  note: pi is cc-switch-managed (schema v17+); providers & exact pricing come from the cc-switch db; live config still mirrors ~/.pi/agent/models.json`
+    : `  note: pi models come from ~/.pi/agent/models.json (estimated; pi is not cc-switch-managed)`);
   if (appType === "dsh") out(`  note: dsh models come from $DSH_HOME/settings.yaml (not cc-switch-managed); prices from ~/.cc-switch/model-pricing.json where model ids match`);
   out(`Model capability view — curated catalog, estimated (dimensions mirror the artificialanalysis.ai model leaderboards: intelligence / coding / math / agentic / multimodal-vision / image / image-edit / video / tts / stt)`);
   out(`Available ${appType} provider models (${cands.length}):`);

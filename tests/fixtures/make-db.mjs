@@ -32,7 +32,13 @@ const PH = (n) => Array(n).fill("?").join(",");
 
 /**
  * @param {string} dbPath
- * @param {{ withLogs?: boolean, multiplier?: number, codexOAuth?: boolean }} [opts]
+ * @param {{ withLogs?: boolean, multiplier?: number, codexOAuth?: boolean, v17?: boolean, v17NoPi?: boolean }} [opts]
+ *   v17: model cc-switch v3.20.0 / cli v5.10.2 schema — PRAGMA user_version=17,
+ *   `session_usage_dedup` ledger (shape modeled: upstream DDL not published in
+ *   the release notes; MAW only feature-detects its presence), a managed pi
+ *   provider row (app_type='pi'), OpenModel provider row, and Pi (Session)
+ *   usage rows in proxy_request_logs (data_source='pi-session'; shape modeled).
+ *   v17NoPi: v17 schema WITHOUT pi rows (managed-detection negative case).
  */
 export function makeFixtureDb(dbPath, opts = {}) {
   fs.mkdirSync(path.dirname(dbPath), { recursive: true });
@@ -80,6 +86,16 @@ export function makeFixtureDb(dbPath, opts = {}) {
     )`,
   ];
 
+  // v17 additions (cc-switch v3.20.0 / cli v5.10.2). The dedup-ledger shape is
+  // MODELED — upstream's exact DDL is not in the release notes; table presence
+  // is the v17 marker and MAW never queries its columns.
+  if (opts.v17 || opts.v17NoPi) {
+    sql.push(`CREATE TABLE session_usage_dedup (
+      fingerprint TEXT PRIMARY KEY, session_key TEXT, file_path TEXT,
+      first_seen_at INTEGER, last_seen_at INTEGER
+    )`);
+  }
+
   const settingsConfig = JSON.stringify({
     env: {
       ANTHROPIC_MODEL: "claude-opus-5",
@@ -102,9 +118,15 @@ export function makeFixtureDb(dbPath, opts = {}) {
     { table: "providers", vals: ["p3", "gemini", "Test Gemini", JSON.stringify({ model: "gemini-3-pro" }), null, null, 1, 0, null, null, null, "{}", 1, 0, "1", null, null, null] },
   ];
 
+  if (opts.v17) {
+    rows.push({ table: "providers", vals: ["p4", "pi", "Pi Official", JSON.stringify({ model: "gpt-5.5", api: "openai" }), null, null, 1, 0, null, null, null, "{}", 1, 0, "1", null, null, null] });
+    rows.push({ table: "providers", vals: ["p5", "claude", "OpenModel", JSON.stringify({ model: "openmodel-x", env: { ANTHROPIC_BASE_URL: "https://api.openmodel.example" } }), null, null, 1, 1, null, null, null, "{}", 0, 0, "1", null, null, null] });
+  }
+
   if (NODE_SQLITE?.DatabaseSync) {
     const db = new NODE_SQLITE.DatabaseSync(dbPath);
     for (const s of sql) db.exec(s);
+    db.exec(`PRAGMA user_version = ${opts.v17 || opts.v17NoPi ? 17 : 16}`);
     const insProv = db.prepare(`INSERT INTO providers (id, app_type, name, settings_config, website_url, category, created_at, sort_index, notes, icon, icon_color, meta, is_current, in_failover_queue, cost_multiplier, limit_daily_usd, limit_monthly_usd, provider_type) VALUES (${PH(18)})`);
     for (const r of rows) if (r.table === "providers") insProv.run(...r.vals);
     const insP = db.prepare(`INSERT INTO model_pricing (model_id, display_name, input_cost_per_million, output_cost_per_million, cache_read_cost_per_million, cache_creation_cost_per_million) VALUES (${PH(6)})`);
@@ -129,6 +151,14 @@ export function makeFixtureDb(dbPath, opts = {}) {
       insLog.run("r1", "p1", "claude", "claude-opus-5", "0.50", 200, "sess-A", now - 40);
       insLog.run("r2", "p1", "claude", "claude-opus-5", "0.50", 200, "sess-A", now - 30);
       insLog.run("r3", "p1", "claude", "claude-opus-5", "0.50", 200, "sess-A", now - 10);
+    }
+    if (opts.v17) {
+      // Pi (Session) usage rows (modeled): imported from pi session files by
+      // cc-switch, NOT proxied — distinct data_source, app_type='pi'.
+      const insLog = db.prepare(`INSERT INTO proxy_request_logs (request_id, provider_id, app_type, model, input_tokens, output_tokens, total_cost_usd, status_code, error_message, session_id, created_at, data_source) VALUES (${PH(12)})`);
+      const now = Math.floor(Date.now() / 1000);
+      insLog.run("pr1", "p4", "pi", "gpt-5.5", 1000, 2000, "0.30", 200, null, "pi-sess-1", now - 50, "pi-session");
+      insLog.run("pr2", "p4", "pi", "gpt-5.5", 1000, 2000, "0.30", 500, "interrupted turn: provider 500", "pi-sess-1", now - 20, "pi-session");
     }
     // usage_daily_rollups: $2.00 spent TODAY by p1 (→ remaining today $8 of $10; month $48 of $50)
     const today = new Date().toISOString().slice(0, 10);
@@ -169,6 +199,13 @@ export function makeFixtureDb(dbPath, opts = {}) {
   }
   const today = new Date().toISOString().slice(0, 10);
   all.push(`INSERT INTO usage_daily_rollups (date, app_type, provider_id, model, total_cost_usd) VALUES ('${today}','claude','p1','claude-opus-5','2.00')`);
+  if (opts.v17) {
+    all.push(`INSERT INTO providers VALUES ('p4','pi','Pi Official','${esc(JSON.stringify({ model: "gpt-5.5", api: "openai" }))}',NULL,NULL,1,0,NULL,NULL,NULL,'{}',1,0,'1',NULL,NULL,NULL)`);
+    all.push(`INSERT INTO providers VALUES ('p5','claude','OpenModel','${esc(JSON.stringify({ model: "openmodel-x", env: { ANTHROPIC_BASE_URL: "https://api.openmodel.example" } }))}',NULL,NULL,1,1,NULL,NULL,NULL,'{}',0,0,'1',NULL,NULL,NULL)`);
+    const now2 = Math.floor(Date.now() / 1000);
+    all.push(`INSERT INTO proxy_request_logs (request_id, provider_id, app_type, model, input_tokens, output_tokens, total_cost_usd, status_code, error_message, session_id, created_at, data_source) VALUES ('pr1','p4','pi','gpt-5.5',1000,2000,'0.30',200,NULL,'pi-sess-1',${now2 - 50},'pi-session')`);
+    all.push(`INSERT INTO proxy_request_logs (request_id, provider_id, app_type, model, input_tokens, output_tokens, total_cost_usd, status_code, error_message, session_id, created_at, data_source) VALUES ('pr2','p4','pi','gpt-5.5',1000,2000,'0.30',500,'interrupted turn: provider 500','pi-sess-1',${now2 - 20},'pi-session')`);
+  }
   const dump = all.map((s) => s + ";").join("\n");
   execFileSync("sqlite3", [dbPath], { input: dump, encoding: "utf8" });
   if (opts.codexOAuth) {

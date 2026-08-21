@@ -82,6 +82,11 @@ function sqlStr(s) {
   return "'" + String(s).replace(/'/g, "''") + "'";
 }
 
+/** Highest cc-switch db schema version MAW's read layer is verified against.
+ *  v17 (cc-switch v3.20.0 / cli v5.10.2) adds the `session_usage_dedup`
+ *  ledger + pi app management; additive, all MAW read paths verified on it. */
+export const SUPPORTED_CC_SCHEMA = 17;
+
 /**
  * Read everything MAW needs from cc-switch in one shot.
  * @param {object} [opts]
@@ -93,9 +98,16 @@ export function readCcSwitch(opts = {}) {
     return {
       dbPath: "", impl: "none", appTypes: [], currentProviders: {},
       allProviders: [], modelPricing: {}, settings: {},
+      schemaVersion: 0, schemaSupported: true,
     };
   }
   const r = makeReader(dbPath);
+  // Schema-version guard: MAW is read-only and additive upstream migrations
+  // keep parsing, but a NEWER-than-supported schema means unverified semantics
+  // — surface it (doctor) instead of failing silently or crashing.
+  const vRow = (r.all("PRAGMA user_version") || [])[0];
+  const schemaVersion = num(vRow ? vRow.user_version : 0);
+  const schemaSupported = schemaVersion <= SUPPORTED_CC_SCHEMA;
   const allProviders = r.all(
     "SELECT id, app_type, name, is_current, provider_type, cost_multiplier, limit_daily_usd, limit_monthly_usd, website_url, category, sort_index, settings_config FROM providers ORDER BY app_type, is_current DESC, sort_index"
   );
@@ -142,7 +154,23 @@ export function readCcSwitch(opts = {}) {
   for (const s of settingsRows) settings[s.key] = s.value;
 
   r.close();
-  return { dbPath, impl: r.impl, appTypes, currentProviders, allProviders, modelPricing, settings };
+  return { dbPath, impl: r.impl, appTypes, currentProviders, allProviders, modelPricing, settings, schemaVersion, schemaSupported };
+}
+
+/**
+ * cc-switch v3.20.0+ manages pi as its 9th app: providers rows with
+ * app_type='pi' appear (schema v17) and cc-switch writes `~/.pi/agent/
+ * models.json` additively. When this returns true, the cc-switch db is the
+ * authoritative (exact) source for pi providers/pricing and MAW must NOT
+ * layer models.json-derived pi info on top of it (no double counting).
+ * Pure; read-only.
+ * @param {{ schemaVersion?: number, allProviders?: any[] }} ccInfo result of readCcSwitch()
+ * @returns {boolean}
+ */
+export function piManagedByCcSwitch(ccInfo) {
+  if (!ccInfo || !ccInfo.dbPath) return false;
+  if ((ccInfo.schemaVersion ?? 0) < 17) return false;
+  return (ccInfo.allProviders || []).some((p) => p.app_type === "pi");
 }
 
 /**

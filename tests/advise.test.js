@@ -165,7 +165,7 @@ test("adviseTask: state file updated (UTC+8 day, runsToday) and --check-fresh fl
   const projectDir = tmpProject();
   let fake = new Date("2026-08-20T15:59:00Z").getTime(); // 23:59 UTC+8
   const clock = () => fake;
-  const r1 = adviseTask(OPTS({ projectDir, updateState: true, task: "research", difficulty: 3 }));
+  const r1 = adviseTask(OPTS({ projectDir, updateState: true, task: "research", difficulty: 3, clock }));
   assert.equal(r1.stateUpdated, true);
   const statePath = path.join(projectDir, ".mawf", "runtime", "advise-state.json");
   assert.equal(checkFreshness(statePath, clock), "ADVISED_TODAY");

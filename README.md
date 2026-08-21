@@ -14,7 +14,7 @@
 
 > **Note:** formerly `multi-agent-workflow` / repo `multi-agent-workflow-for-a-complicated-codebase`; renamed to an available npm name (the unscoped old name is an unrelated third-party package) and a collision-free command (`mawf`).
 
-> **Supported hosts: Claude Code, Codex, Pi Agent, and DeepSeek Harness (dsh).** Other agent software (Gemini CLI, opencode, …) is intentionally **not** supported. Note: Pi Agent and dsh are NOT cc-switch-managed — pi's config lives in `~/.pi/agent/`; dsh's providers/models live in `~/.dsh/settings.yaml`. Their spend rate is not measured (no proxy), so rate limits degrade to concurrency-only; dsh model prices still come from cc-switch's auto-synced `~/.cc-switch/model-pricing.json` where model ids match.
+> **Supported hosts: Claude Code, Codex, Pi Agent, and DeepSeek Harness (dsh).** Other agent software (Gemini CLI, opencode, …) is intentionally **not** supported. Note: dsh is NOT cc-switch-managed — its providers/models live in `~/.dsh/settings.yaml`, prices cross-ref cc-switch's auto-synced `~/.cc-switch/model-pricing.json` where ids match. Since **cc-switch v3.20 (db schema v17) pi MAY be cc-switch-managed**: when the cc-switch db carries pi provider rows, providers/pricing come from the cc-switch db (exact) and `~/.pi/agent/models.json` mirrors what cc-switch wrote; without pi rows, pi providers come from `models.json` as before. pi spend is measurable only when cc-switch's Pi (Session) import has data (cache-write accounting may be incomplete); dsh spend rate is not measured (no proxy), so dsh rate limits degrade to concurrency-only.
 
 ---
 
