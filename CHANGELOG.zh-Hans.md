@@ -4,7 +4,7 @@
 格式：[Keep a Changelog](https://keepachangelog.com/)；版本遵循
 [SemVer](https://semver.org/)。
 
-## [Unreleased]
+## [0.6.0] - 2026-08-21
 
 ### Added
 
