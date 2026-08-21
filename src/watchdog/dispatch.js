@@ -16,7 +16,9 @@ import { candidatesForAppType } from "../modelcap.js";
 import { resolvePrice } from "../pricing.js";
 import { checkPriceGate } from "../pricegate.js";
 import { applyEvent, saveIncident } from "./incidents.js";
-import { ensureSnapshot, isGitProject } from "./snapshot.js";
+import { ensureSnapshot, isGitProject, reconcileSnapshot } from "./snapshot.js";
+import { signature, findCase, appendCase, precedentText } from "./knowledge.js";
+import { spendSince } from "../ccswitch.js";
 
 export const PHASE_WINDOW_SEC = 15 * 60;
 export const VERDICT_RE = /RESCUE-DONE outcome=(resolved|failed|blocked)/;
@@ -86,6 +88,9 @@ export function buildPhaseAPrompt(args) {
     `- NEVER write, modify, or delete files inside the target project. NEVER kill or signal processes. NEVER install packages.`,
     `- Operate from ${workspaceDefault()} via absolute paths into the target project.`,
     ``,
+    `Report your action as one line BEFORE the footer:`,
+    `FIX: <one-line description of what you did (or "none")>`,
+    ``,
     `End with EXACTLY one line:`,
     `RESCUE-DONE outcome=resolved   (blockage cleared)`,
     `or RESCUE-DONE outcome=failed  (could not clear losslessly)`,
@@ -119,6 +124,9 @@ export function buildPhaseBPrompt(args) {
     lines.push(``, `A pre-write git snapshot ref was created (${args.snapshotRef}). Prefer committing your work on a branch named rescue/${inc.id}.`);
   }
   lines.push(
+    ``,
+    `Report your action as one line BEFORE the footer:`,
+    `FIX: <one-line description of what you did (or "none")>`,
     ``,
     `End with EXACTLY one line:`,
     `RESCUE-DONE outcome=resolved   (task continued to a sane stopping point)`,
@@ -201,7 +209,7 @@ export function bootstrapWorkspace(workspace) {
  * @param {{
  *   incident: any, cc: any, cfg?: any,
  *   available?: string[] | Set<string>, run?: typeof runDefault,
- *   workspace?: string, dryRun?: boolean, nowSec?: number,
+ *   workspace?: string, dryRun?: boolean, nowSec?: number, dbPath?: string,
  *   transcriptExcerpt?: string, precedent?: string | null,
  *   ensureSnap?: typeof ensureSnapshot, log?: (line: string) => void,
  * }} args
@@ -225,6 +233,14 @@ export function dispatchIncident(args) {
   const order = cfg.hostOrder;
   const workspace = bootstrapWorkspace(args.workspace);
 
+  // knowledge-base lookup (R7): same-signature precedents guide the rescue
+  const knowledgeDir = path.join(workspace, "knowledge");
+  const sig = signature({ host: inc.host, finding: inc.finding });
+  const hit = findCase(knowledgeDir, sig);
+  const precedent = precedentText(hit);
+  inc.signature = sig;
+  saveIncident(inc);
+
   // phase selection: no completed Phase A yet → Phase A; else Phase B
   const phaseADone = inc.phases.some((p) => p.phase === "a" && p.endedAt);
   const phase = phaseADone ? "b" : "a";
@@ -246,6 +262,8 @@ export function dispatchIncident(args) {
       return { dispatched: false, reason: `snapshot failed: ${snap.reason}` };
     }
     snapshotRef = snap.ref;
+    inc.snapshotRef = snap.ref;
+    saveIncident(inc);
   }
 
   const hosts = selectRescueHosts({ stalled: inc.host, tried: inc.hostsTried, order, available: args.available });
@@ -270,7 +288,7 @@ export function dispatchIncident(args) {
 
   const trellis = phase === "b" && exists(path.join(inc.projectDir, ".trellis", "scripts", "task.py"));
   const prompt = phase === "a"
-    ? buildPhaseAPrompt({ incident: inc, transcriptExcerpt: args.transcriptExcerpt, precedent: args.precedent })
+    ? buildPhaseAPrompt({ incident: inc, transcriptExcerpt: args.transcriptExcerpt, precedent })
     : buildPhaseBPrompt({ incident: inc, snapshotRef, trellis });
 
   applyEvent(inc, { type: phase === "a" ? "dispatch-a" : "dispatch-b", nowSec: now, host });
@@ -289,9 +307,19 @@ export function dispatchIncident(args) {
   const cmd = hostCommand({ host, prompt, model: modelPick?.model ?? null, workspace });
   const res = run(cmd.bin, cmd.args, cmd.cwd, cfg.phaseWindowSec ? Number(cfg.phaseWindowSec) : PHASE_WINDOW_SEC);
   phaseRec.endedAt = nowSec();
-  phaseRec.spendTracked = false; // Stage 4 wires spend attribution
+  // spend attribution (R6 layer 2): window-attribution over the rescue window
+  // on that host's app_type — conservative (may include concurrent user
+  // requests, never misses rescue spend that went through cc-switch)
+  phaseRec.spendUsd = spendSince({ dbPath: args.dbPath, sinceSec: phaseRec.startedAt, untilSec: phaseRec.endedAt, appTypes: [APP_TYPE[host]] });
+  inc.budgetUsd = Math.round((Number(inc.budgetUsd || 0) + Number(phaseRec.spendUsd || 0)) * 1e6) / 1e6;
 
   const verdict = res.timedOut ? { outcome: "failed" } : parseVerdict(res.stdout);
+  const fixLine = String(res.stdout ?? "").match(/^FIX: (.*)$/m)?.[1] ?? "unknown";
+  appendCase(knowledgeDir, {
+    sig, host: inc.host, symptom: inc.finding?.reason ?? "",
+    fix: fixLine, outcome: verdict && verdict.outcome === "resolved" ? "success" : "failed",
+    notes: res.stdout,
+  });
   if (verdict && verdict.outcome === "resolved") {
     phaseRec.outcome = "resolved";
     saveIncident(inc);
@@ -301,6 +329,10 @@ export function dispatchIncident(args) {
   // failure: verdict failed/blocked, no verdict, or timeout
   phaseRec.outcome = res.timedOut ? "window-elapsed" : (verdict ? verdict.outcome : "no-verdict");
   saveIncident(inc);
+  if (Number(inc.budgetUsd) >= Number(inc.budgetCapUsd)) {
+    applyEvent(inc, { type: "budget-stop", nowSec: nowSec(), reason: `budget $${inc.budgetUsd} >= cap $${inc.budgetCapUsd} after ${host} ${phase}` });
+    return { dispatched: true, host, phase, reason: "budget-stop" };
+  }
   applyEvent(inc, { type: phase === "a" ? "phase-a-failed" : "phase-b-failed", nowSec: nowSec(), reason: `${host}: ${phaseRec.outcome}` });
   const remaining = selectRescueHosts({ stalled: inc.host, tried: inc.hostsTried, order, available: args.available });
   if (!remaining.length && phase === "b") {
@@ -326,7 +358,16 @@ function tryNativeCodex(inc, workspace, run, args, now, log) {
     const cmd = hostCommand({ host: "codex", prompt: buildPhaseBPrompt({ incident: inc, trellis: exists(path.join(inc.projectDir, ".trellis", "scripts", "task.py")) }), workspace, native: mode, sessionId: String(inc.sessionId) });
     const res = run(cmd.bin, cmd.args, cmd.cwd, PHASE_WINDOW_SEC);
     phaseRec.endedAt = nowSec();
+    phaseRec.spendUsd = spendSince({ dbPath: args.dbPath, sinceSec: phaseRec.startedAt, untilSec: phaseRec.endedAt, appTypes: ["codex"] });
+    inc.budgetUsd = Math.round((Number(inc.budgetUsd || 0) + Number(phaseRec.spendUsd || 0)) * 1e6) / 1e6;
     const verdict = res.timedOut ? { outcome: "failed" } : parseVerdict(res.stdout);
+    const sig0 = inc.signature || signature({ host: inc.host, finding: inc.finding });
+    appendCase(path.join(workspace, "knowledge"), {
+      sig: sig0, host: inc.host, symptom: inc.finding?.reason ?? "",
+      fix: String(res.stdout ?? "").match(/^FIX: (.*)$/m)?.[1] ?? "unknown",
+      outcome: verdict && verdict.outcome === "resolved" ? "success" : "failed",
+      notes: res.stdout,
+    });
     if (verdict && verdict.outcome === "resolved") {
       phaseRec.outcome = "resolved";
       saveIncident(inc);

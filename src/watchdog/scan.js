@@ -14,9 +14,10 @@ import { readJson, writeJson, ensureDir, nowSec, readText, parseYamlSubset } fro
 import { perSessionRate } from "../ccswitch.js";
 import { discoverSessionFiles, parseTail, evaluateSignals, DEFAULT_THRESHOLDS } from "./signals.js";
 import { readRegistry, resolveWatchList } from "./registry.js";
-import { listIncidents, openIncident, applyEvent, reconcilePhaseTimeout, watchdogDir, loadIncident } from "./incidents.js";
+import { listIncidents, openIncident, applyEvent, reconcilePhaseTimeout, watchdogDir, loadIncident, saveIncident, appendAlert } from "./incidents.js";
 import { dispatchIncident } from "./dispatch.js";
-import { readCcSwitch } from "../ccswitch.js";
+import { reconcileSnapshot } from "./snapshot.js";
+import { readCcSwitch, spendSince } from "../ccswitch.js";
 
 const TAIL_BYTES = 131072; // last 128 KiB of a transcript is plenty for a/b
 
@@ -146,7 +147,21 @@ export function scanOnce(opts = {}) {
     // reconcile incidents: phase timeouts + original-recovery
     const incidents = listIncidents(dir);
     for (const inc of incidents) {
-      reconcilePhaseTimeout(inc, { nowSec: now, windowSec: 15 * 60 });
+      const aged = reconcilePhaseTimeout(inc, { nowSec: now, windowSec: 15 * 60 });
+      if (aged) {
+        // late spend attribution for the window-elapsed phase (re-entry parity:
+        // a cron cycle must see the same budget growth an in-process one would)
+        const ph = inc.phases[inc.phases.length - 1];
+        if (ph && !ph.spendUsd) {
+          ph.spendUsd = spendSince({ dbPath: opts.dbPath, sinceSec: ph.startedAt, untilSec: ph.endedAt, appTypes: [ph.host === "claude" ? "claude" : ph.host] });
+          inc.budgetUsd = Math.round((Number(inc.budgetUsd || 0) + Number(ph.spendUsd || 0)) * 1e6) / 1e6;
+          if (Number(inc.budgetUsd) >= Number(inc.budgetCapUsd) && ["open", "rescuing-a", "rescuing-b"].includes(inc.state)) {
+            applyEvent(inc, { type: "budget-stop", nowSec: now, reason: `budget $${inc.budgetUsd} >= cap $${inc.budgetCapUsd} on re-entry` });
+          } else {
+            saveIncident(inc);
+          }
+        }
+      }
     }
     // recompute recovery: any incident still open/rescuing whose session now
     // shows NO finding → original-recovered. A session NO LONGER DISCOVERED
@@ -158,8 +173,10 @@ export function scanOnce(opts = {}) {
       const sess = sessions.find((s) => s.host === inc.host && s.sessionId === inc.sessionId);
       if (sess && !sess.finding) {
         applyEvent(inc, { type: "original-recovered", nowSec: now, reason: "signals cleared" });
+        noteReconcile(dir, inc, opts);
       } else if (!sess) {
         applyEvent(inc, { type: "original-recovered", nowSec: now, reason: "session no longer discovered (rotated/stale)" });
+        noteReconcile(dir, inc, opts);
       }
     }
 
@@ -181,7 +198,7 @@ export function scanOnce(opts = {}) {
           const r = dispatchIncident({
             incident: inc, cc: ccInfo, cfg, available: availableHosts,
             run: opts.run, dryRun: opts.dryRun, workspace: opts.workspace,
-            ensureSnap: opts.ensureSnap, log: opts.log,
+            ensureSnap: opts.ensureSnap, log: opts.log, dbPath: opts.dbPath,
           });
           if (r.dispatched) dispatched.push({ id: inc.id, ...r });
         } catch (e) {
@@ -205,4 +222,16 @@ export function scanOnce(opts = {}) {
     projects: projectReports,
     blockedTotal: projectReports.reduce((n, p) => n + p.blocked, 0),
   };
+}
+
+/** After original-recovery, record the snapshot divergence guidance on the
+ *  incident + ALERTS (only when a Phase B snapshot exists). */
+function noteReconcile(projectDir, inc, opts) {
+  if (!inc.snapshotRef) return;
+  try {
+    const rec = reconcileSnapshot(projectDir, inc.id, opts.git);
+    inc.reconcile = { at: new Date().toISOString(), ok: rec.ok, guidance: rec.guidance, diffSummary: rec.diffSummary ?? null };
+    saveIncident(inc);
+    appendAlert(projectDir, `- original-recovered \`${inc.id}\` — snapshot reconcile: ${rec.guidance}`);
+  } catch { /* best-effort */ }
 }

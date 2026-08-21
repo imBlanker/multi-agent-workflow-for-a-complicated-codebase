@@ -158,6 +158,32 @@ export function readCcSwitch(opts = {}) {
 }
 
 /**
+ * Read-only windowed spend attribution for the watchdog budget layer: sum of
+ * total_cost_usd for rows created since `sinceSec` (optionally filtered to
+ * app_types). Conservative by construction — window-attribution may include
+ * concurrent non-rescue sessions on the same host, which stops escalation
+ * EARLIER, never later. pi/dsh sessions without cc-switch telemetry are not
+ * represented (spend stays 0 — the default cost-guard layer still bounds them).
+ * @param {{ dbPath?: string, sinceSec: number, untilSec?: number, appTypes?: string[] }} opts
+ * @returns {number} USD
+ */
+export function spendSince(opts = {}) {
+  const dbPath = opts.dbPath ?? findDb();
+  if (!dbPath || !Number.isFinite(opts.sinceSec)) return 0;
+  try {
+    const r = makeReader(dbPath);
+    let where = `created_at >= ${Math.floor(opts.sinceSec)}`;
+    if (Number.isFinite(opts.untilSec)) where += ` AND created_at <= ${Math.floor(/** @type {number} */ (opts.untilSec))}`;
+    if (Array.isArray(opts.appTypes) && opts.appTypes.length) {
+      where += " AND app_type IN (" + opts.appTypes.map(sqlStr).join(",") + ")";
+    }
+    const rows = r.all(`SELECT COALESCE(SUM(CAST(total_cost_usd AS REAL)),0) as t FROM proxy_request_logs WHERE ${where}`);
+    r.close();
+    return num(rows?.[0]?.t);
+  } catch { return 0; }
+}
+
+/**
  * cc-switch (GUI v3.20+ / CLI v5.10+) repo-backed skills management: rows in
  * the `skills` table with name LIKE 'mawf-%' mean cc-switch can update those
  * installations (`cc-switch skills update`) — coexistence with mawf's own

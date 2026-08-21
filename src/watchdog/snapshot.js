@@ -20,6 +20,33 @@ function runDefault(args, cwd) {
 }
 
 /**
+ * After original-recovered: summarize divergence between the snapshot ref and
+ * the current tree. NEVER auto-merges — with the never-kill policy (R8/A1)
+ * BOTH the original agent and the rescue may have written; a human decides.
+ * Returns the summary; caller records it on the incident + ALERTS.
+ * @param {string} projectDir
+ * @param {string} incidentId
+ * @param {GitOpts} [opts]
+ * @returns {{ ok: boolean, ref?: string, diffSummary?: string, guidance: string }}
+ */
+export function reconcileSnapshot(projectDir, incidentId, opts = {}) {
+  const run = opts.run ?? runDefault;
+  const ref = `refs/rescue/${incidentId}`;
+  if (!isGitProject(projectDir, opts)) return { ok: false, guidance: "non-git project — nothing to reconcile (diagnose-only was enforced)" };
+  try {
+    const diff = run(["diff", "--stat", `${ref}..HEAD`], projectDir);
+    const dirty = run(["status", "--porcelain"], projectDir);
+    const dirtyCount = dirty.status === 0 ? dirty.stdout.split("\n").filter((l) => l.trim()).length : -1;
+    const diffSummary = (diff.status === 0 ? diff.stdout.trim() : "(diff unavailable)") || "(no committed divergence)";
+    return {
+      ok: true, ref, diffSummary,
+      guidance: `original agent recovered after snapshot ${ref}. Committed divergence since snapshot:\n${diffSummary}\nUncommitted changes now: ${dirtyCount < 0 ? "unknown" : dirtyCount}. Review and merge/cherry-pick rescue work (branch rescue/${incidentId}) as appropriate — auto-merge is intentionally NOT performed.`,
+    };
+  } catch (e) {
+    return { ok: false, guidance: `reconcile failed: ${e?.message ?? e}` };
+  }
+}
+/**
  * Is this project a git repo? (`.git` present or `git rev-parse` succeeds)
  * @param {string} projectDir
  * @param {GitOpts} [opts]
