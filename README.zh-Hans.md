@@ -3,7 +3,7 @@
 [![CI](https://github.com/imBlanker/multi-agents-workflow/actions/workflows/ci.yml/badge.svg)](https://github.com/imBlanker/multi-agents-workflow/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D20.17-green.svg)](https://nodejs.org)
-[![Tests](https://img.shields.io/badge/tests-237%20passing-success.svg)](#testing)
+[![Tests](https://img.shields.io/badge/tests-275%20passing-success.svg)](#testing)
 [![GitHub stars](https://img.shields.io/github/stars/imBlanker/multi-agents-workflow?style=social&label=Stars)](https://github.com/imBlanker/multi-agents-workflow/stargazers)
 
 # MAW — 面向复杂代码库的多智能体工作流系统
@@ -215,6 +215,21 @@ MAW 项目中任一受支持宿主的会话都掌握整机的全貌。三个组�
 **`mawf advise [--task "<文本>"] [--difficulty 1-5] [--json]`** 用纯确定性规则为每个宿主打分——capabilityFit（≤30）、skillMatch（≤30；失败/待批准的 MCP 与已禁用插件永不参与匹配）、modelFit（≤25）、costFit（≤15），另对当前宿主 +8 留守加分；仅当领先者超出 ≥10 分才建议切换（滞回，防反复横跳）。判定为 `switch` 时预生成 `.mawf/handoff/<时间戳>-<from>-<to>.md` 交接简报，并打印确切的启动命令——dsh 的命令是 `kill -9 $(lsof -ti tcp:3080) && dsh web`（旧实例占用 3080 端口）。**advise 绝不执行任何命令**，由人类自己运行。
 
 **主动注入（仅项目级——绝不碰全局提示词文件）。** `init/plan/install/update/upgrade` 会向项目根 `AGENTS.md` + `CLAUDE.md`（所有受支持宿主都会加载的面）写入幂等管理块（≤20 行，`<!-- mawf:cross-host-advise BEGIN/END -->`）。该块指示任何会话中的 agent：在会话开始及每天（UTC+8）第一个提示词时重新运行留守/切换分析（新鲜度状态存于 `.mawf/runtime/advise-state.json`）；主动向人类呈现建议与理由；切换时填好交接简报并原样展示命令；接续 48 小时内的交接简报；在声称本机"缺少"某能力之前先查摘要。`mawf uninstall` 默认保留管理块；`--purge-config` 将其移除。
+
+## 10b. Watchdog：停滞检测与跨 host 救援（opt-in）
+
+`mawf watchdog` 周期性（默认 15 分钟）检查所有 mawf 初始化项目中**活跃**的 agent/subagent 会话是否被报警阻碍，并可换 host 救援：
+
+- **信号（优先级 d→c→a→b）**：cc-switch 日志的按会话错误/中断计数（含 Pi (Session) 导入）→ 转录停滞（进程存活但文件不再增长）→ 尾部连续同类错误 → 权限/审批挂起。阈值在 `.mawf/config.yaml`（`watchdog.thresholds`）；超过 60 分钟无变动的旧会话绝不算活跃。
+- **两阶段**：Phase A 仅无损解阻（只读诊断、配置类修复；绝不写目标项目、绝不杀进程）。Phase A 在 15 分钟窗口失败后才进入 Phase B——换下一家 host 接续任务，以停滞转录为交接（mawf+trellis 工作区注入 trellis 任务上下文；codex-on-codex 先试原生 `exec resume`/`fork`）。
+- **host 轮换固定**：claude → pi → dsh → codex，跳过停滞/不可用 host；每 host 每事故至多一次；遍历完 → `human-alert`（终态）。救援模型必须过价格闸门（claude/codex 按次 `--model`/`-m`；pi/dsh 用其配置默认——默认 cost-guard 仍约束花费）。
+- **专属救援工作区** `~/.mawf/watchdog/workspace/`（标准 mawf 工作区，绝不注册为被监视项目）按默认设置分派 subagents——数量"无上限"，默认 cost-guard 约束仍然生效。
+- **预算三层**：默认 cost-guard + 每事故硬顶（默认 **$10**，`watchdog.incidentBudgetUsd`）+ 价格阀门。窗口归因的救援花费记到事故账上；任一层触发 → `budget-stop`。
+- **经验复用**：问题签名（host + 错误类别 + 规范化 token）解析到救援工作区 `knowledge/` 的案例文件；过往成功注入为先例，失败过的修复绝不再原样重试，新解回写。
+- **安全**：绝不杀原进程；原 agent 恢复则事故以 `original-recovered` 关闭、停止后续派发。Phase B 写入前必须有 git 快照（`refs/rescue/<incident>`）；非 git 项目降级为只诊断。
+- **审计**：每事故记录于 `<project>/.mawf/watchdog/`（信号、派发、花费、结论）；终态追加到 `ALERTS.md`；可选 `watchdog.webhookUrl` POST 摘要。
+
+仅在被调用时运行：常驻 `mawf watchdog [--interval 15]`，或 cron/systemd 用 `*/15 * * * * mawf watchdog --once`（时钟制状态跨调用存活）。`mawf init` 把项目登记进 `~/.mawf/projects.json`（`--no-watchdog` 退出；config `extra`/`exclude` 调整）。`--dry-run` 只打印派发 prompt、不 spawn。
 
 ## 11. 安装
 **从 npm：** `npx multi-agents-workflow@latest install`。

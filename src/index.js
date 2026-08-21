@@ -346,8 +346,8 @@ function capLine(caps) {
 function cmdWatchdog(f, flags) {
   const single = flags.once === true;
   const intervalMin = Number(flags.interval) || 15;
-  const runOnce = () => {
-    const r = scanOnce({
+  const runOnce = async () => {
+    const r = await scanOnce({
       projectDir: flags.project ? path.resolve(flags.project) : undefined,
       dbPath: flags.db || undefined,
       dispatch: true,
@@ -366,9 +366,9 @@ function cmdWatchdog(f, flags) {
   if (single) return runOnce();
   // resident loop: `--once` is the primitive; cron/systemd users own scheduling
   out(`watchdog resident loop every ${intervalMin} min (ctrl-c to stop; use --once for schedulers)`);
-  const timer = setInterval(() => { try { runOnce(); } catch (err) { out(`watchdog cycle error: ${err?.message ?? err}`, false); } }, intervalMin * 60 * 1000);
+  const timer = setInterval(() => { runOnce().catch((err) => out(`watchdog cycle error: ${err?.message ?? err}`, false)); }, intervalMin * 60 * 1000);
   timer.unref?.();
-  try { runOnce(); } catch (err) { out(`watchdog cycle error: ${err?.message ?? err}`, false); }
+  runOnce().catch((err) => out(`watchdog cycle error: ${err?.message ?? err}`, false));
   return 0;
 }
 

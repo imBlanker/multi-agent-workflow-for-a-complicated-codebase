@@ -16,6 +16,10 @@
   - fixture `make-db.mjs` v17/v17NoPi 變體：`session_usage_dedup` 帳本（形狀為建模）、pi 供應商列、OpenModel 供應商列、pi-session 用量列（放置位置為建模）。
   - vendored 兜底價格按 cc-switch v3.20 目錄刷新（claude-sonnet-5 2/10、deepseek-v4-pro 0.435/0.87、deepseek-v4-flash 0.14/0.28、kimi-k3 3/15）——仍標記為估算。
 
+### Added（續）
+
+- **Watchdog：停滯偵測 + 跨 host 救援（opt-in）** — `mawf watchdog [--once] [--interval 15] [--project P] [--dry-run] [--json]`。訊號 d→c→a→b（日誌錯誤/中斷計數含 Pi (Session) 匯入 → 轉錄停滯 → 尾部連續錯誤 → 權限掛起）；僅活躍會話（60 分鐘新近性）。兩階段救援：Phase A 僅無損解阻，Phase A 15 分鐘視窗失敗後換 host 接續（轉錄交接、trellis 上下文、codex 原生 resume/fork 先試）。固定輪換 claude→pi→dsh→codex，每 host 一次；遍歷完 → human-alert。專屬救援工作區 `~/.mawf/watchdog/workspace/`（自身絕不被監視）；價格閥門選模；三層預算（預設 cost-guard + 每事故 $10 硬頂 + 價格閥門，視窗歸因記帳）；經驗庫復用（簽名 → 案例，失敗修復不再原樣重試）；Phase B 寫前 git 快照（非 git → 只診斷）；絕不殺原程序（恢復即關事故）；完整審計 + ALERTS.md + 可選 webhook。`mawf init` 登記 `~/.mawf/projects.json`（`--no-watchdog` 退出）。doctor：註冊表/警報/調度檢查。測試 275/275。
+
 ### 驗證
 
 - 真機資料庫（schema v17、pi 托管：deep-worker + openai-codex、暫無 pi-session 列→優雅降級）與 **trellis `@mindfoldhq/trellis` 0.6.15**：空白專案 `trellis init -u <u> --claude --yes` 干淨通過；MAW 的平台旗標（`--claude/--codex/--pi/--dsh`）仍然有效；tracker 狀態與 npm latest 一致。

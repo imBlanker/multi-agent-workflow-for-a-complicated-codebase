@@ -3,7 +3,7 @@
 [![CI](https://github.com/imBlanker/multi-agents-workflow/actions/workflows/ci.yml/badge.svg)](https://github.com/imBlanker/multi-agents-workflow/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D20.17-green.svg)](https://nodejs.org)
-[![Tests](https://img.shields.io/badge/tests-237%20passing-success.svg)](#testing)
+[![Tests](https://img.shields.io/badge/tests-275%20passing-success.svg)](#testing)
 [![GitHub stars](https://img.shields.io/github/stars/imBlanker/multi-agents-workflow?style=social&label=Stars)](https://github.com/imBlanker/multi-agents-workflow/stargazers)
 
 # MAW — Multi-Agent Workflow for Complex Codebases
@@ -217,6 +217,21 @@ Every supported host session in a MAW project knows the whole machine. Three pie
 **`mawf advise [--task "<text>"] [--difficulty 1-5] [--json]`** scores every host against the task deterministically — capabilityFit (≤30), skillMatch (≤30; failed/pending MCPs and disabled plugins never match), modelFit (≤25), costFit (≤15) + a +8 stayBonus on the current host; switching is recommended only when the winner leads by ≥10 (hysteresis). On `switch` it pre-creates a `.mawf/handoff/<ts>-<from>-<to>.md` brief and prints the exact launch command — dsh's is `kill -9 $(lsof -ti tcp:3080) && dsh web` (a live old instance holds port 3080). **Advise never executes anything**; the human runs the command.
 
 **Proactive injection (project scope only — global prompt files are never touched).** `init/plan/install/update/upgrade` write an idempotent managed block (≤20 lines, `<!-- mawf:cross-host-advise BEGIN/END -->`) into the project root `AGENTS.md` + `CLAUDE.md` — surfaces every supported host loads. The block tells any session agent to: re-run the stay/switch analysis at session start and on the first prompt of each day (UTC+8, freshness state in `.mawf/runtime/advise-state.json`); surface the recommendation with reasons; on switch, fill the handoff brief and show the command verbatim; pick up fresh (<48h) handoff briefs; consult the digest before claiming anything is "missing" on this machine. `mawf uninstall` keeps blocks by default; `--purge-config` strips them.
+
+## 10b. Watchdog: Stall Detection & Cross-Host Rescue (opt-in)
+
+`mawf watchdog` periodically (default 15 min) checks **active** agent/subagent sessions in every mawf-initialized project for alarm-blocked stalls and can rescue them on a different host:
+
+- **Signals (priority d→c→a→b)**: per-session error/interrupted counts from cc-switch logs (incl. Pi (Session) import) → transcript stall (no growth while the process lives) → trailing run of consecutive errors → permission/approval pending. Thresholds in `.mawf/config.yaml` (`watchdog.thresholds`); stale sessions (>60 min untouched) are never treated as active.
+- **Two phases**: Phase A = lossless unblock only (read-only diagnosis, config-class fixes; NEVER writes the target project, NEVER kills processes). Phase B = takeover on the next host only after Phase A fails its 15-min window, with the stalled transcript as handoff (+ trellis task context in mawf+trellis workspaces; codex-on-codex first tries native `exec resume`/`fork`).
+- **Host rotation is fixed**: claude → pi → dsh → codex, skipping the stalled/unavailable host; each host at most once per incident; exhaustion → `human-alert` (terminal). Rescue models must pass the price gate (claude/codex per-run `--model`/`-m`; pi/dsh run their configured defaults — the default cost-guard still bounds spend).
+- **Dedicated rescue workspace** `~/.mawf/watchdog/workspace/` (a standard mawf workspace, never registered as watched) dispatches subagents under default settings — "unlimited" count, default cost-guard constraints still apply.
+- **Budget layers**: default cost-guard + per-incident hard cap (default **$10**, `watchdog.incidentBudgetUsd`) + the price valve. Window-attributed rescue spend is charged to the incident; any layer tripped → `budget-stop`.
+- **Experience reuse**: problem signatures (host + error class + normalized tokens) resolve to case files in the rescue workspace `knowledge/`; prior successes are injected as precedents, failed fixes are never retried as-is, novel solutions are written back.
+- **Safety**: the original process is NEVER killed; if it recovers, the incident closes as `original-recovered` and further dispatch stops. Phase B writes require a git snapshot first (`refs/rescue/<incident>`); non-git projects degrade to diagnose-only.
+- **Audit**: every incident is recorded under `<project>/.mawf/watchdog/` (signals, dispatches, spend, verdicts); terminal states append to `ALERTS.md`; optional `watchdog.webhookUrl` POSTs summaries.
+
+Runs ONLY when invoked: resident `mawf watchdog [--interval 15]`, or `*/15 * * * * mawf watchdog --once` for cron/systemd (clock-based state survives across invocations). `mawf init` registers projects into `~/.mawf/projects.json` (opt out: `--no-watchdog`; config `extra`/`exclude` adjust). `--dry-run` prints dispatch prompts and spawns nothing.
 
 ## 11. Installation
 **From npm:** `npx multi-agents-workflow@latest install`.

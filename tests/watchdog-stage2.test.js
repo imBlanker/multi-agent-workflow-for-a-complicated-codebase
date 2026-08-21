@@ -80,7 +80,7 @@ test("readWatchdogConfig: defaults + YAML subset parse", () => {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test("scanOnce: blocked session opens an incident; recovery closes it (fixture tree)", () => {
+test("scanOnce: blocked session opens an incident; recovery closes it (fixture tree)", async () => {
   const dir = tmpProject();
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "maw-home-"));
   // claude transcript with 3 consecutive errors
@@ -95,7 +95,7 @@ test("scanOnce: blocked session opens an incident; recovery closes it (fixture t
   ].join("\n");
   fs.writeFileSync(path.join(claudeSess, "b1.jsonl"), blocked);
 
-  const r1 = scanOnce({ projectDir: dir, nowSec: now, home, isProcessAlive: () => true, dbPath: "/nonexistent.db" });
+  const r1 = await scanOnce({ projectDir: dir, nowSec: now, home, isProcessAlive: () => true, dbPath: "/nonexistent.db" });
   assert.equal(r1.blockedTotal, 1);
   assert.equal(r1.projects[0].incidentsOpened, 1);
   const incId = r1.projects[0].activeIncidents[0].id;
@@ -104,30 +104,30 @@ test("scanOnce: blocked session opens an incident; recovery closes it (fixture t
   assert.ok(fs.existsSync(path.join(watchdogDir(dir), "state.json")));
 
   // second scan: still blocked → no duplicate incident
-  const r2 = scanOnce({ projectDir: dir, nowSec: now + 60, home, isProcessAlive: () => true, dbPath: "/nonexistent.db" });
+  const r2 = await scanOnce({ projectDir: dir, nowSec: now + 60, home, isProcessAlive: () => true, dbPath: "/nonexistent.db" });
   assert.equal(r2.projects[0].incidentsOpened, 0);
   assert.equal(r2.projects[0].activeIncidents.length, 1);
 
   // recovery: healthy tail → original-recovered
   fs.writeFileSync(path.join(claudeSess, "b1.jsonl"), blocked + "\n" + JSON.stringify({ type: "tool_result", is_error: false, content: "recovered", sessionId: "b1", timestamp: new Date((now + 120) * 1000).toISOString() }) + "\n" + JSON.stringify({ type: "tool_result", is_error: false, content: "still fine", sessionId: "b1", timestamp: new Date((now + 130) * 1000).toISOString() }));
-  const r3 = scanOnce({ projectDir: dir, nowSec: now + 200, home, isProcessAlive: () => true, dbPath: "/nonexistent.db" });
+  const r3 = await scanOnce({ projectDir: dir, nowSec: now + 200, home, isProcessAlive: () => true, dbPath: "/nonexistent.db" });
   assert.equal(r3.blockedTotal, 0);
   assert.equal(loadIncident(dir, incId).state, "original-recovered");
 
   // registry-driven watch list also works (extra config path)
   const regFile = path.join(home, "projects.json");
   writeRegistry({ projects: [{ path: dir, addedAt: "" }] }, regFile);
-  const r4 = scanOnce({ registryFile: regFile, nowSec: now + 300, home, isProcessAlive: () => false, dbPath: "/nonexistent.db" });
+  const r4 = await scanOnce({ registryFile: regFile, nowSec: now + 300, home, isProcessAlive: () => false, dbPath: "/nonexistent.db" });
   assert.equal(r4.projects.length, 1);
 
   fs.rmSync(dir, { recursive: true, force: true });
   fs.rmSync(home, { recursive: true, force: true });
 });
 
-test("scanOnce: clean project → zero blocked, exit-safe", () => {
+test("scanOnce: clean project → zero blocked, exit-safe", async () => {
   const dir = tmpProject();
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "maw-home2-"));
-  const r = scanOnce({ projectDir: dir, nowSec: now, home, isProcessAlive: () => true, dbPath: "/nonexistent.db" });
+  const r = await scanOnce({ projectDir: dir, nowSec: now, home, isProcessAlive: () => true, dbPath: "/nonexistent.db" });
   assert.equal(r.blockedTotal, 0);
   assert.equal(r.projects[0].sessionsScanned, 0);
   fs.rmSync(dir, { recursive: true, force: true });

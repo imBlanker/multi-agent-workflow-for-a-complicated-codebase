@@ -278,7 +278,7 @@ test("scanOnce dispatch:true resolves an incident end-to-end (fixture tree, fake
   const blocked = [1, 2, 3].map((i) => JSON.stringify({ type: "tool_result", is_error: true, content: `boom ${i}`, sessionId: "b1", timestamp: new Date((now - 100 * i) * 1000).toISOString() })).join("\n");
   fs.writeFileSync(path.join(claudeSess, "b1.jsonl"), blocked);
   const run = runner({ pi: "resolved" }); // claude stalled → pi rescues
-  const r = scanOnce({ projectDir: dir, nowSec: now, home, isProcessAlive: () => true, dbPath, dispatch: true, run, workspace: path.join(home, "ws") });
+  const r = await scanOnce({ projectDir: dir, nowSec: now, home, isProcessAlive: () => true, dbPath, dispatch: true, run, workspace: path.join(home, "ws") });
   assert.equal(r.projects[0].dispatched.length, 1);
   assert.equal(r.projects[0].dispatched[0].host, "pi");
   assert.equal(r.projects[0].dispatched[0].reason, "resolved");
@@ -288,10 +288,10 @@ test("scanOnce dispatch:true resolves an incident end-to-end (fixture tree, fake
   fs.rmSync(home, { recursive: true, force: true });
 });
 
-test("scanOnce dispatch default OFF (classify+record only; library-safe)", () => {
+test("scanOnce dispatch default OFF (classify+record only; library-safe)", async () => {
   const dir = tmpProject();
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "maw-home4-"));
-  const r = scanOnce({ projectDir: dir, nowSec: now, home, isProcessAlive: () => true, dbPath: "/nonexistent.db" });
+  const r = await scanOnce({ projectDir: dir, nowSec: now, home, isProcessAlive: () => true, dbPath: "/nonexistent.db" });
   assert.deepEqual(r.projects[0].dispatched, []); // field present, nothing dispatched
   fs.rmSync(dir, { recursive: true, force: true });
   fs.rmSync(home, { recursive: true, force: true });

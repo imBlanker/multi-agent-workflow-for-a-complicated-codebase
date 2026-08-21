@@ -140,10 +140,39 @@ test("scanOnce re-entry: aged phase gets late spend attribution + budget-stop", 
   applyEvent(inc, { type: "dispatch-a", nowSec: now });
   inc.phases.push({ phase: "a", host: "claude", startedAt: Math.floor(Date.now() / 1000) - 16 * 60 });
   saveIncident(inc);
-  const r = scanOnce({ projectDir: dir, nowSec: Math.floor(Date.now() / 1000), home, isProcessAlive: () => false, dbPath });
+  const r = await scanOnce({ projectDir: dir, nowSec: Math.floor(Date.now() / 1000), home, isProcessAlive: () => false, dbPath });
   const re = loadIncident(dir, inc.id);
   assert.equal(re.state, "budget-stop");
   assert.ok(re.phases[0].spendUsd > 0, "late attribution recorded");
+  fs.rmSync(dir, { recursive: true, force: true });
+  fs.rmSync(home, { recursive: true, force: true });
+});
+
+// --- webhook (R9) ------------------------------------------------------------------
+
+test("postWebhook: POSTs JSON, never throws; scan wiring fires on incidents", async () => {
+  const { postWebhook } = await import("../src/watchdog/scan.js");
+  const calls = [];
+  const fakeFetch = async (url, init) => { calls.push({ url, init }); return { ok: true, status: 200 }; };
+  const r = await postWebhook("http://example.invalid/hook", { a: 1 }, fakeFetch);
+  assert.equal(r.ok, true);
+  assert.equal(calls[0].init.method, "POST");
+  assert.equal(JSON.parse(calls[0].init.body).a, 1);
+  assert.deepEqual(await postWebhook("", {}, fakeFetch), { ok: false, reason: "no url" });
+  const r2 = await postWebhook("http://x", {}, async () => { throw new Error("net down"); });
+  assert.equal(r2.ok, false);
+
+  // scan wiring: incident opened -> webhook called with the summary
+  const dir = tmpProject();
+  fs.writeFileSync(path.join(dir, ".mawf", "config.yaml"), "watchdog:\n  webhookUrl: http://example.invalid/hook\n");
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "maw-s4w-"));
+  const claudeSlug = "-" + dir.replace(/\//g, "-").replace(/^-+/, "");
+  const claudeSess = path.join(home, ".claude", "projects", claudeSlug);
+  fs.mkdirSync(claudeSess, { recursive: true });
+  fs.writeFileSync(path.join(claudeSess, "b1.jsonl"), [1, 2, 3].map((i) => JSON.stringify({ type: "tool_result", is_error: true, content: `boom ${i}`, sessionId: "b1", timestamp: new Date((Date.now() / 1000 - 60 * i) * 1000).toISOString() })).join("\n"));
+  await scanOnce({ projectDir: dir, nowSec: Math.floor(Date.now() / 1000), home, isProcessAlive: () => true, dbPath: "/nope.db", fetch: fakeFetch });
+  assert.ok(calls.length >= 2, "scan fired the webhook");
+  assert.equal(JSON.parse(calls[calls.length - 1].init.body).source, "mawf-watchdog");
   fs.rmSync(dir, { recursive: true, force: true });
   fs.rmSync(home, { recursive: true, force: true });
 });

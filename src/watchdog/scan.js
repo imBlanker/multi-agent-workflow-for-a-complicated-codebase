@@ -62,6 +62,22 @@ export function readWatchdogConfig(projectDir) {
   };
 }
 
+/** Optional webhook (R9): POST a JSON summary; never throws, never blocks long. */
+export async function postWebhook(url, payload, fetchImpl) {
+  if (!url) return { ok: false, reason: "no url" };
+  try {
+    const f = fetchImpl ?? fetch;
+    const ctl = new AbortController();
+    const t = setTimeout(() => ctl.abort(), 5000);
+    try {
+      const res = await f(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload), signal: ctl.signal });
+      return { ok: res.ok, status: res.status };
+    } finally { clearTimeout(t); }
+  } catch (e) {
+    return { ok: false, reason: String(e?.message ?? e) };
+  }
+}
+
 /**
  * One scan cycle.
  * @param {{
@@ -71,7 +87,7 @@ export function readWatchdogConfig(projectDir) {
  *   fs?: any, homedir?: string,
  * }} [opts]
  */
-export function scanOnce(opts = {}) {
+export async function scanOnce(opts = {}) {
   const now = opts.nowSec ?? nowSec();
   const fsh = opts.fs ?? fs;
   const alive = opts.isProcessAlive ?? processAliveDefault;
@@ -215,6 +231,14 @@ export function scanOnce(opts = {}) {
       dispatched,
       activeIncidents: listIncidents(dir).filter((i) => ["open", "rescuing-a", "rescuing-b"].includes(i.state)).map((i) => ({ id: i.id, state: i.state, host: i.host, sessionId: i.sessionId })),
     });
+    // optional webhook (R9): notify on blocked sessions / dispatches / terminals
+    if (cfg.webhookUrl && (opened > 0 || dispatched.length > 0)) {
+      await postWebhook(cfg.webhookUrl, {
+        source: "mawf-watchdog", at: new Date(now * 1000).toISOString(),
+        project: dir, blocked: sessions.filter((s) => s.finding).length,
+        incidentsOpened: opened, dispatched,
+      }, opts.fetch);
+    }
   }
 
   return {

@@ -3,7 +3,7 @@
 [![CI](https://github.com/imBlanker/multi-agents-workflow/actions/workflows/ci.yml/badge.svg)](https://github.com/imBlanker/multi-agents-workflow/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D20.17-green.svg)](https://nodejs.org)
-[![Tests](https://img.shields.io/badge/tests-237%20passing-success.svg)](#testing)
+[![Tests](https://img.shields.io/badge/tests-275%20passing-success.svg)](#testing)
 [![GitHub stars](https://img.shields.io/github/stars/imBlanker/multi-agents-workflow?style=social&label=Stars)](https://github.com/imBlanker/multi-agents-workflow/stargazers)
 
 # MAW — 面向複雜程式碼庫的多智慧體工作流系統
@@ -215,6 +215,21 @@ MAW 项目中任一受支持宿主的会话都掌握整机的全貌。三个组�
 **`mawf advise [--task "<文本>"] [--difficulty 1-5] [--json]`** 用纯确定性规则为每个宿主打分——capabilityFit（≤30）、skillMatch（≤30；失败/待批准的 MCP 与已禁用插件永不参与匹配）、modelFit（≤25）、costFit（≤15），另对当前宿主 +8 留守加分；仅当领先者超出 ≥10 分才建议切换（滞回，防反复横跳）。判定为 `switch` 时预生成 `.mawf/handoff/<时间戳>-<from>-<to>.md` 交接简报，并打印确切的启动命令——dsh 的命令是 `kill -9 $(lsof -ti tcp:3080) && dsh web`（旧实例占用 3080 端口）。**advise 绝不执行任何命令**，由人类自己运行。
 
 **主动注入（仅项目级——绝不碰全局提示词文件）。** `init/plan/install/update/upgrade` 会向项目根 `AGENTS.md` + `CLAUDE.md`（所有受支持宿主都会加载的面）写入幂等管理块（≤20 行，`<!-- mawf:cross-host-advise BEGIN/END -->`）。该块指示任何会话中的 agent：在会话开始及每天（UTC+8）第一个提示词时重新运行留守/切换分析（新鲜度状态存于 `.mawf/runtime/advise-state.json`）；主动向人类呈现建议与理由；切换时填好交接简报并原样展示命令；接续 48 小时内的交接简报；在声称本机"缺少"某能力之前先查摘要。`mawf uninstall` 默认保留管理块；`--purge-config` 将其移除。
+
+## 10b. Watchdog：停滯偵測與跨 host 救援（opt-in）
+
+`mawf watchdog` 週期性（預設 15 分鐘）檢查所有 mawf 初始化專案中**活躍**的 agent/subagent 會話是否被報警阻礙，並可換 host 救援：
+
+- **訊號（優先級 d→c→a→b）**：cc-switch 日誌的按會話錯誤/中斷計數（含 Pi (Session) 匯入）→ 轉錄停滯（程序存活但檔案不再增長）→ 尾部連續同類錯誤 → 權限/審批掛起。閾值在 `.mawf/config.yaml`（`watchdog.thresholds`）；超過 60 分鐘無變動的舊會話絕不算活躍。
+- **兩階段**：Phase A 僅無損解阻（唯讀診斷、設定類修復；絕不寫目標專案、絕不殺程序）。Phase A 在 15 分鐘視窗失敗後才進入 Phase B——換下一家 host 接續任務，以停滯轉錄為交接（mawf+trellis 工作區注入 trellis 任務上下文；codex-on-codex 先試原生 `exec resume`/`fork`）。
+- **host 輪換固定**：claude → pi → dsh → codex，跳過停滯/不可用 host；每 host 每事故至多一次；遍歷完 → `human-alert`（終態）。救援模型必須過價格閘門（claude/codex 按次 `--model`/`-m`；pi/dsh 用其設定預設——預設 cost-guard 仍約束花費）。
+- **專屬救援工作區** `~/.mawf/watchdog/workspace/`（標準 mawf 工作區，絕不註冊為被監視專案）按預設設定分派 subagents——數量「無上限」，預設 cost-guard 約束仍然生效。
+- **預算三層**：預設 cost-guard + 每事故硬頂（預設 **$10**，`watchdog.incidentBudgetUsd`）+ 價格閥門。視窗歸因的救援花費記到事故帳上；任一層觸發 → `budget-stop`。
+- **經驗復用**：問題簽名（host + 錯誤類別 + 規範化 token）解析到救援工作區 `knowledge/` 的案例檔案；過往成功注入為先例，失敗過的修復絕不再原樣重試，新解回寫。
+- **安全**：絕不殺原程序；原 agent 恢復則事故以 `original-recovered` 關閉、停止後續派發。Phase B 寫入前必須有 git 快照（`refs/rescue/<incident>`）；非 git 專案降級為唯讀診斷。
+- **審計**：每事故記錄於 `<專案>/.mawf/watchdog/`（訊號、派發、花費、結論）；終態追加到 `ALERTS.md`；可選 `watchdog.webhookUrl` POST 摘要。
+
+僅在被呼叫時執行：常駐 `mawf watchdog [--interval 15]`，或 cron/systemd 用 `*/15 * * * * mawf watchdog --once`（時鐘制狀態跨呼叫存活）。`mawf init` 把專案登記進 `~/.mawf/projects.json`（`--no-watchdog` 退出；config `extra`/`exclude` 調整）。`--dry-run` 只列印派發 prompt、不 spawn。
 
 ## 11. 安裝
 **來自 npm：** `npx multi-agents-workflow@latest install`。
