@@ -7,7 +7,7 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { readCcSwitch, piManagedByCcSwitch, costRate, perSessionRate, SUPPORTED_CC_SCHEMA } from "../src/ccswitch.js";
-import { readPiAsCc, mergePiIntoCc } from "../src/piprovider.js";
+import { readPiAsCc, mergePiIntoCc, enrichPiDbRowsWithModelsJson } from "../src/piprovider.js";
 import { makeFixtureDb } from "./fixtures/make-db.mjs";
 import { execFileSync } from "node:child_process";
 
@@ -150,6 +150,30 @@ test("mawfSkillsUnderCcSwitch: detects repo-managed mawf-* skills rows", async (
   // v16 fixture has no skills table → null (feature-detect degrades)
   assert.equal(mawfSkillsUnderCcSwitch({ dbPath: dbV16 }), null);
   assert.equal(mawfSkillsUnderCcSwitch({ dbPath: path.join(tmp, "nope.db") }), null);
+});
+
+test("enrichPiDbRowsWithModelsJson: name-joins model lists into db pi rows, pricing untouched", () => {
+  const piDir = path.join(tmp, "pi-enrich");
+  fs.mkdirSync(piDir, { recursive: true });
+  fs.writeFileSync(path.join(piDir, "models.json"), JSON.stringify({
+    providers: { "Pi Official": { models: [{ id: "gpt-5.5" }, { id: "pi-x2" }] }, empty: { models: [] } },
+  }));
+  fs.writeFileSync(path.join(piDir, "settings.json"), "{}");
+  const cc = readCcSwitch({ dbPath: dbV17 }); // has pi row 'Pi Official' with model gpt-5.5 in settings_config only
+  const piRow = cc.allProviders.find((p) => p.app_type === "pi");
+  assert.ok(piRow.settingsConfig._piModels === undefined, "db row carries no model list pre-enrich");
+  enrichPiDbRowsWithModelsJson(cc, piDir);
+  assert.deepEqual(piRow.settingsConfig._piModels, ["gpt-5.5", "pi-x2"]);
+  assert.equal(piRow.settingsConfig.model, "gpt-5.5");
+  // pricing untouched: db-exact entries remain the source
+  assert.equal(cc.modelPricing["gpt-5.5"]?.source ?? "cc-switch", "cc-switch");
+  // no models.json match → row left as-is; non-pi rows untouched
+  const claudeRows = cc.allProviders.filter((p) => p.app_type === "claude");
+  assert.ok(claudeRows.every((r) => !r.settingsConfig?._piModels));
+  // missing piDir → no-op
+  const cc2 = readCcSwitch({ dbPath: dbV17 });
+  enrichPiDbRowsWithModelsJson(cc2, path.join(tmp, "nope"));
+  assert.equal(cc2.allProviders.find((p) => p.app_type === "pi").settingsConfig._piModels, undefined);
 });
 
 test.after(() => { try { fs.rmSync(tmp, { recursive: true, force: true }); } catch {} });

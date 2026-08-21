@@ -22,7 +22,7 @@ import { classifyModel, selectModelForRole, candidatesForAppType, baseRole } fro
 import { resolvePrice } from "./pricing.js";
 import { checkPriceGate, priceGateReport } from "./pricegate.js";
 import { readDshAsCc } from "./dshprovider.js";
-import { readPiAsCc, mergePiIntoCc } from "./piprovider.js";
+import { readPiAsCc, mergePiIntoCc, enrichPiDbRowsWithModelsJson } from "./piprovider.js";
 import { scanInventory, writeInventoryArtifacts } from "./inventory.js";
 import { adviseTask, checkFreshness, renderAdvise } from "./advise.js";
 import { writeManagedBlocks, removeManagedBlocks } from "./injectblock.js";
@@ -42,7 +42,11 @@ function loadCtx(opts = {}) {
   // When unmanaged, merge models.json-derived providers under app_type "pi"
   // (pricing fills gaps only, mirroring the dsh merge below).
   cc.piManaged = piManagedByCcSwitch(cc);
-  if (!cc.piManaged && host.piDir) {
+  if (cc.piManaged) {
+    // db rows are presence records; model lists live in models.json (written
+    // by cc-switch itself) — read-only name join, pricing priority untouched
+    enrichPiDbRowsWithModelsJson(cc, host.piDir);
+  } else if (host.piDir) {
     mergePiIntoCc(cc, readPiAsCc({ piDir: host.piDir, ccSwitch: { modelPricing: cc.modelPricing } }));
   }
   // dsh merge (dsh is not cc-switch-managed): when a dsh home is detected,

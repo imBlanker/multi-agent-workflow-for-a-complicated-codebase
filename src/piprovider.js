@@ -175,6 +175,41 @@ export function readPiAsCc(opts = {}) {
 }
 
 /**
+ * Managed-pi enrichment: cc-switch db rows (app_type='pi') are presence
+ * records — the model LISTS live in ~/.pi/agent/models.json (which cc-switch
+ * itself wrote). Join them back into the db rows BY PROVIDER NAME so
+ * capability/model views are not sparse. Read-only; PRICING IS NOT TOUCHED
+ * (db-exact prices keep priority; this only fills `_piModels`/`model` hints
+ * when the db row carries none). Pure.
+ * @param {any} cc cc-switch ctx from readCcSwitch() (mutated copy returned)
+ * @param {string} [piDir]
+ * @returns {any}
+ */
+export function enrichPiDbRowsWithModelsJson(cc, piDir) {
+  if (!cc || !Array.isArray(cc.allProviders)) return cc;
+  const cfg = readPiConfig(piDir);
+  if (!cfg) return cc;
+  const providersMap = (cfg.models && cfg.models.providers) || {};
+  const store = cfg.modelsStore && typeof cfg.modelsStore === "object" ? cfg.modelsStore : {};
+  const idsFor = (entry) => {
+    const raw = Array.isArray(entry?.models) ? entry.models : [];
+    return raw.map((m) => (typeof m === "string" ? m : m?.id)).filter(Boolean);
+  };
+  for (const row of cc.allProviders) {
+    if (row.app_type !== "pi") continue;
+    const sc = row.settingsConfig || {};
+    if (Array.isArray(sc._piModels) && sc._piModels.length) continue; // db row already carries models
+    const ids = idsFor(providersMap[row.name] || store[row.name]);
+    if (!ids.length) continue;
+    sc._piModels = ids;
+    if (!sc.model) sc.model = ids[0];
+    row.settingsConfig = sc;
+    if (row.settings_config) row.settings_config = sc; // keep raw mirror in sync
+  }
+  return cc;
+}
+
+/**
  * Merge a readPiAsCc() result into a cc-switch ctx (mirrors the dsh merge in
  * loadCtx). ONLY for pi NOT managed by cc-switch: when cc-switch v3.20+
  * manages pi, its own db rows already flow through readCcSwitch() and merging
